@@ -1,0 +1,83 @@
+name: Build and package POS
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    env:
+      IDF_TOOLS_PATH: ${{ runner.temp }}/espressif
+      IDF_PIP_WHEELS_URL: ''
+    defaults:
+      run:
+        working-directory: POS
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: POS
+      - uses: actions/checkout@v4
+        with:
+          repository: espressif/esp-idf
+          ref: b774170ff46c393eeb5e495ea37936038d3f4f4f
+          submodules: recursive
+          path: esp-idf
+      - name: Install native dependencies and pinned ESP-IDF tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libssl-dev libffi-dev python3-venv cmake ninja-build
+          cd ../esp-idf
+          ./install.sh esp32s3
+          python3 tools/idf_tools.py install cmake ninja
+      - name: Read version and check release tag
+        id: version
+        run: |
+          pos_version=$(python3 -c 'import pathlib,re; print(re.search(r"set\(PROJECT_VER \"([0-9][A-Za-z0-9._-]{0,30})\"\)",pathlib.Path("CMakeLists.txt").read_text())[1])')
+          printf 'version=%s\n' "$pos_version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            test "$GITHUB_REF_NAME" = "v$pos_version"
+          fi
+      - name: Build both firmware roles and run host tests
+        run: |
+          . "$GITHUB_WORKSPACE/esp-idf/export.sh"
+          python tools/posctl.py build
+          python -m unittest discover -s tests -v
+      - name: Export matching USB and SD installation bundle
+        env:
+          POS_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          . "$GITHUB_WORKSPACE/esp-idf/export.sh"
+          python tools/posctl.py bundle --output dist/bundle --zip-output "dist/pos-${POS_VERSION}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pos-firmware-${{ steps.version.outputs.version }}
+          path: |
+            POS/dist/*.zip
+            POS/dist/*.zip.sha256
+          compression-level: 0
+          if-no-files-found: error
+  prerelease:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: pos-firmware-${{ needs.build.outputs.version }}
+          path: firmware-downloads
+      - name: Publish tested tag as an experimental prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          POS_TAG: ${{ github.ref_name }}
+          POS_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh release create "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 --prerelease --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md

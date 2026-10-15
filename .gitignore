@@ -1,0 +1,8 @@
+build/
+build-*/
+dist/
+sdkconfig
+sdkconfig.old
+__pycache__/
+*.pyc
+.venv/
