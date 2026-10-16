@@ -4,7 +4,7 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.3.6-dev adds an SD-backed text editor and shared Wi-Fi services.** Both firmware images compile
+**0.3.7-dev adds an SD-backed text editor and shared Wi-Fi services.** Both firmware images compile
 for ESP32-S3. Native tests exercise the actual portable installer, UI, app,
 settings and recovery code. No physical Panputer has been flashed or tested here.
 
@@ -67,14 +67,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.3.6-dev/launcher.png)
-![Color picker](downloads/0.3.6-dev/color-picker.png)
+![Launcher](downloads/0.3.7-dev/launcher.png)
+![Color picker](downloads/0.3.7-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.3.6-dev/boot-animation.png)
+![POS boot animation](downloads/0.3.7-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.3.6-dev/boot-splash.png)
+[Final splash frame](downloads/0.3.7-dev/boot-splash.png)
 
 This is unsigned development firmware. Physical display orientation, all key
 positions, SD performance, battery calibration, USB recovery and power-cut safety
@@ -90,7 +90,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --output dist/pos-0.3.6-dev --zip-output dist/pos-0.3.6-dev.zip
+python tools/posctl.py bundle --output dist/pos-0.3.7-dev --zip-output dist/pos-0.3.7-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -108,7 +108,7 @@ vendored public-domain font; no Arduino board framework is required.
 Builds use four Ninja jobs and separate ignored `build/installer` and
 `build/runtime` directories and sdkconfigs. When upgrading generated 0.1 configs,
 set main task stack to 16384 and FAT filesystem locks to 32, or preserve the old
-configs and use a fresh `--build-root` so the new defaults apply. Version 0.3.6
+configs and use a fresh `--build-root` so the new defaults apply. Version 0.3.7
 also enables the full TLS certificate bundle; existing generated configs must
 enable it or be replaced using a fresh build root. Pass that same build root to
 `bundle` so installer and runtime come from the matching build.

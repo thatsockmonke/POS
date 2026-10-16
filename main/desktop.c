@@ -125,7 +125,9 @@ static void factory(void) {
 }
 static void wifi_setup(services_t *services) {
 #ifndef POS_INSTALLER
-  pos_ui_wifi(services->root);
+  const char *options[] = {"Set up Wi-Fi", "Skip Wi-Fi"};
+  if (pos_ui_menu("Optional Wi-Fi", options, 2) == 0)
+    pos_ui_wifi(services->root);
 #else
   const char *options[] = {"Connect for this session", "Skip Wi-Fi"};
   if (pos_ui_menu("Optional Wi-Fi", options, 2) != 0)

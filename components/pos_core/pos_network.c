@@ -199,13 +199,18 @@ int pos_receive_file(const char *root, const char *relative, uint64_t expected,
   }
   if (!out)
     return failed(error, "Cannot create transfer staging file.");
-  uint8_t buffer[4096];
+  uint8_t *buffer = malloc(4096);
+  if (!buffer) {
+    fclose(out);
+    return failed(error,
+                  "Not enough memory for transfer. Staging file retained.");
+  }
   uint64_t total = 0;
   uint32_t written_crc = 0;
   int n, bad = 0;
-  while ((n = reader(reader_ctx, buffer, sizeof(buffer))) > 0) {
+  while ((n = reader(reader_ctx, buffer, 4096)) > 0) {
     total += n;
-    if (n > (int)sizeof(buffer) || total > UINT32_MAX ||
+    if (n > 4096 || total > UINT32_MAX ||
         (expected != UINT64_MAX && total > expected) ||
         fwrite(buffer, 1, n, out) != (size_t)n ||
         (progress && progress(ctx, "Transferring file", total,
@@ -215,6 +220,7 @@ int pos_receive_file(const char *root, const char *relative, uint64_t expected,
     }
     written_crc = pos_crc32(written_crc, buffer, n);
   }
+  free(buffer);
   if (n < 0 || (expected != UINT64_MAX && total != expected) || fflush(out) ||
       fsync(fileno(out)))
     bad = 1;

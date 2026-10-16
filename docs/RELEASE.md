@@ -1,4 +1,4 @@
-POS 0.3.6-dev adds an SD-backed Text Editor and shared Wi-Fi services.
+POS 0.3.7-dev adds an SD-backed Text Editor and shared Wi-Fi services.
 
 - Text Editor: New/Open/Recover, ordinary WASD typing, Fn+arrows, Ctrl+S save,
   Ctrl+F find, Ctrl+G go to line and an unsaved-changes prompt on closing.
@@ -15,9 +15,12 @@ POS 0.3.6-dev adds an SD-backed Text Editor and shared Wi-Fi services.
   Local HTTP is unencrypted: use a trusted network.
 - Nine-app launcher retains black/white icons, custom stripe backgrounds, A/D to
   move, W to open and one foreground app at a time. Existing boot animation retained.
+- A final ESP32 stack audit moved large I/O buffers to bounded heap allocations;
+  a compiler guard prevents stack-heavy editor/network frames returning. The
+  0.3.6-dev candidate was withdrawn before publication.
 - Includes full installation and editor/network/recovery instructions.
 
-Download pos-0.3.6-dev.zip and its checksum, extract it, and read INSTALL.md.
+Download pos-0.3.7-dev.zip and its checksum, extract it, and read INSTALL.md.
 Flash the small USB installer at 0x0. Extract the inner pos-install.zip onto a FAT32
 microSD; the installer verifies and installs the final runtime itself.
 

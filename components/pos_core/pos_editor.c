@@ -23,20 +23,27 @@ static int path(const pos_editor_t *e, const char *name,
 static int flush(FILE *f) { return fflush(f) || fsync(fileno(f)) ? -1 : 0; }
 static int copy(FILE *in, FILE *out, uint32_t *size, uint32_t *crc,
                 pos_io_progress_t progress, void *ctx) {
-  unsigned char buffer[BUFFER];
+  unsigned char *buffer = malloc(BUFFER);
+  if (!buffer)
+    return -1;
   size_t n;
   *size = *crc = 0;
-  while ((n = fread(buffer, 1, sizeof(buffer), in))) {
-    if (memchr(buffer, 0, n))
-      return -1;
-    if (*size > INT32_MAX - n || fwrite(buffer, 1, n, out) != n)
-      return -1;
+  int bad = 0;
+  while ((n = fread(buffer, 1, BUFFER, in))) {
+    if (memchr(buffer, 0, n) || *size > INT32_MAX - n ||
+        fwrite(buffer, 1, n, out) != n) {
+      bad = 1;
+      break;
+    }
     *size += n;
     *crc = pos_crc32(*crc, buffer, n);
-    if (progress && progress(ctx, "Preparing editor", *size, 0))
-      return -1;
+    if (progress && progress(ctx, "Preparing editor", *size, 0)) {
+      bad = 1;
+      break;
+    }
   }
-  return ferror(in) || flush(out) ? -1 : 0;
+  free(buffer);
+  return bad || ferror(in) || flush(out) ? -1 : 0;
 }
 static FILE *index_file(const pos_editor_t *e, unsigned slot,
                         const char *mode) {
@@ -63,12 +70,16 @@ static int prefix_crc_io(const char *filename, uint32_t size, uint32_t *crc,
   FILE *f = fopen(filename, "rb");
   if (!f)
     return -1;
-  unsigned char buffer[4096];
+  unsigned char *buffer = malloc(BUFFER);
+  if (!buffer) {
+    fclose(f);
+    return -1;
+  }
   uint32_t remaining = size;
   *crc = 0;
   int bad = 0;
   while (remaining) {
-    size_t n = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+    size_t n = remaining < BUFFER ? remaining : BUFFER;
     if (fread(buffer, 1, n, f) != n) {
       bad = 1;
       break;
@@ -84,6 +95,7 @@ static int prefix_crc_io(const char *filename, uint32_t size, uint32_t *crc,
   if (ferror(f))
     bad = 1;
   fclose(f);
+  free(buffer);
   return bad ? -1 : 0;
 }
 static int prefix_crc(const char *filename, uint32_t size, uint32_t *crc) {
@@ -596,12 +608,17 @@ int pos_editor_save(pos_editor_t *e, const char *relative, bool replace,
   if (!out)
     return fail(error, "Cannot create a new save staging file. Existing files "
                        "were preserved.");
-  unsigned char buffer[BUFFER];
+  unsigned char *buffer = malloc(BUFFER);
+  if (!buffer) {
+    fclose(out);
+    return fail(error,
+                "Not enough memory to save. Original and draft preserved.");
+  }
   uint32_t offset = 0, crc = 0;
   int bad = 0;
   while (offset < e->length && !bad) {
     size_t n;
-    if (pos_editor_read(e, offset, buffer, sizeof(buffer), &n) || !n ||
+    if (pos_editor_read(e, offset, buffer, BUFFER, &n) || !n ||
         fwrite(buffer, 1, n, out) != n) {
       bad = 1;
       break;
@@ -611,6 +628,7 @@ int pos_editor_save(pos_editor_t *e, const char *relative, bool replace,
     if (progress && progress(ctx, "Saving document", offset, e->length))
       bad = 1;
   }
+  free(buffer);
   if (flush(out))
     bad = 1;
   if (fclose(out))
@@ -666,26 +684,36 @@ int pos_editor_find(pos_editor_t *e, const char *text, uint32_t start,
   size_t length = strlen(text);
   if (!length || length > 128 || start > e->length)
     return -1;
-  unsigned char buffer[BUFFER + 128];
+  unsigned char *buffer = malloc(BUFFER + 128);
+  if (!buffer)
+    return -1;
+  int result = 1;
   size_t carry = 0;
   uint32_t offset = start;
   while (offset < e->length) {
     size_t n;
-    if (pos_editor_read(e, offset, buffer + carry, BUFFER, &n) || !n)
-      return -1;
+    if (pos_editor_read(e, offset, buffer + carry, BUFFER, &n) || !n) {
+      result = -1;
+      break;
+    }
     for (size_t i = 0; i + length <= n + carry; ++i)
       if (!memcmp(buffer + i, text, length)) {
         *found = offset - carry + i;
-        return 0;
+        result = 0;
+        goto done;
       }
     offset += n;
     size_t total = n + carry;
     carry = total < length - 1 ? total : length - 1;
     memmove(buffer, buffer + total - carry, carry);
-    if (progress && progress(ctx, "Finding text", offset, e->length))
-      return -1;
+    if (progress && progress(ctx, "Finding text", offset, e->length)) {
+      result = -1;
+      break;
+    }
   }
-  return 1;
+done:
+  free(buffer);
+  return result;
 }
 int pos_editor_line(pos_editor_t *e, uint32_t line, uint32_t *offset,
                     pos_io_progress_t progress, void *ctx) {
@@ -694,20 +722,30 @@ int pos_editor_line(pos_editor_t *e, uint32_t line, uint32_t *offset,
   *offset = 0;
   if (line == 1)
     return 0;
-  unsigned char buffer[BUFFER];
+  unsigned char *buffer = malloc(BUFFER);
+  if (!buffer)
+    return -1;
+  int result = 1;
   uint32_t current = 1, at = 0;
   while (at < e->length) {
     size_t n;
-    if (pos_editor_read(e, at, buffer, sizeof(buffer), &n) || !n)
-      return -1;
+    if (pos_editor_read(e, at, buffer, BUFFER, &n) || !n) {
+      result = -1;
+      break;
+    }
     for (size_t i = 0; i < n; ++i)
       if (buffer[i] == '\n' && ++current == line) {
         *offset = at + i + 1;
-        return 0;
+        result = 0;
+        goto done;
       }
     at += n;
-    if (progress && progress(ctx, "Finding line", at, e->length))
-      return -1;
+    if (progress && progress(ctx, "Finding line", at, e->length)) {
+      result = -1;
+      break;
+    }
   }
-  return 1;
+done:
+  free(buffer);
+  return result;
 }

@@ -6,15 +6,18 @@ You do not need to compile the OS to use a prebuilt package.
 
 ## Current development package
 
-**POS 0.3.6-dev — experimental, hardware validation not yet performed.**
+**POS 0.3.7-dev — experimental, hardware validation not yet performed.**
 
-- [POS 0.3.6-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.3.6-dev)
-- [Download pos-0.3.6-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.3.6-dev/pos-0.3.6-dev.zip)
-- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.3.6-dev/pos-0.3.6-dev.zip.sha256)
-- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.3.6-dev/boot-animation.png)
+- [POS 0.3.7-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.3.7-dev)
+- [Download pos-0.3.7-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.3.7-dev/pos-0.3.7-dev.zip)
+- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.3.7-dev/pos-0.3.7-dev.zip.sha256)
+- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.3.7-dev/boot-animation.png)
 - [Browse versioned downloads](https://github.com/thatsockmonke/POS/tree/main/downloads)
 - [Full installation guide](INSTALL.md)
 - [Implemented / partial / planned features](STATUS.md)
+
+The 0.3.6-dev candidate was withdrawn before release after an ESP32 stack audit.
+Use 0.3.7-dev, which includes the bounded-buffer fix and a compiler frame-size guard.
 
 Every new POS version is published as a versioned GitHub Release with its matching
 installation ZIP and checksum. Development versions are marked **prerelease**.
@@ -50,7 +53,7 @@ From the source checkout with ESP-IDF v5.5.5 activated:
 ```sh
 python tools/posctl.py build
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --output dist/pos-0.3.6-dev --zip-output dist/pos-0.3.6-dev.zip
+python tools/posctl.py bundle --output dist/pos-0.3.7-dev --zip-output dist/pos-0.3.7-dev.zip
 ```
 
 Choose a fresh output name if one already exists. `bundle` verifies images and

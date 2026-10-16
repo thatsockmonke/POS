@@ -1,4 +1,4 @@
-# POS feature status — 0.3.6-dev
+# POS feature status — 0.3.7-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
