@@ -74,12 +74,12 @@ static void player(const char *root, const char *initial, const char *playlist,
           paused = !paused;
           pos_audio_stop();
         }
-        if (key == 'w' || key == 'W' || key == POS_KEY_UP) {
+        if (key == POS_KEY_UP) {
           if (volume < 100)
             volume += 5;
           last_frame = UINT64_MAX;
         }
-        if (key == 's' || key == 'S' || key == POS_KEY_DOWN) {
+        if (key == POS_KEY_DOWN) {
           if (volume >= 5)
             volume -= 5;
           last_frame = UINT64_MAX;
@@ -110,26 +110,25 @@ static void player(const char *root, const char *initial, const char *playlist,
         }
         if (key == 'h' || key == 'H') {
           pos_audio_stop();
-          pos_ui_notice(single ? "Audio Player controls" : "Music controls",
-                        single
-                            ? "Space/Enter: pause\nA/D: previous/next\nW/S: "
-                              "volume\nP: add to playlist\nEOF: "
-                              "stop/back\nEsc: stop/back\nFn+Space: close app"
-                            : "Space/Enter: pause\nA/D: previous/next\nW/S: "
-                              "volume\nR: shuffle\nP: add to playlist\nEsc: "
-                              "stop/back\nFn+Space: close app");
+          pos_ui_notice(
+              single ? "Audio Player controls" : "Music controls",
+              single
+                  ? "Space/Enter: pause\nLeft/Right: previous/next\nUp/Down: "
+                    "volume\nP: add to playlist\nEOF: "
+                    "stop/back\nEsc: stop/back\nFn+Space: close app"
+                  : "Space/Enter: pause\nLeft/Right: previous/next\nUp/Down: "
+                    "volume\nR: shuffle\nP: add to playlist\nEsc: "
+                    "stop/back\nFn+Space: close app");
           last_frame = UINT64_MAX;
         }
-        if (key == 'a' || key == 'A' || key == POS_KEY_LEFT || key == 'd' ||
-            key == 'D' || key == POS_KEY_RIGHT) {
+        if (key == POS_KEY_LEFT || key == POS_KEY_RIGHT) {
           if (playlist)
             pos_music_playlist_track(root, playlist, 0, folder, &total);
           else
             pos_music_track(root, folder, 0, (char[241]){0}, &total);
           if (total) {
-            index = (key == 'a' || key == 'A' || key == POS_KEY_LEFT)
-                        ? (index + total - 1) % total
-                        : (index + 1) % total;
+            index = key == POS_KEY_LEFT ? (index + total - 1) % total
+                                        : (index + 1) % total;
             change = true;
           }
         }
@@ -189,10 +188,10 @@ static void player(const char *root, const char *initial, const char *playlist,
                         shuffle ? "on" : "off");
         pos_view_line(&view, 9, "%u Hz / %u channels", status.rate,
                       status.channels);
-        pos_view_line(&view, 11, "Space:pause  A/D:prev/next");
+        pos_view_line(&view, 11, "Space:pause  L/R:prev/next");
         pos_view_line(&view, 12,
-                      single ? "W/S:volume  End:stop"
-                             : "W/S:volume  R:shuffle");
+                      single ? "Up/Down:volume  End:stop"
+                             : "Up/Down:volume  R:shuffle");
         pos_view_line(&view, 13, "P:playlist  H:help");
         pos_view_line(&view, 15, "Esc:stop Fn+Space:close");
         pos_device_show(&view);
@@ -230,7 +229,8 @@ void pos_ui_music(const char *root) {
       pos_ui_notice(
           "POS Music",
           "Put MP3 or PCM 16-bit WAV files in Music (folders are supported). "
-          "Space pauses; A/D changes tracks; W/S changes volume; R toggles "
+          "Space pauses; Left/Right changes tracks; Up/Down changes volume; R "
+          "toggles "
           "shuffle; P adds to a .m3u playlist. Audio stops on closing.");
       continue;
     }

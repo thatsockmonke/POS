@@ -12,16 +12,11 @@ int pos_launcher_action(const pos_event_t *event) {
       (event->modifiers & (POS_MOD_CTRL | POS_MOD_ALT)))
     return 0;
   switch (event->key) {
-  case 'a':
-  case 'A':
   case POS_KEY_LEFT:
     return POS_KEY_LEFT;
-  case 'd':
-  case 'D':
   case POS_KEY_RIGHT:
     return POS_KEY_RIGHT;
-  case 'w':
-  case 'W':
+  case POS_KEY_UP:
   case POS_KEY_ENTER:
     return POS_KEY_ENTER;
   default:
@@ -59,5 +54,5 @@ void pos_launcher_view(const char *root, const char *device,
   pos_view_line(view, 12, "%*s%s", (int)(POS_COLS - strlen(name)) / 2, "",
                 name);
   pos_view_line(view, 14, "App %d/%d", selected + 1, POS_LAUNCHER_APP_COUNT);
-  pos_view_line(view, 15, "A/D: move   W: open");
+  pos_view_line(view, 15, "Left/Right:move Up:open");
 }

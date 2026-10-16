@@ -22,6 +22,7 @@
 #include <limits.h>
 #include <signal.h>
 #include <sys/resource.h>
+#include <time.h>
 
 static pos_event_t ui_events[512];
 static unsigned ui_next, ui_count, ui_frames;
@@ -175,6 +176,10 @@ void pos_ui_updates(const char *root) { (void)root; }
 static void push_key(int key, unsigned mods) {
   assert(ui_count < sizeof(ui_events) / sizeof(ui_events[0]));
   ui_events[ui_count++] = (pos_event_t){key, mods, true};
+}
+static void keys_down(unsigned count) {
+  for (unsigned i = 0; i < count; ++i)
+    push_key(POS_KEY_DOWN, 0);
 }
 static void push_text(const char *text) {
   for (; *text; ++text)
@@ -353,13 +358,13 @@ static int editor_ui_tests(const char *root, const char *mode) {
     push_key(POS_KEY_HOME, 0);
   } else if (!strcmp(mode, "editor-ui-draft")) {
     push_key(POS_KEY_HOME, 0);
-    push_text("s");
+    push_key(POS_KEY_DOWN, 0);
     push_key(POS_KEY_ENTER, 0);
     idle_event();
     push_key(POS_KEY_ENTER, 0); /* draft save and notice */
   } else {
     push_key(POS_KEY_HOME, 0);
-    push_text("ss");
+    keys_down(2);
     push_key(POS_KEY_ENTER, 0);
   }
   pos_ui_editor(root);
@@ -372,21 +377,21 @@ static int editor_ui_tests(const char *root, const char *mode) {
 static int wifi_ui_tests(const char *root, const char *mode) {
   ui_next = ui_count = 0;
   if (!strcmp(mode, "wifi-ui-remember")) {
-    push_text("ss");
+    keys_down(2);
     push_key(POS_KEY_ENTER, 0); /* manual network */
     push_text("Test WiFi");
     push_key(POS_KEY_ENTER, 0);
     push_text("network-password");
     push_key(POS_KEY_ENTER, 0);
     push_key(POS_KEY_ENTER, 0); /* connected notice */
-    push_text("s");
+    push_key(POS_KEY_DOWN, 0);
     push_key(POS_KEY_ENTER, 0);
     push_text("correct horse battery staple");
     push_key(POS_KEY_ENTER, 0);
     push_text("correct horse battery staple");
     push_key(POS_KEY_ENTER, 0);
     push_key(POS_KEY_ENTER, 0); /* saved notice */
-    push_text("sssssss");
+    keys_down(7);
     push_key(POS_KEY_ENTER, 0); /* Back */
     pos_ui_wifi(root);
     assert(has_vault && fake_network.connected);
@@ -400,7 +405,7 @@ static int wifi_ui_tests(const char *root, const char *mode) {
   } else {
     fake_network.connected = true;
     strcpy(fake_network.ip, "192.0.2.1");
-    push_text("sssssss");
+    keys_down(7);
     push_key(POS_KEY_ENTER, 0); /* transfer */
     push_key(POS_KEY_ENTER, 0); /* receive only */
     push_key(POS_KEY_ENTER, 0); /* LAN notice */
@@ -459,7 +464,9 @@ static int ui_tests(void) {
   const char *long_menu[12];
   for (unsigned i = 0; i < 12; ++i)
     long_menu[i] = "Item";
-  queue_text("sssssssssss");
+  ui_next = ui_count = 0;
+  keys_down(11);
+  push_key(POS_KEY_ENTER, 0);
   assert(pos_ui_menu("Paged menu", long_menu, 12) == 11);
   puts("{\"home_bubbles_to_launcher\":true,\"password_display_leaked\":false}");
   return 0;
@@ -606,14 +613,14 @@ static int setup_tests(const char *root, const char *mode) {
   if (strstr(mode, "cancel-time"))
     push_key(POS_KEY_ESCAPE, 0);
   else {
-    push_key('s', 0);
+    push_key(POS_KEY_DOWN, 0);
     push_key(POS_KEY_ENTER, 0); /* Pacific */
     if (strstr(mode, "home"))
       push_key(POS_KEY_HOME, 0);
     else if (strstr(mode, "cancel"))
       push_key(POS_KEY_ESCAPE, 0);
     else {
-      push_key('s', 0);
+      push_key(POS_KEY_DOWN, 0);
       push_key(POS_KEY_ENTER, 0);
     }
   }
@@ -635,7 +642,7 @@ static int setup_tests(const char *root, const char *mode) {
 }
 static void choose(unsigned index) {
   for (unsigned i = 0; i < index; ++i)
-    push_key('s', 0);
+    push_key(POS_KEY_DOWN, 0);
   push_key(POS_KEY_ENTER, 0);
 }
 static int settings_ui_tests(const char *root, const char *mode) {
@@ -742,10 +749,12 @@ static int background_tests(const char *root, const char *mode) {
     push_key(POS_KEY_ENTER, 0); /* dismiss invalid count */
     push_key(POS_KEY_ESCAPE, 0);
   } else {
-    push_text("s");
+    push_key(POS_KEY_DOWN, 0);
     push_key(POS_KEY_ENTER, 0); /* first stripe */
-    push_text("dse");
-    push_key('W', POS_MOD_SHIFT);
+    push_key(POS_KEY_RIGHT, 0);
+    push_key(POS_KEY_DOWN, 0);
+    push_key('e', 0);
+    push_key(POS_KEY_UP, POS_MOD_SHIFT);
     if (!strcmp(mode, "background-home")) {
       push_key(POS_KEY_HOME, 0);
     } else {
@@ -753,10 +762,11 @@ static int background_tests(const char *root, const char *mode) {
       if (!strcmp(mode, "background-cancel")) {
         push_key(POS_KEY_ESCAPE, 0);
       } else {
-        push_text("ssss");
+        for (unsigned i = 0; i < 4; ++i)
+          push_key(POS_KEY_DOWN, 0);
         push_key(POS_KEY_ENTER, 0); /* preview at index 5 */
         push_key(POS_KEY_ENTER, 0); /* return to editor */
-        push_text("s");
+        push_key(POS_KEY_DOWN, 0);
         push_key(POS_KEY_ENTER, 0); /* Save & Apply */
         if (!strcmp(mode, "background-save-failure")) {
           push_key(POS_KEY_ENTER, 0); /* save error */
@@ -790,8 +800,10 @@ static int background_tests(const char *root, const char *mode) {
 static int picker_tests(void) {
   uint32_t rgb = 0x808080, original = rgb;
   ui_next = ui_count = 0;
-  push_text("dse");
-  push_key('W', POS_MOD_SHIFT);
+  push_key(POS_KEY_RIGHT, 0);
+  push_key(POS_KEY_DOWN, 0);
+  push_key('e', 0);
+  push_key(POS_KEY_UP, POS_MOD_SHIFT);
   push_key(POS_KEY_ENTER, 0);
   assert(pos_ui_color("Pick a color", &rgb));
   assert(picker_last.picker_hue == 10 && picker_last.picker_saturation == 25 &&
@@ -802,7 +814,8 @@ static int picker_tests(void) {
   push_key(POS_KEY_ENTER, 0);
   assert(pos_ui_color("Keep exact color", &rgb) && rgb == original);
   ui_next = ui_count = 0;
-  push_text("aaa");
+  for (unsigned i = 0; i < 3; ++i)
+    push_key(POS_KEY_LEFT, 0);
   push_key(POS_KEY_ESCAPE, 0);
   assert(!pos_ui_color("Cancel color", &rgb) && rgb == original);
   ui_next = ui_count = 0;
@@ -811,11 +824,22 @@ static int picker_tests(void) {
          pos_ui_take_home());
   rgb = 0xffffff;
   ui_next = ui_count = 0;
-  push_text("aw"); /* clamp saturation and brightness at the edges */
+  push_key(POS_KEY_LEFT, 0);
+  push_key(POS_KEY_UP, 0); /* clamp saturation and brightness at the edges */
   push_key('d', POS_MOD_CTRL);
   ui_events[ui_count++] = (pos_event_t){'s', 0, false};
   push_key(POS_KEY_ENTER, 0);
   assert(pos_ui_color("Bounds", &rgb) && rgb == 0xffffff);
+  ui_next = ui_count = 0;
+  push_text("wasdWASD");
+  push_key(POS_KEY_ENTER, 0);
+  assert(pos_ui_color("Letters do not navigate", &rgb) && rgb == 0xffffff);
+  ui_next = ui_count = 0;
+  push_text("wasdWASD");
+  push_key(POS_KEY_DOWN, 0);
+  push_key(POS_KEY_ENTER, 0);
+  const char *items[] = {"First", "Second", "Third"};
+  assert(pos_ui_menu("Arrow navigation", items, 3) == 1);
   pos_view_t color_view;
   pos_color_picker_view("Color", 0xabcdef, 0, 500, 500, &color_view);
   assert(pos_view_pixel(&color_view, 8, 28) == 0xffff);
@@ -833,23 +857,30 @@ static int picker_tests(void) {
   assert(pos_color_parse("#aB12ef", &rgb) && rgb == 0xab12ef);
   assert(!pos_color_parse("#GG0000", &rgb) &&
          !pos_color_parse("FFFFFFF", &rgb));
-  puts("{\"wasd_picker\":true,\"fine_adjustment\":true,\"cancel_preserves_"
+  puts("{\"arrow_picker\":true,\"fine_adjustment\":true,\"cancel_preserves_"
        "color\":true}");
   return 0;
 }
 static int launcher_tests(const char *root) {
   assert(POS_LAUNCHER_APP_COUNT == 15);
-  pos_event_t event = {'w', 0, true};
+  pos_event_t event = {POS_KEY_UP, 0, true};
   assert(pos_launcher_action(&event) == POS_KEY_ENTER);
-  event.key = 'a';
+  event.key = POS_KEY_ENTER;
+  assert(pos_launcher_action(&event) == POS_KEY_ENTER);
+  event.key = POS_KEY_LEFT;
   assert(pos_launcher_action(&event) == POS_KEY_LEFT);
-  event.key = 'd';
+  event.key = POS_KEY_RIGHT;
   assert(pos_launcher_action(&event) == POS_KEY_RIGHT);
-  event.key = 's';
+  for (const char *letter = "wasdWASD"; *letter; ++letter) {
+    event.key = *letter;
+    assert(!pos_launcher_action(&event));
+    assert(pos_navigation(&event) == *letter);
+  }
+  event.key = POS_KEY_DOWN;
   assert(!pos_launcher_action(&event));
-  event.key = 'w';
+  event.key = POS_KEY_UP;
   event.pressed = false;
-  assert(!pos_launcher_action(&event));
+  assert(!pos_launcher_action(&event) && !pos_navigation(&event));
   event.pressed = true;
   event.modifiers = POS_MOD_CTRL;
   assert(!pos_launcher_action(&event));
@@ -948,13 +979,22 @@ static int core_tests(void) {
   pos_event_t event;
   assert(pos_keyboard_decode(&keyboard, 0x8c, &event) && event.key == 'w' &&
          event.pressed);
-  assert(pos_navigation(&event) == POS_KEY_UP && event.key == 'w');
+  assert(pos_navigation(&event) == 'w' && event.key == 'w');
   assert(pos_keyboard_decode(&keyboard, 0x0c, &event) && !event.pressed);
   assert(!pos_keyboard_decode(&keyboard, 0x87, &event)); /* shift */
   assert(pos_keyboard_decode(&keyboard, 0x8c, &event) && event.key == 'W');
   assert(pos_keyboard_decode(&keyboard, 0x0c, &event));
   assert(!pos_keyboard_decode(&keyboard, 0x07, &event));
   assert(!pos_keyboard_decode(&keyboard, 0x83, &event)); /* Fn */
+  const uint8_t scans[] = {0xb9, 0xb6, 0xba, 0xc0};
+  const int arrows[] = {POS_KEY_UP, POS_KEY_LEFT, POS_KEY_DOWN, POS_KEY_RIGHT};
+  for (unsigned i = 0; i < 4; ++i) {
+    assert(pos_keyboard_decode(&keyboard, scans[i], &event));
+    assert(event.key == arrows[i] && pos_navigation(&event) == arrows[i]);
+    assert(event.modifiers & POS_MOD_FN);
+    assert(pos_keyboard_decode(&keyboard, scans[i] & 0x7f, &event));
+    assert(!pos_navigation(&event));
+  }
   assert(pos_keyboard_decode(&keyboard, 0xc4, &event) &&
          event.key == POS_KEY_HOME);
   assert(!pos_keyboard_decode(&keyboard, 0xc4,
@@ -1030,10 +1070,6 @@ static int core_tests(void) {
   return 0;
 }
 
-static void keys_down(unsigned count) {
-  for (unsigned i = 0; i < count; ++i)
-    push_key('s', 0);
-}
 static int apps_ui(const char *root, const char *mode) {
   if (!strcmp(mode, "hardware-ui-missing")) {
     fake_expansion.frequency_hz = 915000000;
@@ -1168,6 +1204,31 @@ int main(int argc, char **argv) {
     assert(pos_console_poll(descriptors[0]) == -1);
     assert(write(descriptors[1], "w", 1) == 1);
     assert(pos_console_poll(descriptors[0]) == 'w');
+    assert(pos_console_poll(descriptors[0]) == -1);
+    const char *sequences[] = {"\033[A", "\033[B", "\033[C", "\033[D",
+                               "\033OA", "\033OB", "\033OC", "\033OD"};
+    const int arrows[] = {POS_KEY_UP, POS_KEY_DOWN, POS_KEY_RIGHT,
+                          POS_KEY_LEFT};
+    for (unsigned i = 0; i < 8; ++i) {
+      for (unsigned j = 0; j < 3; ++j) {
+        assert(write(descriptors[1], sequences[i] + j, 1) == 1);
+        assert(pos_console_poll(descriptors[0]) == (j == 2 ? arrows[i % 4] : -1));
+      }
+    }
+    assert(write(descriptors[1], "\033[3~wasdWASD", 12) == 12);
+    for (const char *letter = "wasdWASD"; *letter; ++letter)
+      assert(pos_console_poll(descriptors[0]) == *letter);
+    assert(write(descriptors[1], "\033x", 2) == 2);
+    assert(pos_console_poll(descriptors[0]) == 27);
+    assert(pos_console_poll(descriptors[0]) == 'x');
+    assert(write(descriptors[1], "\033", 1) == 1);
+    assert(pos_console_poll(descriptors[0]) == -1);
+    struct timespec delay = {.tv_nsec = 110000000};
+    nanosleep(&delay, NULL);
+    assert(pos_console_poll(descriptors[0]) == 27);
+    assert(pos_console_poll(descriptors[0]) == -1);
+    assert(write(descriptors[1], "\033[\035", 3) == 3);
+    assert(pos_console_poll(descriptors[0]) == 29);
     assert(pos_console_poll(descriptors[0]) == -1);
     assert(pos_console_nonblocking(-1) == -1);
     close(descriptors[0]);

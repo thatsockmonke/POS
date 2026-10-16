@@ -1,6 +1,6 @@
 # Files, Audio Player, Recorder, Music and hardware
 
-Use A/D to move the launcher ribbon and W/Enter to open an app. Menus use W/S
+Use Left/Right arrows to move the launcher ribbon and Up/Enter to open an app. Menus use Up/Down
 and Enter. Fn+backtick is Escape; Fn+Space requests closing the current app.
 Only one foreground app runs. Wi-Fi and the enabled location/radio services can
 continue in the background. Music and explicit file-transfer sessions stop on exit.
@@ -56,8 +56,8 @@ A2DP support.
 | Action | Key |
 | --- | --- |
 | Play/pause | Space or Enter |
-| Previous/next track | A/D or left/right arrows |
-| Volume | W/S or up/down arrows, in 5% steps |
+| Previous/next track | Left/Right arrows |
+| Volume | Up/Down arrows, in 5% steps |
 | Shuffle | R |
 | Add current track to a playlist | P |
 | Controls help | H |
@@ -317,7 +317,7 @@ Actual electrical power-cut behavior and microphone quality still need hardware 
 ## Files Audio Player
 
 Select an MP3 or PCM WAV in Files, then **Play in Audio Player**. Space/Enter
-pauses, W/S changes volume, A/D selects a neighboring track manually, P adds to a
+pauses, Up/Down changes volume, Left/Right selects a neighboring track manually, P adds to a
 standard Music playlist, Escape stops and returns to Files, and Fn+Space closes
 the current foreground Files app. Playback stops at the selected file's EOF;
 Music's automatic library advance/shuffle behavior stays in Music. The player

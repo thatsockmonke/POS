@@ -301,7 +301,7 @@ static void counter_render(void *opaque, pos_view_t *v) {
   counter_t *s = opaque;
   pos_view_clear(v, "Counter");
   pos_view_line(v, 4, "Count: %d", s->count);
-  pos_view_line(v, 7, "W/S changes the value");
+  pos_view_line(v, 7, "Up/Down changes the value");
   pos_view_line(v, 10, "Saved when the app closes");
   pos_view_line(v, 15, "Esc / Fn+Space: launcher");
 }

@@ -1,10 +1,11 @@
-POS 0.5.1-dev - Pan Operating System
+POS 0.5.2-dev - Pan Operating System
 
 Boot: pink -> yellow -> blue flashes. Yellow slides into the middle, then
 pink slides into the top starting halfway through yellow. Large POS fades
 in across all three stripes, holds one second, then normal startup continues.
-Launcher: A/D moves, W opens the centered app. Fn+Space closes the app.
-Background: choose 1-12 stripes; WASD picks color, Q/E hue, Shift fine.
+ADV arrows: hold Fn with ; (Up), , (Left), . (Down), / (Right).
+Launcher: Left/Right moves, Up/Enter opens the centered app. Fn+Space closes the app.
+Background: choose 1-12 stripes; arrows pick color, Q/E hue, Shift fine.
 Preview then Save & Apply; cancel keeps the previous background.
 Only one foreground app runs; shared system services may continue.
 Ctrl+U clears text fields; setup validates names before continuing.
@@ -16,7 +17,7 @@ Esc opens the editor menu; Home asks about unsaved changes.
 Wi-Fi: scan/connect, encrypted saved networks, time sync, HTTPS and LAN transfer.
 Sync time before HTTPS. Local HTTP transfer is for trusted networks only.
 Files: Copy/Cut, navigate, Folder actions > Paste. Trash is reversible.
-Music: MP3 / PCM 16-bit WAV. Space pause, A/D tracks, W/S volume, R shuffle.
+Music: MP3 / PCM 16-bit WAV. Space pause, Left/Right tracks, Up/Down volume, R shuffle.
 Share: local save, Wi-Fi, or numeric-paired BLE. Accept each incoming file.
 GPS/LoRa: Settings > Expansion hardware shows presence and feature enablement.
 Radio/Range require a detected, enabled cap; GPS presence separately gates Maps.

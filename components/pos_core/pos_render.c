@@ -44,7 +44,7 @@ void pos_color_picker_view(const char *title, uint32_t rgb, uint16_t hue,
   view->picker_saturation = saturation;
   view->picker_value = value;
   view->picker_rgb = rgb;
-  pos_view_line(view, 1, "WASD: color   Q/E: hue");
+  pos_view_line(view, 1, "Arrows:color Q/E:hue");
   pos_view_line(view, 2, "Shift: fine adjustment");
   pos_view_line(view, 9, "%23s#%06X", "", (unsigned)rgb);
   pos_view_line(view, 10, "%23sH %u", "", (unsigned)hue);

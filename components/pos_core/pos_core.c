@@ -73,22 +73,7 @@ bool pos_keyboard_decode(pos_keyboard_t *k, uint8_t raw, pos_event_t *event) {
 int pos_navigation(const pos_event_t *event) {
   if (!event->pressed)
     return 0;
-  switch (event->key) {
-  case 'w':
-  case 'W':
-    return POS_KEY_UP;
-  case 's':
-  case 'S':
-    return POS_KEY_DOWN;
-  case 'a':
-  case 'A':
-    return POS_KEY_LEFT;
-  case 'd':
-  case 'D':
-    return POS_KEY_RIGHT;
-  default:
-    return event->key;
-  }
+  return event->key;
 }
 
 void pos_view_clear(pos_view_t *view, const char *title) {

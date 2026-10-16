@@ -31,7 +31,7 @@ typedef struct {
 bool pos_keyboard_decode(pos_keyboard_t *keyboard, uint8_t raw,
                          pos_event_t *event);
 int pos_navigation(
-    const pos_event_t *event); /* context-specific WASD mapping */
+    const pos_event_t *event); /* pressed key; letters remain ordinary text */
 
 #define POS_ROWS 16
 #define POS_COLS 30

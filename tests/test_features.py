@@ -286,7 +286,7 @@ class FeatureTests(unittest.TestCase):
     def test_ble_home_rejects_pairing_and_stops_without_accepting_file(self):
         self.run_feature('ble-ui-home')
 
-    def test_wasd_color_picker_accept_cancel_fine_adjustment_and_bounds(self):
+    def test_arrow_color_picker_accept_cancel_fine_adjustment_and_bounds(self):
         report=json.loads(self.run_feature("picker").stdout)
         self.assertTrue(all(report.values()))
 

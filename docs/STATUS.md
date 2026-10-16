@@ -1,4 +1,4 @@
-# POS feature status — 0.5.1-dev
+# POS feature status — 0.5.2-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -7,9 +7,9 @@ are evidence of software behavior; actual ADV behavior is still unverified.
 | Area | Current implementation | Remaining work |
 | --- | --- | --- |
 | Boot appearance | Pink → yellow → blue flashes (180 ms each), yellow slides into the middle over blue, pink follows halfway through; large POS fades across all stripes, holds 1 second, then normal boot | Observe orientation/color on actual ADV |
-| Display/input | ST7789 output, TCA8418 decode, WASD/context routing, global Home, held recovery shortcut, nonblocking USB fallback | Verify all 56 positions, wiring, timing and stalled-app recovery physically |
+| Display/input | ST7789 output, TCA8418 decode, arrow-key/context routing, global Home, held recovery shortcut, nonblocking USB fallback | Verify all 56 positions, wiring, timing and stalled-app recovery physically |
 | Core/UI/apps | Central event loop, streamed icons, fifteen-app ribbon, one foreground app, lifecycle/cleanup and paginated menus; launcher workspace is heap-owned | Additional scoped apps; physical stack/heap measurements |
-| Background app | 1-12 horizontal stripes, visual WASD picker, Q/E hue, Shift fine steps, preview, Save & Apply and protected persistence | Optional richer styling later |
+| Background app | 1-12 horizontal stripes, visual arrow-key picker, Q/E hue, Shift fine steps, preview, Save & Apply and protected persistence | Optional richer styling later |
 | Setup/settings | Direct profile/brightness/date-time/background controls, regional/custom POSIX timezones, manual validated UTC, SNTP, preference reset confirmation and remembered menu selection; checksummed redundant settings | Physical UX/time-sync validation; preset rule changes when legislation changes |
 | SD/files | Safe file manager, previews/editor/music, create/rename, copy/cut/paste, streamed verified folder copies, Trash/restore and confirmed permanent deletion | Optional sorting/search refinements; real-card performance |
 | Installer | USB factory installer, package validation, SD staging/readback, inactive runtime write/readback and boot selection | Physical flashing/SD/OTA rollback/power-cut validation |

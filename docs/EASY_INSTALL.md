@@ -8,7 +8,7 @@ manual flash addresses or an understanding of partitions.
 
 ## Start here
 
-1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.1-dev).
+1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.2-dev).
 2. Download **`pos-setup`**. This is the executable wizard, not the Source code ZIP.
    Its optional `pos-setup.sha256` checksum is beside it. The complete POS ZIP
    also includes a copy of the wizard.
@@ -82,7 +82,8 @@ deletes one to make room for a newer attempt.
 After the wizard says the USB flash/readback succeeded:
 
 1. Power the Cardputer off and on with the prepared SD inserted.
-2. On its screen use **W/S** and **Enter** to choose **Install POS / resume**.
+2. On its screen use **Up/Down** and **Enter** to choose **Install POS / resume**.
+   On the ADV, hold **Fn** with **;** for Up or **.** for Down.
 3. Type **INSTALL** and press Enter. Keep power and SD connected while it works.
 4. When installation is complete, power it off and on again.
 5. Set your name and preferences. Wi-Fi can be skipped.
@@ -150,8 +151,8 @@ Optional commands for troubleshooting:
 
 ```sh
 ~/pos-setup --download-only                 # Download/verify without device changes
-~/pos-setup --release v0.5.1-dev             # Use a specific published version
-~/pos-setup --bundle /path/pos-0.5.1-dev.zip # Use a ZIP and matching .sha256 offline
+~/pos-setup --release v0.5.2-dev             # Use a specific published version
+~/pos-setup --bundle /path/pos-0.5.2-dev.zip # Use a ZIP and matching .sha256 offline
 ~/pos-setup --sd-folder '/mnt/chromeos/removable/YOUR CARD'
 ```
 

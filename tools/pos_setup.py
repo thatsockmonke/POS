@@ -25,7 +25,7 @@ import zipfile
 import pos_setup_storage as storage
 from pos_setup_storage import SetupError
 
-VERSION = "0.5.1-dev"
+VERSION = "0.5.2-dev"
 REPOSITORY = "thatsockmonke/POS"
 MAX_DOWNLOAD = 256 * 1024 * 1024
 MAX_UNPACK = 256 * 1024 * 1024
@@ -519,7 +519,8 @@ def flash(bundle: Path, state: Path, port: str, backup: Path) -> None:
         pos_deploy.flash(args, posctl)
     say("\nUSB flash and readback completed. The on-device POS installation is NEXT:")
     say("  1. Power Panputer off and on, leaving its microSD inserted.")
-    say("  2. On its screen choose 'Install POS / resume' with W/S and Enter.")
+    say("  2. On its screen choose 'Install POS / resume' with Up/Down and Enter.")
+    say("     ADV arrows: hold Fn with ; (Up) or . (Down).")
     say("  3. Type INSTALL and press Enter. Leave power/card connected while it works.")
     say("  4. When it says installation is complete, power off and on again.")
     say("  5. Set your name/preferences; Wi-Fi can be skipped. Leave this SD inserted for normal use.")
@@ -553,7 +554,7 @@ def main(argv=None) -> int:
     parser.add_argument("--version", action="version", version="POS Setup " + VERSION)
     parser.add_argument("--doctor", action="store_true", help="Read-only check of Linux/Crostini card/USB access")
     parser.add_argument("--download-only", action="store_true", help="Download and verify the latest published POS, including development releases")
-    parser.add_argument("--release", help="Choose a specific release, e.g. v0.5.1-dev")
+    parser.add_argument("--release", help="Choose a specific release, e.g. v0.5.2-dev")
     parser.add_argument("--bundle", type=Path, help="Use an already downloaded POS ZIP plus matching .sha256 file")
     parser.add_argument("--sd-folder", type=Path, help="Offer this mounted/shared card folder (copy only; never formats)")
     parser.add_argument("--work-dir", type=Path, default=Path.home()/".local/share/pos-setup", help="Private download/backup folder; default ~/.local/share/pos-setup")

@@ -38,7 +38,7 @@ void pos_ui_expansion(const char *root) {
     for (int i = 0; i < 4; ++i)
       pos_view_line(&view, i + 10, "%s", items[i]);
     view.selected_row = selected + 10;
-    pos_view_line(&view, 15, "W/S:move Enter:select Esc:back");
+    pos_view_line(&view, 15, "Arrows:move Enter:OK Esc:back");
     pos_device_show(&view);
     pos_event_t event;
     if (!pos_device_event(&event, 250) || !event.pressed)

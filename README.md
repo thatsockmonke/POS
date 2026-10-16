@@ -4,9 +4,9 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.5.1-dev adds `pos-setup`, a guided Linux/Crostini installer that downloads
-and verifies POS, prepares FAT32 SD media and walks through USB backup/recovery
-and flashing.** Recorder, Files Audio Player, IR/IMU and deployment tools remain.
+**0.5.2-dev switches navigation to arrow keys throughout POS. Left/Right moves
+between apps; Up or Enter opens one. Menus, color picking and audio controls use
+arrows too.** The guided Linux/Crostini `pos-setup` installer is included.
 Both ESP32-S3 firmware roles and native tests are checked; physical Panputer
 validation is still outstanding.
 
@@ -51,8 +51,8 @@ Implemented:
   **POS** lettering fades in across all three stripes, holds for one second, then normal boot continues.
 - Native ST7789 display output and TCA8418 ADV keyboard input, with USB fallback.
 - A fifteen-app horizontal launcher with black icons outlined in white, streamed from SD.
-  A/D moves the ribbon; W opens the centered app. Only one foreground app runs.
-- Background app: 1-12 horizontal stripes, visual WASD color picker, Q/E hue,
+  Left/Right moves the ribbon; Up or Enter opens the centered app. Only one foreground app runs.
+- Background app: 1-12 horizontal stripes, visual arrow-key color picker, Q/E hue,
   Shift fine adjustments, launcher preview and explicit Save & Apply.
   Backgrounds survive restarts, settings changes and verified backup/restore.
 - Central input routing, protected Home shortcut, and a separate input supervisor.
@@ -119,14 +119,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.5.1-dev/launcher.png)
-![Color picker](downloads/0.5.1-dev/color-picker.png)
+![Launcher](downloads/0.5.2-dev/launcher.png)
+![Color picker](downloads/0.5.2-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.5.1-dev/boot-animation.png)
+![POS boot animation](downloads/0.5.2-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.5.1-dev/boot-splash.png)
+[Final splash frame](downloads/0.5.2-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -143,7 +143,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.1-dev --zip-output dist/pos-0.5.1-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.2-dev --zip-output dist/pos-0.5.2-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -176,18 +176,22 @@ standalone runtime at the factory address. Read [INSTALL.md](docs/INSTALL.md).
 
 ## Controls
 
+On the Cardputer ADV, hold **Fn** and press the printed arrow keys:
+**;** = Up, **,** = Left, **.** = Down, **/** = Right. WASD type ordinary letters.
+USB terminals can use their normal arrow keys.
+
 | Context | Keys |
 | --- | --- |
-| Launcher | A/D or left/right arrows move; W or Enter opens the centered app |
-| Menus | W/S or arrows move; Enter selects |
-| Color picker | WASD moves color cursor; Q/E changes hue; Shift makes finer steps; Enter accepts |
+| Launcher | Left/Right arrows move; Up or Enter opens the centered app |
+| Menus | Up/Down arrows move; Enter selects |
+| Color picker | Arrow keys move color cursor; Q/E changes hue; Shift makes finer steps; Enter accepts |
 | Text fields | WASD are ordinary letters; Shift, Backspace, Enter; Ctrl+U clears |
-| Music | Space pauses; A/D previous/next; W/S volume; R shuffle; P add to playlist |
+| Music | Space pauses; Left/Right previous/next; Up/Down volume; R shuffle; P add to playlist |
 | Text Editor | Type normally; Fn+arrows move; Ctrl+S saves; Ctrl+F finds; Ctrl+G goes to line; Esc opens menu |
 | Back/cancel | Fn+backtick (Escape); closes an app from its main screen |
 | Close app / launcher | Fn+Space or a short G0 button press, from any screen; editor asks about unsaved text; unsaved background edits are discarded |
 | Recover from a stalled app | Hold Fn+Space or G0 for two seconds; restart into recovery |
-| USB fallback | WASD, Enter, Escape, and byte 0x1d for Home; IDF monitor itself reserves Ctrl-] |
+| USB fallback | ANSI arrow keys, Enter, Escape, and byte 0x1d for Home; IDF monitor itself reserves Ctrl-] |
 
 See the [new apps and expansion hardware guide](docs/APPS.md),
 [signed update guide](docs/UPDATES.md), [transfer/radio formats](docs/PROTOCOLS.md) and the [editor and Wi-Fi guide](docs/INSTALL.md#text-editor) for draft recovery,

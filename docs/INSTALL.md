@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.5.1-dev is an **experimental foundation**, not the complete master roadmap.
+POS 0.5.2-dev is an **experimental foundation**, not the complete master roadmap.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
 flashing, peripherals, factory boot recovery and electrical power-loss behavior
 have not been tested here. Read [STATUS.md](STATUS.md) before choosing to install.
@@ -19,9 +19,9 @@ including Chromebook shared-folder/USB limits. The detailed manual route follows
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.5.1-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.5.2-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.5.1-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.5.2-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -42,10 +42,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.5.1-dev.zip.sha256
-mkdir pos-0.5.1-dev
-unzip pos-0.5.1-dev.zip -d pos-0.5.1-dev
-cd pos-0.5.1-dev
+sha256sum -c pos-0.5.2-dev.zip.sha256
+mkdir pos-0.5.2-dev
+unzip pos-0.5.2-dev.zip -d pos-0.5.2-dev
+cd pos-0.5.2-dev
 sha256sum -c SHA256SUMS
 ```
 
@@ -168,7 +168,7 @@ with the final runtime. Close the serial program and reset/power-cycle if needed
    stripes, holds for **one second**, then normal boot status follows. The sequence runs once on each
    firmware boot, including recovery boots. Setup, SD validation and recovery
    checks still run before the launcher opens.
-2. In **POS Installer / Recovery**, choose **Install POS / resume** with W/S and Enter.
+2. In **POS Installer / Recovery**, choose **Install POS / resume** with Up/Down and Enter.
 3. The installer checks package/model/version, file sizes/hashes, runtime header,
    destination ownership, flash capacity and conservative SD free space.
 4. Read the summary, then type **INSTALL** exactly and press Enter. **Ctrl+U**
@@ -202,11 +202,14 @@ BLE sharing and the LoRa/GPS cap.
 
 ## 7. Normal use and recovery
 
+On the ADV, hold **Fn** with **;** (Up), **,** (Left), **.** (Down),
+or **/** (Right). In USB terminals, use the normal arrow keys.
+
 | Action | Control |
 | --- | --- |
-| Launcher | A/D or left/right arrows move; W or Enter opens the centered app |
-| Menus | W/S or arrows, Enter |
-| Color picker | WASD moves cursor; Q/E hue; Shift fine steps; Enter accepts; Esc cancels |
+| Launcher | Left/Right arrows move; Up or Enter opens the centered app |
+| Menus | Up/Down arrows, Enter |
+| Color picker | Arrow keys move cursor; Q/E hue; Shift fine steps; Enter accepts; Esc cancels |
 | Clear a text field | Ctrl+U (also byte 0x15 from a raw USB terminal) |
 | Back | Fn+backtick (Escape) |
 | Return Home | Fn+Space or a short G0 press |
@@ -262,9 +265,9 @@ do not prove FAT survives torn sectors or actual electrical power loss.
 
 ## Set your launcher background
 
-From the launcher, use **A/D** to center **Background**, then press **W**.
-Choose **Stripe count** (1-12), then open each stripe's color picker. **A/D**
-changes saturation; **W/S** changes brightness; **Q/E** changes hue along the
+From the launcher, use **Left/Right** to center **Background**, then press **Up** or **Enter**.
+Choose **Stripe count** (1-12), then open each stripe's color picker. **Left/Right**
+changes saturation; **Up/Down** changes brightness; **Q/E** changes hue along the
 rainbow bar. Hold **Shift** for finer steps. The cursor and swatch show your
 selection. **Enter** accepts a color; **Esc** cancels that color edit.
 
@@ -281,7 +284,7 @@ an app, or close it from its main screen. Background system services may continu
 
 ## Text Editor
 
-Center **Text Editor** with A/D and press W. Choose **New document**, **Open
+Center **Text Editor** with Left/Right and press Up or Enter. Choose **New document**, **Open
 text file** or **Recover working draft**. The file picker allows ordinary user
 files, never protected system files. New files and Save As go to
 `/POS/Users/Owner/Documents`; enter a simple filename including `.txt`.
@@ -369,11 +372,11 @@ and the common local/Wi-Fi/BLE Share screen.
 
 Read [APPS.md](APPS.md) for full controls, formats and recovery behavior.
 
-- **Files:** select a file/folder with W/S and Enter. Copy or Cut, navigate to
+- **Files:** select a file/folder with Up/Down and Enter. Copy or Cut, navigate to
   the destination, then Folder actions → Paste. Trash is reversible. Permanent
   deletion requires typing `DELETE` and cannot be undone.
-- **Music:** put MP3 or PCM 16-bit WAV files in Music. Space pauses, A/D changes
-  tracks, W/S changes volume, R toggles shuffle, P adds to a playlist. Audio stops
+- **Music:** put MP3 or PCM 16-bit WAV files in Music. Space pauses, Left/Right changes
+  tracks, Up/Down changes volume, R toggles shuffle, P adds to a playlist. Audio stops
   when closing the app.
 - **Share:** choose a user file, then local copy, Wi-Fi or BLE. On the receiving
   Panputer choose Receive BLE file, compare pairing numbers on both devices and

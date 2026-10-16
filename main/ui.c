@@ -41,7 +41,7 @@ static unsigned message_page(const char *title, const char *body, unsigned page,
   }
   unsigned pages = line ? (line + 11) / 12 : 1;
   if (pages > 1)
-    pos_view_line(&v, 14, "Page %u/%u   W/S: scroll", page + 1, pages);
+    pos_view_line(&v, 14, "Page %u/%u   Up/Down:scroll", page + 1, pages);
   pos_view_line(&v, 15,
                 notice && page + 1 < pages ? "Enter: next   Fn+Space: home"
                                            : "Enter: continue Fn+Space: home");
@@ -100,7 +100,7 @@ static int menu(const char *title, const char *const *items, int count,
       if (count > 10)
         pos_view_line(&view, 14, "Menu %d/%d", selected / 10 + 1,
                       (count + 9) / 10);
-      pos_view_line(&view, 15, "W/S:move Enter:select Esc:back");
+      pos_view_line(&view, 15, "Arrows:move Enter:OK Esc:back");
       pos_device_show(&view);
       redraw = false;
     }
