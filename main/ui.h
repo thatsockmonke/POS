@@ -44,3 +44,9 @@ void pos_desktop(const char *root, bool recovery_only);
 bool pos_ui_timezone(char timezone[64]);
 void pos_ui_settings(const char *root, pos_settings_t *settings);
 void pos_ui_updates(const char *root);
+
+void pos_ui_recorder(const char *root);
+void pos_ui_files_from(const char *root,const char *folder);
+void pos_ui_instruments(void);
+
+void pos_ui_deploy(const char *root);

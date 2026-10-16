@@ -85,7 +85,10 @@ static void details(const char *root, const char *relative) {
   pos_ui_notice("Details", text);
 }
 static void actions(const char *root, files_ui_t *f, bool folder) {
-  const char *items[] = {folder ? "Open folder" : "Open file",
+  const char *items[] = {folder ? "Open folder"
+                         : pos_music_supported(f->selected)
+                             ? "Play in Audio Player"
+                             : "Open file",
                          "Copy",
                          "Cut / move",
                          "Rename",
@@ -184,11 +187,15 @@ static void actions(const char *root, files_ui_t *f, bool folder) {
     details(root, f->selected);
 }
 static void folder_actions(const char *root, files_ui_t *f) {
-  const char *items[] = {
-      "New folder", "Paste clipboard",         "This folder actions",
-      "Open Trash", "Restore this Trash item", "SD root",
-      "Back"};
-  int choice = pos_ui_menu("Folder actions", items, 7);
+  const char *items[] = {"New folder",
+                         "Paste clipboard",
+                         "This folder actions",
+                         "Open Trash",
+                         "Restore this Trash item",
+                         "SD root",
+                         "Recordings",
+                         "Back"};
+  int choice = pos_ui_menu("Folder actions", items, 8);
   pos_error_t e = {0};
   if (choice == 0) {
     char name[121] = "New folder";
@@ -254,16 +261,26 @@ static void folder_actions(const char *root, files_ui_t *f) {
       f->page = 0;
     }
   }
+  if (choice == 6) {
+    strcpy(f->folder, "Recordings");
+    f->page = 0;
+  }
   if (choice == 5) {
     *f->folder = 0;
     f->page = 0;
   }
 }
-void pos_ui_files(const char *root) {
+void pos_ui_files_from(const char *root, const char *initial) {
   files_ui_t *f = calloc(1, sizeof(*f));
   if (!f)
     return;
-  strcpy(f->folder, "POS/Users/Owner");
+  if (!initial || strlen(initial) >= sizeof(f->folder) ||
+      (*initial &&
+       (!pos_fs_archive_path(initial) || !pos_fs_user_path(initial)))) {
+    free(f);
+    return;
+  }
+  strcpy(f->folder, initial);
   while (!pos_home_pending()) {
     if (listing(root, f)) {
       pos_ui_notice("Cannot open folder", "Files were not changed.");
@@ -315,4 +332,8 @@ void pos_ui_files(const char *root) {
     actions(root, f, S_ISDIR(st.st_mode));
   }
   free(f);
+}
+
+void pos_ui_files(const char *root) {
+  pos_ui_files_from(root, "POS/Users/Owner");
 }

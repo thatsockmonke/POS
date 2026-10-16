@@ -146,3 +146,59 @@ class AppsTests(unittest.TestCase):
         self.assertEqual(list((self.root/'POS/Users/Owner/Radio/outbox').iterdir()),[])
     def test_radio_crc_dedup_acks_retries_broadcast_and_range_csv(self):
         self.run_app('radio');rows=list(csv.DictReader((self.root/'range.csv').open()));self.assertEqual(len(rows),2);self.assertEqual(rows[0]['latitude'],'');self.assertEqual(rows[0]['rssi_dbm'],'');self.assertEqual(rows[1]['latitude'],'34.0000000');self.assertEqual(rows[1]['rssi_dbm'],'-91');self.assertEqual(rows[1]['snr_db'],'3.50')
+
+    def test_recorder_wav_is_standard_streamed_pcm_and_unique(self):
+        self.run_app('recorder','finish'); self.run_app('recorder','finish')
+        files=sorted((self.root/'Recordings').glob('*.wav')); self.assertEqual(len(files),2)
+        with wave.open(str(files[0]),'rb') as wav:
+            self.assertEqual((wav.getnchannels(),wav.getsampwidth(),wav.getframerate(),wav.getnframes()),(1,2,16000,38400))
+            expected=struct.pack('<256h',*[i*251-32000 for i in range(256)])
+            self.assertEqual(wav.readframes(38400),expected*150)
+        self.assertFalse(list((self.root/'Recordings').glob('*.part')))
+    def test_recorder_partial_recovery_and_corrupt_readback(self):
+        self.run_app('recorder','partial'); folder=self.root/'Recordings'
+        part=folder/'Recording-00001.wav.part'; self.assertTrue(part.exists())
+        self.run_app('recorder','recover','Recordings/'+part.name)
+        self.assertFalse(part.exists())
+        with wave.open(str(folder/'Recording-00001.wav'),'rb') as wav:self.assertEqual(wav.getnframes(),38400)
+        self.run_app('recorder','corrupt',expected=1)
+        self.assertFalse((folder/'Recording-00002.wav').exists()); self.assertTrue((folder/'Recording-00002.wav.part').exists())
+    def test_recorder_rejects_symlink_odd_partial_and_existing_wav(self):
+        outside=self.root/'outside'; outside.mkdir(); (self.root/'Recordings').symlink_to(outside,target_is_directory=True)
+        self.run_app('recorder','finish',expected=1); self.assertEqual(list(outside.iterdir()),[])
+        (self.root/'Recordings').unlink(); self.run_app('recorder','partial')
+        part=self.root/'Recordings/Recording-00001.wav.part'; part.write_bytes(part.read_bytes()+b'x')
+        before=part.read_bytes();self.run_app('recorder','recover','Recordings/'+part.name,expected=1);self.assertEqual(part.read_bytes(),before)
+    def test_imu_full_configuration_scaling_and_nec_wire_bits(self):self.run_app('instruments')
+    def app_envelope(self,schema,generation,payload,format=1):
+        import zlib
+        crc=zlib.crc32(f'counter\n{schema}\n{generation}\n'.encode()+payload.encode())
+        return json.dumps(dict(format=format,app='counter',schema=schema,generation=generation,payload=payload,crc32=f'{crc:08x}')).encode()
+    def test_counter_legacy_migration_preserves_original_and_generational_save(self):
+        original=self.write('POS/Users/Owner/Saves/counter.txt',b'321\n')
+        self.assertEqual(self.run_app('counter').decode().strip(),'321');self.assertEqual(original.read_bytes(),b'321\n')
+        self.assertEqual(self.run_app('counter','999').decode().strip(),'999');self.assertEqual(self.run_app('counter').decode().strip(),'999')
+        folder=self.root/'POS/Users/Owner/Saves/counter';self.assertEqual(len(list(folder.glob('slot-*.json'))),2)
+    def test_counter_schema_migration_keeps_exact_old_envelope(self):
+        legacy=self.app_envelope(0,1,'{"value":-456}')
+        self.write('POS/Users/Owner/Saves/counter/slot-1.json',legacy)
+        self.assertEqual(self.run_app('counter').decode().strip(),'-456')
+        backup=self.root/'POS/Users/Owner/Saves/counter/migration-0-1.json';self.assertEqual(backup.read_bytes(),legacy)
+        self.run_app('counter','22');self.assertEqual(backup.read_bytes(),legacy)
+    def test_future_save_and_corrupt_crc_are_preserved_without_default_writes(self):
+        future=self.write('POS/Users/Owner/Saves/counter/slot-1.json',self.app_envelope(7,1,'{"unknown":7}'))
+        before=future.read_bytes();self.run_app('counter','99',expected=1);self.assertEqual(future.read_bytes(),before)
+        future.write_bytes(self.app_envelope(1,1,'{"count":1}',format=2));before=future.read_bytes()
+        self.run_app('counter','99',expected=1);self.assertEqual(future.read_bytes(),before)
+        corrupt=json.loads(self.app_envelope(1,1,'{"count":1}'));corrupt['crc32']='00000000';future.write_text(json.dumps(corrupt));before=future.read_bytes()
+        self.run_app('counter','99',expected=1);self.assertEqual(future.read_bytes(),before)
+
+    def test_app_save_interrupted_partial_blocks_replacement_but_old_slot_loads(self):
+        self.run_app('counter','15')
+        part=self.write('POS/Users/Owner/Saves/counter/slot-0.json.part',b'incomplete save')
+        self.run_app('counter','99',expected=1)
+        self.assertEqual(self.run_app('counter').decode().strip(),'15');self.assertEqual(part.read_bytes(),b'incomplete save')
+    def test_counter_corrupt_legacy_preserves_original_and_refuses_reset(self):
+        old=self.write('POS/Users/Owner/Saves/counter.txt',b'123\ntrailing corruption')
+        before=old.read_bytes();self.run_app('counter',expected=1);self.assertEqual(old.read_bytes(),before)
+        self.assertFalse((old.parent/'counter').exists())

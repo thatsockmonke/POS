@@ -35,7 +35,7 @@ class FeatureTests(unittest.TestCase):
         cls.runner=Path(cls.compilation.name)/"features"
         sdk=Path(os.environ.get("IDF_PATH","/workspace/pos-cloud/esp-idf-v5.5.5"));cjson=sdk/"components/json/cJSON"
         sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/settings.c",ROOT/"main/browser.c",ROOT/"main/background.c",ROOT/"main/editor.c",ROOT/"main/wifi.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
-        sources += [ROOT/"main/files.c",ROOT/"main/music.c",ROOT/"main/sharing.c",ROOT/"main/expansion.c"]
+        sources += [ROOT/"main/files.c",ROOT/"main/music.c",ROOT/"main/recorder.c",ROOT/"main/instruments.c",ROOT/"main/sharing.c",ROOT/"main/expansion.c"]
         for component in ("pos_core","pos_recovery"):
             sources.extend((ROOT/"components"/component).glob("*.c"))
         command=["gcc","-std=c11","-D_POSIX_C_SOURCE=200809L","-Wall","-Wextra","-Werror","-g","-fsanitize=undefined","-fno-sanitize-recover=all"]
@@ -641,5 +641,17 @@ class FeatureTests(unittest.TestCase):
                 self.write("pos-reinstall.pos",text.encode());self.run_feature("reinstall",expected=1)
                 self.assertFalse((self.card/"POS.previous").exists());self.assertEqual((self.card/"pos-reinstall.pos").read_text(),text)
 
+
+    def test_recorder_home_finalizes_wav_and_releases_microphone(self):
+        self.run_feature('recorder-ui-home')
+        import wave
+        with wave.open(str(self.card/'Recordings/Recording-00001.wav'),'rb') as wav:
+            self.assertEqual((wav.getnframes(),wav.getframerate(),wav.getnchannels()),(256,16000,1))
+    def test_files_audio_player_stops_at_eof_without_entering_library_loop(self):
+        import wave
+        file=self.card/'Music/tone.wav';file.parent.mkdir()
+        with wave.open(str(file),'wb') as wav:
+            wav.setparams((1,2,22050,0,'NONE','not compressed'));wav.writeframes(struct.pack('<2048h',*[i%1000 for i in range(2048)]))
+        self.run_feature('audio-ui-file-eof')
 
 if __name__=="__main__":unittest.main()

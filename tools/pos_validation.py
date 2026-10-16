@@ -12,7 +12,7 @@ CHECKS = (
     "heap", "boot", "frame_timing", "battery", "wifi", "sleep_wake", "cap_conflicts",
     "cut_marker", "cut_sd_copy", "cut_sd_commit", "cut_firmware_write",
     "cut_boot_select", "cut_boot_confirm", "cut_backup_finalize",
-    "cut_reinstall_retire", "cut_restore_migrate", "cut_cleanup",
+    "cut_reinstall_retire", "cut_restore_migrate", "cut_cleanup", "ota_update", "ota_rollback",
 )
 
 
@@ -47,7 +47,7 @@ def write_new(path: Path, value) -> None:
 
 
 def template(output: Path) -> None:
-    write_new(output, {"format": 1, "observations": [
+    write_new(output, {"format": 1, "device_id": "", "validated_build_id": "", "observations": [
         {"check": check, "result": "not_run", "note": "", "evidence": []}
         for check in CHECKS
     ]})
@@ -83,10 +83,17 @@ def hardware_report(root: Path, observations: Path | None, output: Path) -> dict
             else:
                 continue
             measurements.append({"path": str(path.relative_to(root)), "sha256": digest(path), "measurement": data})
+    identity = {}
     if observations:
         data = read_json(observations)
         if not isinstance(data, dict) or data.get("format") != 1 or not isinstance(data.get("observations"), list):
             raise ValueError("Unsupported observation format")
+        import re
+        for field, pattern in (("device_id", r"(?:[0-9a-f]{2}:){5}[0-9a-f]{2}"), ("validated_build_id", r"[0-9a-f]{64}")):
+            if data.get(field):
+                if not isinstance(data[field], str) or not re.fullmatch(pattern, data[field]):
+                    raise ValueError("Invalid deployment evidence identity")
+                identity[field] = data[field]
         seen = set()
         base = observations.resolve().parent
         for item in data["observations"]:
@@ -126,6 +133,7 @@ def hardware_report(root: Path, observations: Path | None, output: Path) -> dict
               "measurements": measurements, "comparisons": comparisons,
               "physical_validation_complete": all(c["result"] == "pass" for c in checks.values()),
               "evidence_policy": "Measurements are collected evidence; physical checks require explicit operator observations."}
+    report.update(identity)
     write_new(output, report)
     return report
 

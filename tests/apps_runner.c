@@ -1,4 +1,7 @@
 #include "pos_capabilities.h"
+#include "pos_recorder.h"
+#include "pos_appdata.h"
+#include "pos_instruments.h"
 #include "pos_files.h"
 #include "pos_location.h"
 #include "pos_music.h"
@@ -18,11 +21,64 @@ static int cancelled(void *ctx, const char *phase, uint64_t done,
   (void)total;
   return done >= (uint64_t)*(unsigned *)ctx;
 }
+typedef struct { unsigned config_bytes,delays; uint32_t crc; bool broken; uint8_t power; } imu_mock_t;
+static int imu_read(void *ctx,uint8_t reg,uint8_t *bytes,size_t n) {
+  imu_mock_t *m=ctx; memset(bytes,0,n);
+  if(reg==0) *bytes=0x24;
+  if(reg==0x21) *bytes=m->broken?0:1;
+  if(reg==3) *bytes=0xc0;
+  if(reg==0x0c) { bytes[1]=0x20; bytes[3]=0xe0; bytes[9]=0x40; }
+  if(reg==0x22) bytes[1]=2;
+  return 0;
+}
+static int imu_write(void *ctx,uint8_t reg,const uint8_t *bytes,size_t n) {
+  imu_mock_t *m=ctx;
+  if(reg==0x7e) { m->config_bytes=0; m->crc=0; }
+  if(reg==0x5b) { assert(n==2); assert(((unsigned)bytes[0]+((unsigned)bytes[1]<<4))*2==m->config_bytes); }
+  if(reg==0x5e) { assert(n<=32); m->config_bytes+=(unsigned)n; m->crc=pos_crc32(m->crc,bytes,n); }
+  if(reg==0x7d) m->power=*bytes;
+  return 0;
+}
+static void imu_delay(void *ctx,unsigned ms) { ((imu_mock_t *)ctx)->delays+=ms; }
 int main(int argc, char **argv) {
   if (argc < 3)
     return 2;
   const char *mode = argv[1], *root = argv[2];
   pos_error_t e = {0};
+  if (!strcmp(mode,"instruments")) {
+    imu_mock_t mock={0}; pos_imu_bus_t bus={&mock,imu_read,imu_write,imu_delay};
+    assert(!pos_imu_initialize(&bus,&e)); assert(mock.config_bytes==8192 && mock.crc==0x229a1189u && mock.delays>=100 && mock.power==14);
+    pos_imu_sample_t sample;
+    assert(!pos_imu_sample(&bus,&sample,&e));
+    assert(sample.acceleration_g[0]==1.0f && sample.acceleration_g[1]==-1.0f && sample.temperature_c==24.0f);
+    assert(sample.angular_dps[1]>499.9f && sample.angular_dps[1]<500.1f);
+    assert(!pos_imu_suspend(&bus) && !mock.power);
+    mock.broken=true; assert(pos_imu_initialize(&bus,&e)<0 && !mock.power);
+    uint16_t pairs[34][2]; pos_ir_nec(0x12,0x34,pairs);
+    assert(pairs[0][0]==9000 && pairs[0][1]==4500 && pairs[33][0]==560);
+    uint32_t value=0; for(unsigned i=0;i<32;++i) { assert(pairs[i+1][0]==560); if(pairs[i+1][1]==1690) value|=1UL<<i; else assert(pairs[i+1][1]==560); }
+    assert(value==0xcb34ed12UL); puts("verified config, axes, failure and NEC bits"); return 0;
+  }
+  if (!strcmp(mode,"recorder")) {
+    if (!strcmp(argv[3],"recover")) return pos_recorder_recover(root,argv[4],&e)?fail(&e):0;
+    pos_recorder_t *r=pos_recorder_open(root,&e); if(!r) return fail(&e);
+    int16_t samples[256]; for(unsigned i=0;i<256;++i) samples[i]=(int)i*251-32000;
+    for(unsigned i=0;i<150;++i) assert(!pos_recorder_write(r,samples,256,&e));
+    assert(pos_recorder_frames(r)==38400);
+    if(!strcmp(argv[3],"corrupt")) {
+      char rel[260],path[POS_FS_PATH]; snprintf(rel,sizeof(rel),"%s.part",pos_recorder_path(r)); assert(!pos_fs_join(path,root,rel));
+      FILE *f=fopen(path,"r+b"); assert(f); assert(!fseek(f,44,SEEK_SET)); fputc(1,f); fclose(f);
+    }
+    int result=0;
+    if(strcmp(argv[3],"partial")) result=pos_recorder_finish(r,&e);
+    puts(pos_recorder_path(r)); pos_recorder_close(r); return result?fail(&e):0;
+  }
+  if (!strcmp(mode,"counter")) {
+    int count=0; int result=pos_counter_load(root,&count,&e);
+    if(result<0) return fail(&e);
+    if(argc>3) { count=atoi(argv[3]); if(pos_counter_save(root,count,&e)) return fail(&e); }
+    printf("%d\n",count); return 0;
+  }
   if (!strcmp(mode, "files")) {
     if (argc < 5)
       return 2;

@@ -311,3 +311,7 @@ Recovery. Preserve them alongside the exact build and USB logs for diagnosis.
 An update journal is resolved before normal System validation. See
 [UPDATES.md](UPDATES.md#format-and-interruption-recovery); retain the old/failed
 System directories and never discard the only known-good backup.
+
+App metadata now has versioned save/migration APIs and concrete Counter migrations.
+See [MIGRATIONS.md](MIGRATIONS.md) for generation slots, preserved originals,
+future-schema refusal and restore behavior.

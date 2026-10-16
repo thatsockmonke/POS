@@ -34,7 +34,7 @@ static bool background_preview_seen;
 static pos_view_t picker_last;
 static pos_expansion_status_t fake_expansion;
 static unsigned hardware_changes, audio_writes, audio_stops, ble_accepts,
-    ble_pairings;
+    ble_pairings, microphone_starts, microphone_stops, microphone_reads;
 static bool audio_active, ble_active, advance_after_audio,
     hardware_missing_seen, maps_ready_seen;
 static pos_ble_status_t fake_ble;
@@ -838,7 +838,7 @@ static int picker_tests(void) {
   return 0;
 }
 static int launcher_tests(const char *root) {
-  assert(POS_LAUNCHER_APP_COUNT == 14);
+  assert(POS_LAUNCHER_APP_COUNT == 15);
   pos_event_t event = {'w', 0, true};
   assert(pos_launcher_action(&event) == POS_KEY_ENTER);
   event.key = 'a';
@@ -1060,6 +1060,18 @@ static int apps_ui(const char *root, const char *mode) {
            !fake_expansion.tx_enabled && fake_expansion.gps_detected &&
            fake_expansion.maps_available && maps_ready_seen);
     return 0;
+  }
+  if (!strcmp(mode,"audio-ui-file-eof")) {
+    pos_ui_music_file(root,"Music/tone.wav");
+    assert(audio_writes && !audio_active && audio_stops && !pos_home_pending());
+    assert(!strcmp(ui_last.lines[0],"Audio Player")); return 0;
+  }
+  if (!strcmp(mode,"recorder-ui-home")) {
+    push_key(POS_KEY_ENTER,0); idle_event(); push_key(POS_KEY_HOME,0);
+    pos_ui_recorder(root);
+    assert(microphone_starts==1 && microphone_reads==1 && microphone_stops && pos_home_pending());
+    char file[POS_FS_PATH]; assert(!pos_fs_join(file,root,"Recordings/Recording-00001.wav"));
+    struct stat st; assert(!stat(file,&st) && st.st_size==44+512); return 0;
   }
   if (!strncmp(mode, "music-ui-", 9)) {
     advance_after_audio = true;
@@ -1307,3 +1319,12 @@ int main(int argc, char **argv) {
            (unsigned long long)info.required, info.conflicts);
   return 0;
 }
+
+void pos_ui_deploy(const char *root) { (void)root; }
+int pos_microphone_start(pos_error_t *e) { (void)e; ++microphone_starts; return 0; }
+int pos_microphone_read(int16_t *m,size_t capacity,size_t *n,pos_error_t *e) { (void)e; ++microphone_reads; if(ui_next<ui_count && ui_events[ui_next].key==INT_MIN) ++ui_next; *n=capacity; for(size_t i=0;i<capacity;++i) m[i]=(int16_t)i; return 0; }
+void pos_microphone_stop(void) { ++microphone_stops; }
+int pos_motion_start(pos_error_t *e) { (void)e; return 0; }
+int pos_motion_read(pos_imu_sample_t *s,pos_error_t *e) { (void)e; memset(s,0,sizeof(*s)); return 0; }
+void pos_motion_stop(void) {}
+int pos_infrared_send(uint8_t a,uint8_t c,pos_error_t *e) { (void)a;(void)c;(void)e; return 0; }

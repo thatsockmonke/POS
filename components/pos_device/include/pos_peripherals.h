@@ -25,3 +25,13 @@ int pos_expansion_send(uint8_t type, uint32_t destination, const char *text,
 int pos_expansion_retry(pos_error_t *e);
 int pos_expansion_range(bool enable, pos_error_t *e);
 void pos_expansion_stop(void);
+
+#include "pos_instruments.h"
+/* Audio is exclusive: microphone and speaker cannot run together. */
+int pos_microphone_start(pos_error_t *);
+int pos_microphone_read(int16_t *mono,size_t capacity,size_t *frames,pos_error_t *);
+void pos_microphone_stop(void);
+int pos_motion_start(pos_error_t *);
+int pos_motion_read(pos_imu_sample_t *,pos_error_t *);
+void pos_motion_stop(void);
+int pos_infrared_send(uint8_t address,uint8_t command,pos_error_t *);

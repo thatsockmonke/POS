@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.4.0-dev is an **experimental foundation**, not the complete master roadmap.
+POS 0.5.0-dev is an **experimental foundation**, not the complete master roadmap.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
 flashing, peripherals, factory boot recovery and electrical power-loss behavior
 have not been tested here. Read [STATUS.md](STATUS.md) before choosing to install.
@@ -9,9 +9,9 @@ Only use the **Cardputer ADV** hardware profile, not the original Cardputer.
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.4.0-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.5.0-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.4.0-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.5.0-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -32,10 +32,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.4.0-dev.zip.sha256
-mkdir pos-0.4.0-dev
-unzip pos-0.4.0-dev.zip -d pos-0.4.0-dev
-cd pos-0.4.0-dev
+sha256sum -c pos-0.5.0-dev.zip.sha256
+mkdir pos-0.5.0-dev
+unzip pos-0.5.0-dev.zip -d pos-0.5.0-dev
+cd pos-0.5.0-dev
 sha256sum -c SHA256SUMS
 ```
 
@@ -393,3 +393,8 @@ termination signal. [APPS.md](APPS.md#battery-display) documents thresholds and
 controls. Settings includes direct brightness, regional/custom timezones, UTC
 clock setting, crash reports and safe-mode requests. [Recovery](RECOVERY.md#crash-records-and-safe-mode)
 explains the persistent failed-boot policy and 60-second healthy interval.
+
+Recorder, Files Audio Player and IR/motion controls are described in [APPS.md](APPS.md).
+[Developer tooling](DEVELOPMENT.md) adds checksum/backup-checked `posctl flash`,
+streamed user file transfer and evidence-gated signed deployment. Do not attempt
+wireless firmware deployment before actual USB recovery/OTA/rollback validation.

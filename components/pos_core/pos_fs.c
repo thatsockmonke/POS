@@ -54,6 +54,7 @@ int pos_fs_layout(const char *root) {
                         "POS/Updates",
                         "Downloads",
                         "Music",
+                        "Recordings",
                         "Music/Playlists",
                         "POS/Users/Owner/Radio",
                         "POS/Users/Owner/Diagnostics/Crashes",

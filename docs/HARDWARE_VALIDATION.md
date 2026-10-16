@@ -60,3 +60,17 @@ an off-device copy. If the card requires repair, record that as a filesystem
 failure; do not count an automatic repair as proof that installation was atomic.
 No program in this repository controls an external power relay or has performed
 these tests. Factory USB recovery remains the prerequisite and fallback.
+
+## Added peripherals and deployment (not run)
+
+| Check | Evidence | Result |
+| --- | --- | --- |
+| Microphone / Recorder | Known tone/voice, channel/gain/noise, desktop WAV open, pause/resume, long recording, SD-full/overrun and partial recovery | Not run |
+| BMI270 | Chip/config status, stationary gravity, rotations/signs, temperature, keyboard/audio/cap coexistence | Not run |
+| IR emitter | GPIO44 logic-analyzer carrier/envelope and known receiver response to explicit NEC send | Not run |
+| ota_update | Signed HTTPS update, target build/sequence and healthy confirmation with saved serial/SD evidence | Not run |
+| ota_rollback | Deliberate failed test boot, old runtime/System restored and user data comparison | Not run |
+| Developer session | Rejected wrong key/signature/evidence, LAN transfer hashes, explicit device approval and post-reboot confirmation | Not run |
+
+See DEVELOPMENT.md for target/build identity fields and evidence-gated deployment.
+No host test below substitutes for any physical result in this table.

@@ -105,3 +105,14 @@ condition and a comparison against an off-device original. Check missing/corrupt
 cards and insufficient space separately. A repaired FAT volume is a recorded
 failure, not proof of transaction atomicity. None of these tools operates a power
 relay or automatically certifies electrical power-loss behavior.
+
+
+Recorder tests independently open generated WAVs, compare PCM, recover interrupted
+files and check readback corruption/symlink refusal. UI tests verify global close
+finalizes recording/releases input and Files playback stops at EOF. IMU tests use
+a simulated register bus to check the full 8192-byte configuration, scaled samples,
+failed initialization shutdown and exact NEC complement/bit order. App-save tests
+cover preserved legacy originals, schema backups, future/corrupt data refusal and
+interrupted-slot protection. Developer tests mock USB/LAN/HTTPS to check signatures,
+payload/hosted-manifest changes, physical-evidence hashes/identity, transfer hashes,
+private session keys and confirmation criteria. These are software checks only.

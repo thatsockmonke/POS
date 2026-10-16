@@ -31,3 +31,8 @@ int pos_network_share_start(const char *root, const char *export_file,
 void pos_network_share_stop(void);
 
 int pos_network_https_limit(const char *,const char *,const char *,const char *,const char *,const char *,const char *,pos_io_progress_t,void *,pos_error_t *,uint32_t limit);
+
+/* Deployment routes only exist in an explicit foreground developer session. */
+int pos_network_deploy_start(const char *root,char key[17]);
+bool pos_network_deploy_take(char url[512]);
+void pos_network_deploy_result(bool success);

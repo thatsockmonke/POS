@@ -1,0 +1,54 @@
+# Versioned app saves and migrations
+
+User audio/documents remain ordinary files. Versioned app metadata uses the
+portable `pos_appdata` API; it does not require a package manager. An app owns
+`POS/Users/Owner/Saves/<app-id>/`, where app IDs contain 1–32 lowercase letters,
+digits or hyphens. Large data stays in streamed companion files. A save envelope
+contains bounded JSON metadata/references (at most 1024 bytes), not whole tracks,
+documents or maps.
+
+Two `slot-0.json` / `slot-1.json` envelopes contain exactly:
+
+```json
+{"format":1,"app":"counter","schema":1,"generation":1,"payload":"{\"count\":7}","crc32":"xxxxxxxx"}
+```
+
+`payload` is the exact serialized JSON string. CRC-32 covers UTF-8
+`<app>\n<schema>\n<generation>\n<payload>`; `crc32` is eight lowercase hex digits.
+Generations start at 1; generation modulo 2 chooses the slot. Load verifies the
+envelope, CRC, JSON and bounded integers, selecting the latest valid generation.
+An unsupported future envelope/schema in either valid slot blocks writes.
+The loader does not rewrite files while inspecting them.
+
+`pos_appdata_load(root, app, current_schema, migrate_step, ctx, out, error)` returns
+0 for current, 1 for absent, 2 for a successful in-memory migration, -1 for damage
+and -2 for unsupported/future data. A converter handles **one schema step** at a
+time into a separate JSON buffer; each output is validated. Failed/unknown steps
+leave the original SD files intact. Migration chains are bounded to 16 steps.
+The caller must refuse saving after negative results; Counter does this explicitly.
+
+`pos_appdata_save` checks the current generation/schema again, refuses stale/future
+writes, writes a separate exclusive `.part`, syncs and reads it back, then replaces
+only the older target slot. The other known-good slot remains available. A stale
+partial blocks retry until inspected/moved through Files; it is not automatically
+erased. Before committing a schema change, the **exact original** envelope is
+copied and verified as `migration-<schema>-<generation>.json`. Conflicting migration
+backups block writing. Originals and preserved migration snapshots remain readable
+on a normal computer. CRC detects accidental corruption; it is not authentication.
+
+## Concrete Counter migrations
+
+- Previous `counter.txt` / `counter.previous.txt` plain integers are validated and
+  imported to schema 1 without deleting or modifying either original.
+- Versioned Counter schema 0 `{"value":N}` becomes schema 1 `{"count":N}`.
+  The old envelope is retained permanently before commit.
+- Values must be integral and between -1,000,000 and 1,000,000. Future schemas,
+  malformed payloads, checksum damage without a valid fallback or symlinked paths
+  are refused; opening the app cannot silently reset and overwrite them.
+
+ZIP and folder restores already preserve user saves and conflicts as ordinary
+files. App conversion happens through the known app's loader after restore,
+without overwriting the new operating system. Existing Settings migrations remain
+separate, as documented in RECOVERY.md. Future app/save schemas require explicit
+converters when those schemas are defined; unsupported data stays accessible.
+No framework can safely guess the meaning of arbitrary future save formats.

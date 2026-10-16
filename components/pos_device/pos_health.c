@@ -11,6 +11,7 @@
 #include "pos_fs.h"
 #include "xtensa_context.h"
 #include <stdio.h>
+#include <stdatomic.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -59,7 +60,8 @@ void IRAM_ATTR __wrap_esp_panic_handler(panic_info_t *info) {
   }
   __real_esp_panic_handler(info);
 }
-static bool safe, tracking, ready, healthy;
+static bool tracking, ready;
+static atomic_bool safe, healthy;
 static uint32_t failures;
 static uint64_t ready_ms, confirm_attempt_ms;
 static int (*confirm_hook)(void);
@@ -180,3 +182,5 @@ int pos_health_export(const char *root) {
   reset_reason = ESP_RST_UNKNOWN;
   return 0;
 }
+
+bool pos_health_healthy(void) { return healthy && !safe; }

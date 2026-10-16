@@ -4,8 +4,8 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.4.0-dev adds signed online/asset updates, an always-visible battery estimate,
-persistent crash records/safe mode, editor history/selection and expanded Settings.**
+**0.5.0-dev adds Recorder, a Files-only Audio Player, IR/IMU services,
+versioned app-save migrations and USB/LAN deployment tools.**
 Both ESP32-S3 firmware roles and native tests are checked; physical Panputer
 validation is still outstanding.
 
@@ -14,7 +14,8 @@ validation is still outstanding.
 [GitHub Releases](https://github.com/thatsockmonke/POS/releases) · [Download the complete package](docs/DOWNLOADS.md) · [Full installation guide](docs/INSTALL.md) · [Feature status / remaining roadmap](docs/STATUS.md)
 
 The complete master roadmap is not implemented. On-device maps/navigation,
-Meshtastic compatibility, a Recorder app, IR/IMU and wireless deployment remain.
+and Meshtastic compatibility remain. Wireless firmware deployment is evidence-gated
+until physical USB recovery and OTA/rollback tests pass on your device/build.
 Games, a POS terminal, installable apps/package management and automatic power
 management have been removed from scope. The battery indicator replaces that
 power-management milestone. See the current [remaining list](docs/STATUS.md#remaining-software-roadmap-current-priorities).
@@ -33,7 +34,7 @@ Implemented:
   over blue. Pink slides into the top when yellow is halfway across. Large centered
   **POS** lettering fades in across all three stripes, holds for one second, then normal boot continues.
 - Native ST7789 display output and TCA8418 ADV keyboard input, with USB fallback.
-- A fourteen-app horizontal launcher with black icons outlined in white, streamed from SD.
+- A fifteen-app horizontal launcher with black icons outlined in white, streamed from SD.
   A/D moves the ribbon; W opens the centered app. Only one foreground app runs.
 - Background app: 1-12 horizontal stripes, visual WASD color picker, Q/E hue,
   Shift fine adjustments, launcher preview and explicit Save & Apply.
@@ -102,14 +103,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.4.0-dev/launcher.png)
-![Color picker](downloads/0.4.0-dev/color-picker.png)
+![Launcher](downloads/0.5.0-dev/launcher.png)
+![Color picker](downloads/0.5.0-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.4.0-dev/boot-animation.png)
+![POS boot animation](downloads/0.5.0-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.4.0-dev/boot-splash.png)
+[Final splash frame](downloads/0.5.0-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -124,9 +125,9 @@ On the prepared cloud machine:
 ```sh
 cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
-python tools/posctl.py build --build-root build-v040
+python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v040 --output dist/pos-0.4.0-dev --zip-output dist/pos-0.4.0-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.0-dev --zip-output dist/pos-0.5.0-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -150,7 +151,7 @@ also enables the full TLS certificate bundle; existing generated configs must
 enable it or be replaced using a fresh build root. Pass that same build root to
 `bundle` so installer and runtime come from the matching build. Version 0.3.8
 requires fresh NimBLE/Secure Connections defaults too; the commands above use a
-separate build-v040 root rather than reusing an old generated sdkconfig.
+separate build-v050 root rather than reusing an old generated sdkconfig.
 
 `bundle`, `package`, preview and backup commands refuse existing output names.
 A bundle contains the merged `pos-installer-usb.bin`, `pos-install.zip`, an
@@ -225,5 +226,17 @@ for the actual-device workflow.
 See [format and transaction details](docs/FORMAT.md),
 [recovery semantics](docs/RECOVERY.md), [hardware profile](docs/HARDWARE.md) and
 [third-party notices](THIRD_PARTY.md). The card is never formatted or automatically
-wiped. On-device maps/navigation, Meshtastic compatibility, the Recorder app,
-IR/IMU services and wireless deployment remain later milestones.
+wiped. On-device maps/navigation and Meshtastic compatibility remain later milestones.
+Recorder, Files Audio Player, IR/IMU, versioned save migrations and evidence-gated
+deployment are described in [APPS.md](docs/APPS.md), [MIGRATIONS.md](docs/MIGRATIONS.md)
+and [DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
+
+Recorder is a launcher app: Start recording, Space to pause/resume, Enter/Esc to
+stop and save, Fn+Space to save and close. Standard WAV files live in `/Recordings`.
+Files → select MP3/WAV → **Play in Audio Player** opens a transient player; it
+is absent from the launcher and stops at EOF. The Music library app is retained.
+Settings → **IR & motion** provides live BMI270 readings and explicit NEC sends.
+See [Developer tooling](docs/DEVELOPMENT.md) for `posctl flash`, `files` and gated
+`deploy`. HTTPS uses ESP-IDF's common-root certificate bundle to preserve the
+existing OTA layout; validation remains enabled and unsupported roots are rejected.

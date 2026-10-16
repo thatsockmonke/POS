@@ -32,3 +32,6 @@ void pos_device_wifi_stop(void);
 void pos_device_keyboard_begin(void);
 
 int pos_device_set_time_utc(const char *text);
+
+int pos_device_i2c_read_block(uint8_t,uint8_t,uint8_t *,size_t);
+int pos_device_i2c_write_block(uint8_t,uint8_t,const uint8_t *,size_t);

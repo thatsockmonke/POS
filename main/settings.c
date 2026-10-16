@@ -136,9 +136,11 @@ void pos_ui_settings(const char *root, pos_settings_t *settings) {
                            "System / software update",
                            "Battery information",
                            "Restore default preferences",
+                           "IR & motion",
+                           "Developer deployment",
                            "Back"};
-    int choice = pos_ui_menu_from("Settings", items, 10, selected);
-    if (choice < 0 || choice == 9)
+    int choice = pos_ui_menu_from("Settings", items, 12, selected);
+    if (choice < 0 || choice == 11)
       return;
     selected = choice;
     if (choice == 0)
@@ -186,6 +188,10 @@ void pos_ui_settings(const char *root, pos_settings_t *settings) {
         save(root, settings, &next);
       }
     }
+    if (choice == 9)
+      pos_ui_instruments();
+    if (choice == 10)
+      pos_ui_deploy(root);
     pos_device_brightness(settings->brightness);
     setenv("TZ", settings->timezone, 1);
     tzset();

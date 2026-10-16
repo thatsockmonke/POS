@@ -1,44 +1,40 @@
-POS 0.4.0-dev implements signed updates, battery status, persistent crash recovery,
-editor improvements and expanded Settings.
+POS 0.5.0-dev adds Recorder, a Files-only Audio Player, IR/IMU services, versioned
+app-save migrations and evidence-gated developer deployment.
 
-- Settings > System / software update > Software Update checks an HTTPS manifest,
-  validates a trusted P-256 signature, model, semantic/minimum versions and signed
-  sequence, then streams verified updates. Asset-only updates do not reflash firmware.
-  Configure your publisher URL and explicitly verified public key first; there is
-  no default public update feed. See UPDATES.md.
-- Update preparation retains current/user data; a journal protects the System
-  swap and keeps the previous System. Inactive firmware is written and read back
-  before boot selection. Online OTA waits for a healthy 60-second UI interval and
-  another validation before confirmation; failed boots can restore System/rollback.
-- Battery percentage and changing icon stay visible in a small black box at the
-  top right, including startup and dialogs. Readings use smoothing and hysteresis;
-  unavailable ADC data shows --%. Green full / 100% is a sustained-voltage estimate,
-  not a charger-termination signal. No automatic power-management milestone remains.
-- SDK panic handling keeps its normal USB report/backtrace while a bounded RTC
-  snapshot survives a warm reset. The next SD mount exports a verified readable
-  JSON; existing reports are never replaced. NVS tracks repeated failed boots,
-  and Safe Mode requires an explicit normal-boot choice before optional services.
-- Editor: 32-level session undo/redo, Shift+arrows selection, Ctrl+A/C/X/V, SD-backed
-  clipboard, word/page/line/document navigation and an expanded controls menu.
-  Large documents/selections remain streamed; reopening restarts session history.
-- Settings: direct profile/brightness controls, regional/custom POSIX timezone
-  rules, UTC/local clock display, manual real-date-validated UTC setting, SNTP,
-  preferences-only reset, battery information, crash reports and safe-mode requests.
-- Keeps all existing Files, Music, BLE sharing, GPS/LoRa, Range Test, background
-  customization, fourteen-icon launcher and pink/yellow/blue boot animation.
-- Remaining scope now tracks on-device map downloads/navigation, Meshtastic
-  compatibility, a dedicated Recorder app/Recordings folder, IR/IMU, developer
-  deployment tools and future data migrations. Games, terminal and installable
-  apps/package management have been removed from scope.
+- Recorder is the fifteenth launcher app. It streams 16 kHz mono signed-16 PCM WAV
+  into /Recordings, with pause/resume, time/size/peak, stop/save and global close.
+  Finished recordings pass full PCM CRC readback; interrupted .wav.part files can
+  be explicitly recovered. Microphone/speaker ownership is exclusive.
+- Files > select MP3/WAV > Play in Audio Player opens a transient player and
+  returns at EOF. Audio Player has no launcher icon; Music remains the library app.
+- Settings > IR & motion provides live BMI270 accel/gyro/temperature and explicit
+  standard NEC sends through GPIO44. Shared APIs upload/verify the BMI270 config
+  and expose scaled sensor axes. The ADV has an emitter, no IR receiver/compass.
+- posctl flash checks installer checksum/images/layout, matching double-read
+  factory backup and security state before writing/readback. posctl files streams
+  SHA-256-verified user transfers through an explicit trusted-LAN session.
+- posctl deploy verifies local signatures/payloads, hosted HTTPS manifest, target
+  trust/identity/health and rehashed physical recovery/OTA evidence. A temporary
+  developer session queues the same signed updater and requires device approval.
+  Firmware reboot closes it; reopen it and refresh the private key file for boot
+  confirmation polling. No startup server or unattended deployment is enabled.
+- Portable app-save envelopes provide checked generation slots, incremental schema
+  migration, readback, preserved originals and future-schema refusal. Counter has
+  concrete legacy text and schema-0-to-1 migrations. Unknown future formats stay
+  recoverable, with converters added when those formats exist.
+- Keeps the existing partition layout and factory recovery. Uses the SDK common
+  certificate roots and WARN library logging for capacity; TLS validation stays
+  enabled. Unsupported roots fail closed. No PSRAM or additional flash is assumed.
 
-Download pos-0.4.0-dev.zip and its checksum, extract it and read INSTALL.md/APPS.md.
-Extract the inner pos-install.zip onto FAT32 SD; flash only pos-installer-usb.bin
-at 0x0. Existing 0.3.x installations need the USB recovery/backup/reinstall flow
-to bootstrap this updater; retain backups and the exact matching installer.
-Online update signatures do not enable ESP secure boot or sign the USB bootstrap.
+Download pos-0.5.0-dev.zip and its checksum. Verify, extract and follow INSTALL.md.
+Full app controls, migrations and developer usage are in APPS.md, MIGRATIONS.md and
+DEVELOPMENT.md. Existing 0.4.0-dev supports signed OTA when a publisher/feed is
+configured; otherwise use the documented backup/USB reinstall path.
 
-Experimental prerelease: builds/native tests and package verification do not
-establish physical ADV behavior. USB/factory recovery, percentage calibration,
-actual panic capture, TLS/radio coexistence, OTA rollback and electrical SD
-power-cut behavior still need device validation. The existing 4-MiB partition
-offsets are retained; runtime flash headroom remains limited.
+Experimental prerelease: host tests/builds are not physical hardware proof. Actual
+microphone quality, I2S timing, IMU orientation, IR signals, USB recovery, networking,
+OTA rollback and SD power-cut behavior need device validation. No physical pass
+has been recorded; wireless firmware deployment remains gated until it is.
+Remaining software roadmap: on-device region downloads/offline maps/navigation
+and Meshtastic compatibility. Games, terminal, installable app/package management
+and automatic power management remain removed from scope.

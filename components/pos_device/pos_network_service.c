@@ -5,6 +5,12 @@
 #include "esp_netif.h"
 #include "esp_netif_sntp.h"
 #include "esp_random.h"
+#include "esp_app_desc.h"
+#include "esp_mac.h"
+#include "esp_ota_ops.h"
+#include "esp_timer.h"
+#include "pos_health.h"
+#include "pos_update_service.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "nvs.h"
@@ -244,11 +250,22 @@ int pos_network_https(const char *url,const char *method,const char *body,const 
 
 static httpd_handle_t server;
 static atomic_bool share_stop_requested;
+static atomic_int deployment_state; /* 0 idle, 1 queued, 2 executing, 3 done, 4 failed */
+static char deployment_url[512];
+static atomic_bool deployment_enabled;
+static int64_t deployment_deadline;
 static struct {
   char root[POS_FS_PATH], export_file[POS_FS_PATH], key[17];
 } share;
 static bool authorized(httpd_req_t *request) {
-  char query[512], key[32];
+  char query[512], key[32], bearer[32];
+  if (deployment_enabled && esp_timer_get_time()>deployment_deadline) return false;
+  if (httpd_req_get_hdr_value_str(request,"Authorization",bearer,sizeof(bearer))==ESP_OK &&
+      strlen(bearer)==23 && !memcmp(bearer,"Bearer ",7)) {
+    unsigned different=0;
+    for(unsigned i=0;i<16;++i) different|=(unsigned char)bearer[i+7]^(unsigned char)share.key[i];
+    return different==0;
+  }
   if (httpd_req_get_url_query_str(request, query, sizeof(query)) != ESP_OK ||
       httpd_query_key_value(query, "key", key, sizeof(key)) != ESP_OK ||
       strlen(key) != 16)
@@ -294,6 +311,10 @@ static esp_err_t send_file(httpd_req_t *request) {
   if (!f)
     return httpd_resp_send_err(request, HTTPD_404_NOT_FOUND,
                                "File unavailable.");
+  char sha[65];
+  uint32_t export_size;
+  if(pos_fs_file_size(share.export_file,&export_size) || pos_hash_file(share.export_file,export_size,sha)) { fclose(f); return ESP_FAIL; }
+  httpd_resp_set_hdr(request,"X-POS-SHA256",sha);
   httpd_resp_set_type(request, "application/octet-stream");
   httpd_resp_set_hdr(request, "Content-Disposition",
                      "attachment; filename=\"panputer-file\"");
@@ -370,15 +391,71 @@ static esp_err_t receive_file(httpd_req_t *request) {
     return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
                                "Use a simple filename without directories.");
   snprintf(relative, sizeof(relative), "Downloads/%s", name);
+  char sha[65]; const char *expected=NULL;
+  if (httpd_req_get_hdr_value_len(request,"X-POS-SHA256")) {
+    if(httpd_req_get_hdr_value_str(request,"X-POS-SHA256",sha,sizeof(sha))!=ESP_OK || strlen(sha)!=64 || strspn(sha,"0123456789abcdef")!=64)
+      return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"Invalid SHA-256 header.");
+    expected=sha;
+  }
   upload_t upload = {request, request->content_len};
   pos_error_t e = {0};
   int result =
-      pos_receive_file(share.root, relative, request->content_len, NULL,
+      pos_receive_file(share.root, relative, request->content_len, expected,
                        upload_read, &upload, share_progress, NULL, &e);
   if (result)
     return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, e.message);
   return httpd_resp_sendstr(request, "Uploaded and verified in Downloads.");
 }
+static esp_err_t device_status(httpd_req_t *request) {
+  if (!authorized(request)) return httpd_resp_send_err(request,HTTPD_403_FORBIDDEN,"Session key required.");
+  uint8_t mac[6]; char build[65],body[600],fingerprint[65]="";
+  uint32_t sequence=0;
+  pos_update_source_t *source=calloc(1,sizeof(*source));
+  if(source && !pos_update_source_load(source)) { sequence=source->sequence; if(*source->key) pos_update_key_fingerprint(source->key,fingerprint); }
+  free(source);
+  if(esp_efuse_mac_get_default(mac)!=ESP_OK) return ESP_FAIL;
+  esp_app_get_elf_sha256(build,sizeof(build));
+  esp_ota_img_states_t state;
+  bool confirmed=esp_ota_get_state_partition(esp_ota_get_running_partition(),&state)==ESP_OK && state==ESP_OTA_IMG_VALID;
+  char journal[POS_FS_PATH]; struct stat st;
+  bool no_update=!pos_fs_join(journal,share.root,"pos-update.pos") && pos_fs_lstat(journal,&st) && errno==ENOENT;
+  snprintf(body,sizeof(body),"{\"format\":1,\"model\":\"m5stack-cardputer-adv\",\"device_id\":\"%02x:%02x:%02x:%02x:%02x:%02x\",\"build_id\":\"%s\",\"version\":\"%s\",\"healthy\":%s,\"ota_confirmed\":%s,\"update_pending\":%s,\"deployment\":%d,\"accepted_sequence\":%u,\"trusted_key\":\"%s\"}",
+    mac[0],mac[1],mac[2],mac[3],mac[4],mac[5],build,esp_app_get_description()->version,
+    pos_health_healthy()?"true":"false",confirmed?"true":"false",no_update?"false":"true",atomic_load(&deployment_state),(unsigned)sequence,fingerprint);
+  httpd_resp_set_type(request,"application/json"); httpd_resp_set_hdr(request,"Cache-Control","no-store");
+  return httpd_resp_sendstr(request,body);
+}
+static esp_err_t deploy_request(httpd_req_t *request) {
+  if (!deployment_enabled || !authorized(request)) return httpd_resp_send_err(request,HTTPD_403_FORBIDDEN,"Open a developer deployment session on device.");
+  if (atomic_load(&deployment_state)!=0) return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"One request per session; reopen for another deployment.");
+  if(request->content_len<9 || request->content_len>=sizeof(deployment_url))
+    return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"HTTPS manifest URL required.");
+  size_t at=0;
+  while(at<request->content_len) {
+    int n=httpd_req_recv(request,deployment_url+at,request->content_len-at);
+    if(n<=0) return ESP_FAIL;
+    at+=(size_t)n;
+  }
+  deployment_url[at]=0;
+  if(memchr(deployment_url,0,at) || !pos_https_url_valid(deployment_url))
+    return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"Use HTTPS without embedded credentials.");
+  atomic_store(&deployment_state,1);
+  httpd_resp_set_status(request,"202 Accepted");
+  return httpd_resp_sendstr(request,"Queued for on-device approval and signature verification.");
+}
+int pos_network_deploy_start(const char *root,char key[17]) {
+  if(pos_network_share_start(root,NULL,key)) return -1;
+  deployment_deadline=esp_timer_get_time()+300000000LL; deployment_enabled=true;
+  atomic_store(&deployment_state,0);
+  httpd_uri_t route={.uri="/deploy",.method=HTTP_POST,.handler=deploy_request};
+  if(httpd_register_uri_handler(server,&route)!=ESP_OK) { pos_network_share_stop(); return -1; }
+  return 0;
+}
+bool pos_network_deploy_take(char url[512]) {
+  if(atomic_load(&deployment_state)!=1) return false;
+  strcpy(url,deployment_url); atomic_store(&deployment_state,2); return true;
+}
+void pos_network_deploy_result(bool success) { atomic_store(&deployment_state,success?3:4); }
 int pos_network_share_start(const char *root, const char *export_file,
                             char key[17]) {
   if (server || !pos_network_status().connected ||
@@ -414,8 +491,9 @@ int pos_network_share_start(const char *root, const char *export_file,
   httpd_uri_t routes[] = {
       {.uri = "/", .method = HTTP_GET, .handler = page},
       {.uri = "/download", .method = HTTP_GET, .handler = send_file},
-      {.uri = "/upload", .method = HTTP_POST, .handler = receive_file}};
-  for (unsigned i = 0; i < 3; ++i)
+      {.uri = "/upload", .method = HTTP_POST, .handler = receive_file},
+      {.uri = "/status", .method = HTTP_GET, .handler = device_status}};
+  for (unsigned i = 0; i < 4; ++i)
     if (httpd_register_uri_handler(server, &routes[i]) != ESP_OK) {
       pos_network_share_stop();
       return -1;
@@ -428,5 +506,8 @@ void pos_network_share_stop(void) {
   if (server)
     httpd_stop(server);
   server = NULL;
+  deployment_enabled=false;
+  atomic_store(&deployment_state,0);
+  pos_secure_zero(deployment_url,sizeof(deployment_url));
   pos_secure_zero(&share, sizeof(share));
 }

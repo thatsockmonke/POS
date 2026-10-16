@@ -126,11 +126,11 @@ def make_bundle(build_root: Path, payload: Path, output: Path) -> Path:
         shutil.copyfile(ROOT / "docs/INSTALL.md", stage / "INSTALL.md")
         for name in ("RECOVERY.md", "HARDWARE.md", "HARDWARE_VALIDATION.md", "FORMAT.md", "VALIDATION.md"):
             shutil.copyfile(ROOT / "docs" / name, stage / name)
-        for name in ("STATUS.md", "DOWNLOADS.md", "APPS.md", "PROTOCOLS.md", "UPDATES.md"):
+        for name in ("STATUS.md", "DOWNLOADS.md", "APPS.md", "PROTOCOLS.md", "UPDATES.md", "DEVELOPMENT.md", "MIGRATIONS.md"):
             shutil.copyfile(ROOT / "docs" / name, stage / name)
         # USB commands work with pip-installed esptool; no SDK/build is required.
         (stage / "tools").mkdir()
-        for name in ("posctl.py", "pos_validation.py", "pos_updates.py"):
+        for name in ("posctl.py", "pos_validation.py", "pos_updates.py", "pos_deploy.py"):
             shutil.copyfile(ROOT / "tools" / name, stage / "tools" / name)
         shutil.copyfile(ROOT / "THIRD_PARTY.md", stage / "THIRD_PARTY.md")
         sdk = Path(os.environ.get("IDF_PATH", "/workspace/pos-cloud/esp-idf-v5.5.5"))
@@ -141,6 +141,7 @@ def make_bundle(build_root: Path, payload: Path, output: Path) -> Path:
         licenses.mkdir()
         shutil.copyfile(ROOT / "components/pos_core/vendor/minimp3/LICENSE", licenses / "minimp3-CC0.txt")
         shutil.copyfile(ROOT / "components/pos_device/vendor/sx126x/LICENSE.txt", licenses / "Semtech-Clear-BSD.txt")
+        shutil.copyfile(ROOT / "components/pos_core/vendor/bmi270/LICENSE", licenses / "M5Stack-MIT.txt")
         nimble = sdk / "components/bt/host/nimble/nimble"
         for source, destination in ((nimble / "LICENSE", "NimBLE-LICENSE.txt"), (nimble / "NOTICE", "NimBLE-NOTICE.txt"),
                                     (nimble / "ext/tinycrypt/LICENSE", "TinyCrypt-LICENSE.txt")):
@@ -409,6 +410,28 @@ def factory_restore(port: str, backup: Path, confirmed: bool) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    p = commands.add_parser("flash", help="Flash/readback a checksum-verified USB installer with a matching factory backup")
+    p.add_argument("--port", required=True)
+    p.add_argument("--image", type=Path, required=True)
+    p.add_argument("--sha256", required=True)
+    p.add_argument("--factory-backup", type=Path, required=True)
+    p.add_argument("--confirm-flash", action="store_true")
+    p = commands.add_parser("files", help="Transfer user files through an explicit trusted-LAN session")
+    p.add_argument("action", choices=["status", "push", "pull"])
+    p.add_argument("--device", required=True)
+    p.add_argument("--key-file", type=Path, required=True)
+    p.add_argument("--source", type=Path)
+    p.add_argument("--name")
+    p.add_argument("--output", type=Path)
+    p = commands.add_parser("deploy", help="Request a signed HTTPS update after verified physical recovery/OTA evidence")
+    p.add_argument("--device", required=True)
+    p.add_argument("--key-file", type=Path, required=True)
+    p.add_argument("--update-dir", type=Path, required=True)
+    p.add_argument("--manifest-url", required=True)
+    p.add_argument("--public-key", type=Path, required=True)
+    p.add_argument("--validation-report", type=Path, required=True)
+    p.add_argument("--evidence-root", type=Path, required=True)
+    p.add_argument("--wait", type=int, default=300)
     p = commands.add_parser("update-keygen", help="Create new user-owned P-256 signing keys; never overwrite keys")
     p.add_argument("--private-key",type=Path,required=True)
     p.add_argument("--public-key",type=Path,required=True)
@@ -465,7 +488,27 @@ def main() -> int:
     p.add_argument("--zip-output", type=Path, help="Also export a complete downloadable ZIP and SHA-256 sidecar")
     args = parser.parse_args()
     try:
-        if args.command in ("update-keygen","update-package"):
+        if args.command in ("flash", "files", "deploy"):
+            import pos_deploy
+            api = sys.modules[__name__]
+            if args.command == "flash":
+                pos_deploy.flash(args, api)
+                print("USB installer write and readback verified. Observe the device and complete SD installation.")
+            elif args.command == "deploy":
+                print(json.dumps(pos_deploy.deploy(args, api), indent=2))
+            elif args.action == "status":
+                print(json.dumps(pos_deploy.status(args.device, args.key_file), indent=2))
+            elif args.action == "push":
+                if not args.source:
+                    raise ValueError("files push requires --source")
+                pos_deploy.push(args.device, args.key_file, args.source, args.name or args.source.name, api)
+                print("User file streamed and SHA-256 verified in Downloads.")
+            else:
+                if not args.output:
+                    raise ValueError("files pull requires --output")
+                pos_deploy.pull(args.device, args.key_file, args.output, api)
+                print("Selected user export streamed and SHA-256 verified.")
+        elif args.command in ("update-keygen","update-package"):
             from pos_updates import keygen,make_update
             if args.command=="update-keygen":
                 print("Public-key SHA-256 (DER SPKI): "+keygen(args.private_key,args.public_key))
@@ -509,7 +552,7 @@ def main() -> int:
         elif args.command == "factory-restore":
             factory_restore(args.port, args.backup, args.confirm_restore)
             print("Factory flash readback verified. Observe the factory application's boot on the physical device.")
-    except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+    except (ValueError, OSError, subprocess.CalledProcessError, struct.error) as exc:
         print(f"posctl: {exc}", file=sys.stderr)
         return 1
     return 0

@@ -1,4 +1,4 @@
-# Files, Music, Share and expansion hardware
+# Files, Audio Player, Recorder, Music and hardware
 
 Use A/D to move the launcher ribbon and W/Enter to open an app. Menus use W/S
 and Enter. Fn+backtick is Escape; Fn+Space requests closing the current app.
@@ -10,7 +10,10 @@ continue in the background. Music and explicit file-transfer sessions stop on ex
 Files starts in `POS/Users/Owner`. Each directory has paginated entries, Parent,
 Previous/Next and Folder actions. Enter on an entry opens its action menu.
 
-- **Open:** enter a folder, play MP3/WAV, or choose Text Editor/Preview for a file.
+- **Open:** enter a folder or choose Text Editor/Preview for a file. For MP3/WAV,
+  the first action is **Play in Audio Player**. It opens the selected file and
+  returns to Files at EOF. Audio Player has no launcher icon. Music remains a
+  separate library app. Folder actions → Recordings opens the recordings folder.
 - **Copy / Cut:** put the selected path on the app's clipboard. Navigate to the
   destination, choose Folder actions → Paste, then accept/edit the destination
   filename. Cut moves only after a successful paste; leaving Files clears the
@@ -287,3 +290,44 @@ Large copies and pastes use a reusable 4-KiB buffer with progress/cancellation a
 readback checks. They do not allocate the selected text in RAM. Closing/discarding
 a document clears its clipboard/history; this is a document-local clipboard.
 All working text and indexes remain ordinary readable files if POS stops working.
+
+
+## Recorder
+
+Open **Recorder** from the launcher, then **Start recording**. Recorder shows a
+RECORDING label, elapsed recorded time, file size and peak
+level. Space pauses/resumes; Enter or Escape stops and saves; Fn+Space saves and
+closes. Pauses are omitted from recorded duration. Resuming discards analog warm-up.
+Only this foreground app records; there is no background microphone capture.
+
+Files are standard signed 16-bit mono PCM WAV at 16000 Hz, under `/Recordings`,
+with unique `Recording-00001.wav` names. Audio streams through small buffers and
+syncs approximately every two recorded seconds. The 2-GiB file limit is checked.
+Stop performs a full streamed PCM CRC readback before publishing the completed
+name. Close playback before starting Recorder, and vice versa.
+
+Interrupted writes remain `Recording-NNNNN.wav.part`, never a completed WAV.
+**Recover interrupted WAV** lets you select one, confirms the layout/whole frames,
+repairs size fields, reads the complete file and publishes only after verification.
+Existing completed files, malformed headers and odd trailing bytes are refused
+and preserved. Files/ordinary desktop tools can copy partials for manual recovery.
+A DMA overrun, full card or SD failure stops recording with a precise error.
+Actual electrical power-cut behavior and microphone quality still need hardware tests.
+
+## Files Audio Player
+
+Select an MP3 or PCM WAV in Files, then **Play in Audio Player**. Space/Enter
+pauses, W/S changes volume, A/D selects a neighboring track manually, P adds to a
+standard Music playlist, Escape stops and returns to Files, and Fn+Space closes
+the current foreground Files app. Playback stops at the selected file's EOF;
+Music's automatic library advance/shuffle behavior stays in Music. The player
+shares the same bounded decoder/audio service and supported formats described above.
+
+## IR & motion
+
+Settings → **IR & motion** offers live accelerometer/gyroscope/temperature readings
+and explicit **Send infrared / NEC**. Enter the receiver's 8-bit address and command
+in hex, point the emitter, and confirm one transmit. No automatic scanning or
+unrequested transmission runs. The shared BMI270 and NEC APIs are available to
+future apps; the IMU is stopped when its screen closes. Sensor axes are shown
+without pretending to provide a calibrated compass. The ADV has no IR receiver.

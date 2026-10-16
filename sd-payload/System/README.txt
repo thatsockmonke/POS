@@ -1,4 +1,4 @@
-POS 0.4.0-dev - Pan Operating System
+POS 0.5.0-dev - Pan Operating System
 
 Boot: pink -> yellow -> blue flashes. Yellow slides into the middle, then
 pink slides into the top starting halfway through yellow. Large POS fades
@@ -34,4 +34,14 @@ Ctrl+arrows move words/document ends; Ctrl+U/D pages; Ctrl+L/E line start/end.
 History and clipboard are on SD and last for the current open document.
 Settings: direct profile, brightness, regional/custom timezone, UTC time and reset.
 Crash JSON: POS/Users/Owner/Diagnostics/Crashes. Safe mode needs explicit normal boot.
-Maps, Meshtastic compatibility, Recorder and IR/IMU remain future work.
+Recorder: standard 16 kHz mono WAV files in /Recordings. Space pauses;
+Enter/Esc saves; Fn+Space saves and closes. Recover interrupted .wav.part in Recorder.
+Files: select MP3/WAV > Play in Audio Player. No Audio Player launcher icon.
+Audio Player stops at EOF; Music remains the folder/playlist library app.
+Settings > IR & motion: live BMI270 and explicit 38 kHz NEC transmit (no IR receive).
+Versioned app-save metadata uses verified generation slots; legacy Counter saves
+migrate without deleting originals. Future schemas are preserved and refused.
+Settings > Developer deployment: temporary trusted-LAN session, signed HTTPS
+updates only, on-device approval and physical recovery/OTA evidence required.
+After firmware reboot reopen the session to verify; no always-on deployment service.
+Maps/navigation and Meshtastic compatibility remain future work.

@@ -42,7 +42,7 @@ static SemaphoreHandle_t drawn;
 static esp_lcd_panel_handle_t panel;
 static i2c_master_dev_handle_t keyboard;
 static i2c_master_bus_handle_t internal_i2c;
-static i2c_master_dev_handle_t codec_i2c, cap_i2c;
+static i2c_master_dev_handle_t codec_i2c, cap_i2c, imu_i2c, imu_alt_i2c;
 static adc_oneshot_unit_handle_t adc;
 static adc_cali_handle_t calibration;
 static uint16_t *stripe;
@@ -401,6 +401,8 @@ void pos_device_wifi_stop(void) {
 static i2c_master_dev_handle_t shared_i2c(uint8_t address) {
   i2c_master_dev_handle_t *device = address == 0x18   ? &codec_i2c
                                     : address == 0x43 ? &cap_i2c
+                                    : address == 0x69 ? &imu_i2c
+                                    : address == 0x68 ? &imu_alt_i2c
                                                       : NULL;
   if (!device || !internal_i2c)
     return NULL;
@@ -513,4 +515,15 @@ int pos_device_set_time_utc(const char *text) {
     return -1;
   struct timeval value = {.tv_sec = epoch};
   return settimeofday(&value, NULL);
+}
+
+int pos_device_i2c_read_block(uint8_t address,uint8_t reg,uint8_t *data,size_t size) {
+  i2c_master_dev_handle_t device=shared_i2c(address);
+  return device && size && size<=32 && i2c_master_transmit_receive(device,&reg,1,data,size,100)==ESP_OK?0:-1;
+}
+int pos_device_i2c_write_block(uint8_t address,uint8_t reg,const uint8_t *data,size_t size) {
+  i2c_master_dev_handle_t device=shared_i2c(address); uint8_t bytes[33];
+  if (!device || !size || size>32) return -1;
+  bytes[0]=reg; memcpy(bytes+1,data,size);
+  return i2c_master_transmit(device,bytes,size+1,100)==ESP_OK?0:-1;
 }

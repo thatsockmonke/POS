@@ -12,3 +12,5 @@ void pos_health_clear(void);
 void pos_health_set_confirm_hook(int (*hook)(void));
 
 int pos_health_resume(void);
+
+bool pos_health_healthy(void);

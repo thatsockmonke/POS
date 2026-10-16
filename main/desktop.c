@@ -11,6 +11,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "pos_ble.h"
+#include "pos_appdata.h"
 #include "pos_device.h"
 #include "pos_fs.h"
 #include "pos_health.h"
@@ -275,38 +276,13 @@ static bool backup(services_t *services) {
   return true;
 }
 
-static int counter_read(const char *path, int *value) {
-  FILE *f = fopen(path, "rb");
-  if (!f)
-    return -1;
-  char text[40];
-  bool read = fgets(text, sizeof(text), f) != NULL;
-  int bad = ferror(f);
-  if (fclose(f))
-    bad = 1;
-  if (!read || bad)
-    return -1;
-  errno = 0;
-  char *end = NULL;
-  long n = strtol(text, &end, 10);
-  if (errno || end == text || (*end && *end != '\n') || n < -1000000 ||
-      n > 1000000)
-    return -1;
-  *value = (int)n;
-  return 0;
-}
 static int counter_init(void *opaque, void *services) {
   counter_t *s = opaque;
   s->services = services;
-  char path[POS_FS_PATH];
-  pos_fs_join(path, s->services->root, "POS/Users/Owner/Saves/counter.txt");
-  if (counter_read(path, &s->count)) {
-    pos_fs_join(path, s->services->root,
-                "POS/Users/Owner/Saves/counter.previous.txt");
-    if (counter_read(path, &s->count))
-      s->count = 0;
-  }
-  return 0;
+  pos_error_t e={0};
+  int result=pos_counter_load(s->services->root,&s->count,&e);
+  if(result<0) pos_ui_notice("Counter save preserved",e.message);
+  return result<0?-1:0;
 }
 static void counter_event(void *opaque, const pos_event_t *event) {
   counter_t *s = opaque;
@@ -318,32 +294,8 @@ static void counter_event(void *opaque, const pos_event_t *event) {
 }
 static int counter_save(void *opaque) {
   counter_t *s = opaque;
-  char path[POS_FS_PATH], temp[POS_FS_PATH], text[32];
-  pos_fs_join(path, s->services->root, "POS/Users/Owner/Saves/counter.txt");
-  pos_fs_join(temp, s->services->root, "POS/Temp/counter.part");
-  if (unlink(temp) && errno != ENOENT)
-    return -1;
-  int n = snprintf(text, sizeof(text), "%d\n", s->count);
-  if (pos_fs_write_new(temp, text, (size_t)n))
-    return -1;
-  int verified;
-  if (counter_read(temp, &verified) || verified != s->count)
-    return -1;
-  /* A toy app save; the prior value stays recoverable in a separate previous
-   * file. */
-  char old[POS_FS_PATH];
-  pos_fs_join(old, s->services->root,
-              "POS/Users/Owner/Saves/counter.previous.txt");
-  struct stat st;
-  if (!stat(path, &st)) {
-    if (!stat(old, &st)) {
-      if (unlink(old))
-        return -1;
-    }
-    if (rename(path, old))
-      return -1;
-  }
-  return rename(temp, path);
+  pos_error_t e={0};
+  return pos_counter_save(s->services->root,s->count,&e);
 }
 static void counter_render(void *opaque, pos_view_t *v) {
   counter_t *s = opaque;
@@ -670,6 +622,13 @@ static void range_foreground(void *state) {
   (void)state;
 #endif
 }
+static void recorder_foreground(void *state) {
+#ifndef POS_INSTALLER
+  pos_ui_recorder((*(services_t **)state)->root);
+#else
+  (void)state;
+#endif
+}
 static void recovery_foreground(void *state) {
   recovery(*(services_t **)state);
 }
@@ -747,11 +706,18 @@ static const pos_app_t modal_apps[] = {{.name = "Settings",
                                         .initialize = service_init,
                                         .foreground = range_foreground,
                                         .available = radio_app_available,
+                                        .render = modal_render},
+                                       {.name = "Recorder",
+                                        .state_size = sizeof(services_t *),
+                                        .initialize = service_init,
+                                        .foreground = recorder_foreground,
                                         .render = modal_render}};
 
 #ifndef POS_INSTALLER
 static void stop_services(void) {
   pos_audio_stop();
+  pos_microphone_stop();
+  pos_motion_stop();
   pos_ble_stop();
   pos_expansion_stop();
 }

@@ -20,7 +20,7 @@ storage. Vendored SHA-256:
 
 Hardware pin/register/layout facts were checked against M5Stack's M5Unified,
 M5GFX and M5Cardputer sources linked in docs/HARDWARE.md. Those frameworks are
-not linked into POS. The bundled fourteen 8x8 app icons are project-created bitmap
+not linked into POS. The bundled fifteen 8x8 app icons are project-created bitmap
 data. No new license for the user's POS project is selected by this file.
 
 
@@ -50,3 +50,11 @@ instructions in `tests/fixtures/README.md`.
 Update verification uses the ESP-IDF-provided mbedTLS P-256/SHA-256 implementation.
 Host signing/key-generation tools invoke the system OpenSSL command; private keys
 are user-managed and no signing key is bundled in firmware or the source tree.
+
+
+**BMI270 configuration:** `components/pos_core/vendor/bmi270/config.h` contains
+M5Stack's unchanged 8192-byte configuration array from M5Unified commit
+`e125e73f28b6b83e621e48df432af426bb2ff935`, `src/utility/imu/BMI270_config.inl`.
+Only the C declaration/header guard was adapted. The upstream MIT LICENSE is
+retained alongside it and shipped in bundles as `licenses/M5Stack-MIT.txt`.
+The POS C initialization/scaling driver is separate from the M5Unified C++ classes.

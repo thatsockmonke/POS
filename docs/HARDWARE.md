@@ -14,6 +14,9 @@ physical signals, orientation, timing and calibration remain unverified here.
 | System button | G0, active low | M5Unified ADV button configuration |
 | Battery | ADC1 GPIO 10, divider ratio 2; curve-fit calibration when available | M5Unified power profile |
 | USB | ESP32-S3 native USB Serial/JTAG console | ESP-IDF |
+| Microphone | ES8311 ADC data-in46, BCLK41/LRCK43; I2S1 16-bit stereo slots, left channel recorded as 16 kHz mono | Official ADV pin map + pinned M5Unified ADV mic profile |
+| IR | GPIO44, emitter only; RMT 38 kHz carrier, standard 8-bit NEC TX | Official ADV pin map |
+| IMU | BMI270 I2C0x69 (0x68 fallback), SDA8/SCL9; 8 KiB configuration, 100 Hz, +/-4 g, +/-1000 degrees/s | Pinned M5Unified + Bosch register definitions |
 | Audio codec / I2S | ES8311 0x18 on SDA8/SCL9; BCLK41, LRCK43, data-out42; I2S1, 16-bit stereo slots | M5Unified ADV speaker profile |
 | Cap LoRa SPI | SPI3 shared with SD: SCK40, MOSI14, MISO39, cap NSS5 (SD CS12) | M5Stack cap docs + UserDemo |
 | Cap reset / IRQ / busy | GPIO3 / GPIO4 / GPIO6 | M5Stack cap pin map |
@@ -45,7 +48,7 @@ in `POS/Users/Owner/Diagnostics`. Interactive write times include UI/fsync overh
 Audio initializes only for playback; BLE only for an explicit sharing session.
 The location/cap service listens for GNSS data and probes cap hardware at runtime.
 LoRa features default off; TX consent is session-only. GPS presence independently
-gates Maps. IR and IMU remain unimplemented. Probe/initialization results are not
+gates Maps. IR and IMU initialize on demand; BMI270 configuration/readback must succeed before samples are exposed. Microphone and speaker are exclusive. Probe/initialization results are not
 physical performance measurements.
 
 Additional references verified for this release:
@@ -80,9 +83,9 @@ Both images are checked against these partitions during builds. Main task stack 
 bounded. Available runtime heap still requires an actual device measurement.
 Optional Wi-Fi does not start until requested, uses RAM credential storage and
 may consume significant heap. Saved profiles use a passphrase-encrypted NVS
-vault; HTTPS, time sync and file transfers are implemented. Wireless deployment
-remains future work; signed online software updates are implemented with explicit
-feed/key setup. New firmware still fits the
+vault; HTTPS, time sync and file transfers are implemented. Wireless deployment is implemented through temporary developer sessions and the
+signed updater, gated on physical recovery/OTA evidence. Reopen a session after
+reboot for confirmation; no always-on service is enabled. New firmware still fits the
 existing slots, with limited runtime flash headroom; future growth must be
 measured against the actual device's verified flash configuration.
 
@@ -122,3 +125,28 @@ The partition offsets are unchanged. New code uses compiler stack guards; launch
 UI/path workspaces are heap-owned to keep nested update/TLS calls off a large
 resident task frame. Actual stack/heap and electrical fault behavior need device
 measurement.
+
+
+## Recorder / IR / IMU driver references and validation
+
+The microphone register profile is taken from `_microphone_enabled_cb_cardputer_adv`
+and its GPIO46/43/41 table in the pinned M5Unified source above. I2S clocks run
+before codec setup, one second of analog warm-up is discarded, and DMA receive
+queue overflow stops recording with an explicit error. Actual gain, channel,
+noise, clock ratio and coexistence need bench verification. DAC output is muted
+while recording; recording/playback cannot own I2S1 simultaneously.
+
+BMI270 configuration bytes are vendored unchanged from the pinned
+[M5Unified configuration](https://github.com/m5stack/M5Unified/blob/e125e73f28b6b83e621e48df432af426bb2ff935/src/utility/imu/BMI270_config.inl).
+The portable driver uploads 32-byte chunks, checks internal initialization status,
+sets accel/gyro ranges/rates and checks sensor error status. Samples expose sensor
+axes, not a calibrated board orientation or heading. No magnetometer is assumed.
+IR uses an ESP-IDF RMT carrier/envelope and one explicit bounded NEC frame; it does
+not claim a receiver acknowledged it. The ADV has an emitter, no IR receiver.
+
+The official ADV documentation lists 8 MiB physical flash. POS continues using
+its existing first-4-MiB layout pending a per-device probe. HTTPS now uses the SDK's
+common-root bundle (approximately 99% coverage per ESP-IDF), retaining certificate
+validation and failing closed for other roots. Builds may enable the full/custom
+bundle if they fit; see `sdkconfig.defaults`. SDK log level is WARN, while POS
+measurement/USB reports and panic output remain available. No PSRAM is assumed.

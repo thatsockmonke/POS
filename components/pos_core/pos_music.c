@@ -194,7 +194,7 @@ int pos_music_track(const char *root, const char *folder, unsigned index,
                     char relative[241], unsigned *total) {
   *total = 0;
   char full[POS_FS_PATH];
-  if (!pos_fs_archive_path(folder) || pos_fs_join(full, root, folder))
+  if ((*folder && !pos_fs_archive_path(folder)) || pos_fs_join(full, root, folder))
     return -1;
   DIR *d = opendir(full);
   if (!d)
@@ -204,7 +204,7 @@ int pos_music_track(const char *root, const char *folder, unsigned index,
   while ((entry = readdir(d)))
     if (pos_music_supported(entry->d_name)) {
       char path[241];
-      if (snprintf(path, sizeof(path), "%s/%s", folder, entry->d_name) >=
+      if (snprintf(path, sizeof(path), "%s%s%s", folder, *folder ? "/" : "", entry->d_name) >=
               (int)sizeof(path) ||
           !pos_files_mutable(root, path))
         continue;
