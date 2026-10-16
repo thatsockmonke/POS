@@ -1,42 +1,106 @@
 # Signed online software updates
 
-Open **Settings → System / software update → Software Update**. POS 0.4 adds a
-signed update client; a publisher must supply an HTTPS update directory and a
-signing public key. **No public feed or embedded publisher key is configured by
-default.** A private GitHub repository's release links require authentication and
-are not an anonymous update feed. Host the signed directory on an HTTPS server
-Panputer can access; do not place credentials in the URL or disable certificate
-validation.
+Open **Settings → System / software update → Software Update → Check for Updates**.
+POS **0.5.3-dev and newer** include the official feed and trusted P-256 public key.
+There is no GitHub login or manual key import for a fresh/default installation.
 
-## Configure and use on Panputer
+1. Connect Wi-Fi when prompted. POS synchronizes time when the clock has not been
+   set; a correct date is required for HTTPS certificate validation.
+2. Choose **Check for Updates**. POS verifies the signature, hardware, package
+   format, semantic/minimum version and increasing signed sequence.
+3. Review the new release/type/size, then approve **Download and install verified
+   update**. Escape/Home cancels preparation; the short commit step finishes safely.
+4. A firmware update writes and verifies the inactive OTA slot, switches the verified
+   SD System and restarts. Keep power and SD connected. Leave POS running normally
+   for at least **60 seconds** so the new boot can be confirmed. A failed boot uses
+   IDF rollback and the retained previous System. Asset-only updates do not flash.
+5. The current version reports **POS is up to date**. A version below the signed
+   minimum requires backup and clean installation rather than an unsafe direct jump.
 
-1. Copy the publisher's **public** PEM key into Downloads. Obtain its SHA-256
-   fingerprint through a separate trusted channel. Never copy its private key to SD.
-2. Connect Wi-Fi and synchronize time (or set UTC in Settings → Date & time).
-3. In Software Update → Configure source / trusted key, enter the HTTPS URL of
-   `manifest.json`. Import the public key, compare the displayed **DER SPKI SHA-256**
-   fingerprint, and explicitly choose **Fingerprint verified: trust key**.
-4. Choose **Check for Updates**. POS verifies the P-256/SHA-256 signature before
-   trusting metadata, then checks model, package format, firmware target, semantic
-   version, minimum directly upgradeable version and increasing signed sequence.
-5. Review release/type/size and explicitly choose Download and install. Downloads
-   and file readback stream in bounded buffers. Escape/Home can cancel preparation;
-   the short commit step completes without interruption from UI cancellation.
-6. An **asset update** swaps only verified SD System files and does not write flash.
-   A **firmware update** verifies the inactive OTA slot before switching System and
-   boot selection, then restarts. Keep SD inserted. The new runtime must validate
-   its files/flash and service the UI for 60 seconds before confirming OTA.
+The official channel is:
 
-Changing only the URL retains the highest accepted sequence. Importing a different
-trusted key explicitly resets that key's sequence history. Source, public key and
-accepted sequence live together in internal NVS; an NVS error never triggers an
-erase. This configuration is not included in SD filesystem backups.
+```text
+https://raw.githubusercontent.com/thatsockmonke/POS/main/updates/manifest.json
+```
 
-If the installed version is below the signed minimum, POS requires a clean
-installation and directs you to back up the filesystem. Downgrade firmware and
-already accepted sequences are refused. This is application-level update
-verification, not ESP secure boot, eFuse anti-rollback or encrypted SD storage.
+The built-in public key is [public-key.pem](../updates/public-key.pem), with DER
+SPKI SHA-256 fingerprint:
+
+```text
+ce79ef57358d4714d7b5748e2f0c0140f4d916426a0d82ace21dce5a7b0d8561
+```
+
+The POS repository must remain public for anonymous device downloads. A network
+failure, captive portal, missing feed, invalid date, bad signature or hash stops
+installation; it never disables certificate checks or replaces the trusted key.
+Downloads, previous System and diagnostics are retained for recovery.
+
+## Older installs and custom sources
+
+Older POS firmware does not contain this default feed/key. Bootstrap once using
+the matching USB installer, following [INSTALL.md](INSTALL.md) and its backup/
+reinstall instructions. Alternatively, POS 0.4+ can use its existing update-source
+screen: copy the public PEM to Downloads, set the official manifest URL, compare
+the fingerprint above and explicitly trust the key before checking for updates.
+The ordinary full installation ZIP is not itself an OTA package.
+
+Existing custom sources and their accepted sequences are preserved. **Configure
+source / trusted key → Use official POS updates** restores the built-in settings
+with confirmation. Keeping the same signing key retains its sequence floor;
+explicitly changing keys starts a new key's history. URL, public key and sequence
+live in internal NVS, outside SD backups. An NVS error never triggers an erase.
+This is application-level verification, not ESP secure boot or eFuse anti-rollback.
 The USB bootstrap installer remains unsigned development firmware.
+
+## Publishing official releases
+
+The normal firmware workflow builds/tests/publishes a tagged release. **Publish
+signed POS update feed** then downloads that exact release ZIP/checksum, verifies
+all contents, signs the firmware/System records and publishes:
+
+- `updates/releases/<version>/`: immutable signed manifest, firmware, System
+  payload, public key, distribution licenses and hashes.
+- `updates/manifest.json`: the current signed channel. Versions and sequences
+  must increase; interrupted/repeated jobs never replace existing version bytes.
+- `pos-update-<version>.zip` and its checksum on the same GitHub release. This is
+  the signed OTA download, distinct from the full installer ZIP.
+
+For unattended signing the maintainer must configure the encrypted repository
+secret **POS_UPDATE_SIGNING_KEY**, containing the matching private PEM. This is a
+maintainer task only, never a step for ordinary device owners. The private key
+stays outside Git, SD, public downloads and logs. Preserve a separate private
+backup; losing it requires a deliberately trusted key change or USB bootstrap.
+
+On a trusted Linux machine with GitHub CLI signed in, the helper validates the
+key against the firmware's public fingerprint before securely setting the secret:
+
+```sh
+chmod 600 /private/path/pos-update-p256.pem
+python tools/pos_release_updates.py --configure-signing-key /private/path/pos-update-p256.pem
+```
+
+Or use repository **Settings → Secrets and variables → Actions → New repository
+secret**, name `POS_UPDATE_SIGNING_KEY`, and enter the private PEM there. Never
+paste it into chat, an issue, a workflow input or a committed file. An integration
+without Secrets permission cannot create this secret even if it can push code.
+Missing signing configuration fails publication explicitly; it never publishes
+an unsigned update or silently replaces the key.
+
+Offline signing is also supported. After the exact release ZIP/checksum has
+been published/downloaded, run from the POS checkout with esptool 4.12 and OpenSSL:
+
+```sh
+python tools/pos_release_updates.py --bundle /downloads/pos-0.5.3-dev.zip \
+  --private-key /private/path/pos-update-p256.pem
+python tools/pos_release_updates.py --verify
+```
+
+Commit/push only the generated `updates/manifest.json` and version directory.
+The push triggers verification against the exact released bundle and attaches
+its deterministic signed update ZIP. It requires no CI private key because the
+signature already exists. Do not regenerate or overwrite a published version.
+The GitHub workflow uses its scoped repository token to push the feed; it does
+not need an additional publication token. Keep Actions repository writes enabled.
 
 ## Publisher tools
 

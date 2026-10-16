@@ -8,7 +8,7 @@ manual flash addresses or an understanding of partitions.
 
 ## Start here
 
-1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.2-dev).
+1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.3-dev).
 2. Download **`pos-setup`**. This is the executable wizard, not the Source code ZIP.
    Its optional `pos-setup.sha256` checksum is beside it. The complete POS ZIP
    also includes a copy of the wizard.
@@ -151,8 +151,8 @@ Optional commands for troubleshooting:
 
 ```sh
 ~/pos-setup --download-only                 # Download/verify without device changes
-~/pos-setup --release v0.5.2-dev             # Use a specific published version
-~/pos-setup --bundle /path/pos-0.5.2-dev.zip # Use a ZIP and matching .sha256 offline
+~/pos-setup --release v0.5.3-dev             # Use a specific published version
+~/pos-setup --bundle /path/pos-0.5.3-dev.zip # Use a ZIP and matching .sha256 offline
 ~/pos-setup --sd-folder '/mnt/chromeos/removable/YOUR CARD'
 ```
 
@@ -161,3 +161,12 @@ bootstrap. Physical ADV USB recovery, SD removal/power-loss and actual Chromeboo
 USB forwarding still require hardware testing. The wizard does not turn a software
 test into a claim that real hardware was validated. The longer [INSTALL.md](INSTALL.md)
 explains each underlying step if you need it.
+
+## Future updates from Panputer
+
+Once 0.5.3-dev or newer is installed, use **Settings → System / software update →
+Software Update → Check for Updates**. Connect to Wi-Fi, review the new version,
+and choose **Download and install verified update**. The official feed and trusted
+key are included. Firmware updates restart; keep power and the SD connected and
+let POS run normally for at least 60 seconds. Asset updates do not reflash firmware.
+You do not need the Linux installer again for compatible future updates.

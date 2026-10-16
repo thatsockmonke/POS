@@ -5,8 +5,10 @@
 #include "pos_network_service.h"
 #include "pos_update_service.h"
 #include "ui.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 extern int pos_device_install_update(const char *, const pos_update_t *,
                                      pos_error_t *);
 static int downloading(void *, const char *, uint64_t, uint64_t);
@@ -26,15 +28,59 @@ static int manifest_download(const char *url, const char *root,
   return pos_network_https_limit(url, "GET", NULL, NULL, root, name, NULL,
                                  downloading, NULL, e, POS_UPDATE_MAX);
 }
+static void official_source(pos_update_source_t *s) {
+  const char *items[] = {"Keep current source", "Use official POS updates"};
+  if (pos_ui_menu("Use the built-in POS signing key?", items, 2) != 1)
+    return;
+  pos_update_source_t *next = malloc(sizeof(*next));
+  if (!next)
+    return;
+  pos_update_source_official(next);
+  char previous[65], official[65];
+  if (!pos_update_key_fingerprint(s->key, previous) &&
+      !pos_update_key_fingerprint(next->key, official) &&
+      !strcmp(previous, official))
+    next->sequence = s->sequence;
+  if (pos_update_source_save(next))
+    pos_ui_notice("Source not saved",
+                  "Previous update settings were preserved.");
+  else
+    *s = *next;
+  free(next);
+}
+static bool network_ready(const char *root) {
+  if (!pos_network_status().connected) {
+    const char *items[] = {"Open Wi-Fi settings", "Back"};
+    if (pos_ui_menu("Connect Wi-Fi to check updates", items, 2) != 0)
+      return false;
+    pos_ui_wifi(root);
+    if (pos_home_pending() || !pos_network_status().connected)
+      return false;
+  }
+  if (time(NULL) < 1704067200) {
+    pos_ui_message("Preparing secure update check", "Synchronizing time...");
+    if (pos_network_sync_time()) {
+      pos_ui_notice(
+          "Time needed for HTTPS",
+          "Connect to the Internet and retry, or set UTC in Settings > "
+          "Date & time. Certificate validation stays enabled.");
+      return false;
+    }
+  }
+  return !pos_home_pending();
+}
 static void source(const char *root, pos_update_source_t *s) {
   int selected = 0;
   while (!pos_home_pending()) {
     const char *items[] = {"Source and trusted key", "Set HTTPS manifest URL",
-                           "Import signing public key", "Back"};
-    int choice = pos_ui_menu_from("Update source", items, 4, selected);
-    if (choice < 0 || choice == 3)
+                           "Import signing public key",
+                           "Use official POS updates", "Back"};
+    int choice = pos_ui_menu_from("Update source", items, 5, selected);
+    if (choice < 0 || choice == 4)
       return;
     selected = choice;
+    if (choice == 3)
+      official_source(s);
     if (choice == 0) {
       char fingerprint[65] = "not configured", body[800];
       if (*s->key)
@@ -128,7 +174,7 @@ static bool install_url(const char *root, const char *url,
   int result = pos_update_load(full, s->key, esp_app_get_description()->version,
                                s->sequence, &u, &error);
   if (result) {
-    pos_ui_notice(result == 1    ? "No new compatible update"
+    pos_ui_notice(result == 1    ? "POS is up to date"
                   : result == -2 ? "Clean installation required"
                                  : "Update rejected",
                   error.message);
@@ -192,11 +238,13 @@ void pos_ui_updates(const char *root) {
       pos_ui_notice(
           "Configure Software Update",
           "Set an HTTPS manifest URL and import a trusted publisher's P-256 "
-          "public key. Verify its fingerprint separately. No public update "
-          "endpoint or signing key is assumed.");
+          "public key. Choose Use official POS updates to restore the built-in "
+          "source "
+          "and trusted signing key.");
       continue;
     }
-    (void)install_url(root, s->url, s);
+    if (network_ready(root))
+      (void)install_url(root, s->url, s);
   }
   free(s);
 }

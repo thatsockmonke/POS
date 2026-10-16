@@ -12,7 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 typedef struct {
-  const char *root, *feed, *interrupt, *failure;
+  const char *root, *feed, *prefix, *interrupt, *failure;
   unsigned writes, selections;
   uint64_t space;
 } context_t;
@@ -29,7 +29,7 @@ static int fetch(void *opaque, const char *url, const char *root,
                  const char *name, uint32_t limit, const char *sha,
                  pos_error_t *e) {
   context_t *c = opaque;
-  const char *prefix = "https://updates.example.test/pos/";
+  const char *prefix = c->prefix;
   if (strncmp(url, prefix, strlen(prefix)))
     return -1;
   char full[POS_FS_PATH];
@@ -230,6 +230,7 @@ int main(int argc, char **argv) {
   }
   context_t c = {.root = root,
                  .feed = argv[7],
+                 .prefix = u->base_url,
                  .interrupt = argc > 8 ? argv[8] : "",
                  .failure = argc > 9 ? argv[9] : "",
                  .space =

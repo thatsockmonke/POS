@@ -15,6 +15,14 @@ typedef struct {
   int (*fetch)(void *ctx,const char *url,const char *directory,const char *name,uint32_t limit,const char *sha,pos_error_t *error);
   pos_platform_t platform;
 } pos_update_platform_t;
+typedef struct {
+  uint32_t format, sequence;
+  char url[512], key[513];
+} pos_update_source_t;
+extern const char pos_update_official_url[], pos_update_official_key[];
+/* Defaults never override a custom/partly configured source or sequence floor. */
+void pos_update_source_official(pos_update_source_t *source);
+bool pos_update_source_use_default(pos_update_source_t *source);
 /* Fingerprint is SHA-256 of DER SubjectPublicKeyInfo; only P-256 keys. */
 int pos_update_key_fingerprint(const char *pem,char fingerprint[65]);
 int pos_update_load(const char *file,const char *trusted_key,const char *current_version,uint32_t minimum_sequence,pos_update_t **out,pos_error_t *error);

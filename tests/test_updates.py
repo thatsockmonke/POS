@@ -24,6 +24,13 @@ class UpdateTests(unittest.TestCase):
         cmd=['gcc','-std=c11','-D_POSIX_C_SOURCE=200809L','-O1','-Wall','-Wextra','-Werror','-fsanitize=undefined','-fno-sanitize-recover=all']
         for c in ('pos_core','pos_install','pos_update'):cmd+=['-I',str(ROOT/'components'/c/'include')]
         subprocess.run(cmd+['-I',str(cjson),*map(str,sources),'-lcrypto','-lm','-o',str(cls.runner)],check=True)
+        cls.ui_runner=Path(cls.build.name)/'update-ui'
+        ui_sources=[ROOT/'tests/update_ui_runner.c', ROOT/'main/updates.c',
+                    ROOT/'components/pos_device/pos_update_service.c', *sources[1:]]
+        subprocess.run(cmd+['-I',str(ROOT/'tests/stubs'),'-I',str(ROOT/'main'),
+                      '-I',str(ROOT/'components/pos_device/include'),'-I',str(cjson),
+                      *map(str,ui_sources),'-lcrypto','-lm','-o',str(cls.ui_runner)],check=True)
+
     @classmethod
     def tearDownClass(cls):cls.build.cleanup()
     def setUp(self):
@@ -52,6 +59,28 @@ class UpdateTests(unittest.TestCase):
     def apply(self,expected=0,interrupt='',failure='',space=1<<40):return self.run_c('apply',self.card,self.meta,self.public,'0.4.0-dev',0,self.feed,interrupt,failure,space,expected=expected)
     def unchanged(self):
         self.assertEqual((self.card/'POS/System/Assets/icons.bin').read_bytes(),b'old icons');self.assertEqual((self.card/'POS/Users/Owner/Documents/precious.txt').read_bytes(),b'keep my words')
+    def ui(self,mode):
+        result=subprocess.run([str(self.ui_runner),mode,str(self.card),str(self.meta),str(self.public)],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        return result
+    def test_builtin_feed_defaults_preserve_custom_sources_sequence_and_nvs_errors(self):
+        expected=subprocess.run(['openssl','pkey','-pubin','-in',str(ROOT/'updates/public-key.pem'),'-outform','DER'],check=True,capture_output=True).stdout
+        self.assertEqual(self.ui('source-defaults').stdout.strip(),hashlib.sha256(expected).hexdigest())
+        self.ui('nvs-error')
+    def test_update_ui_verifies_signature_and_requests_install_confirmation(self):
+        self.signed('firmware');self.ui('install')
+    def test_update_ui_cancel_never_calls_flash_or_changes_current_system(self):
+        self.signed('firmware');self.ui('cancel');self.unchanged()
+    def test_update_ui_bad_signature_never_reaches_installer(self):
+        self.signed('firmware');self.meta.write_text(self.meta.read_text().replace('0.4.1-dev','0.4.2-dev'));self.ui('bad-signature');self.unchanged()
+    def test_update_ui_same_version_reports_up_to_date_without_installing(self):
+        self.signed('firmware',mutate=lambda p:(p.update(release='0.4.0-dev'),p['package'].update(version='0.4.0-dev')));self.ui('current')
+    def test_update_ui_opens_wifi_settings_before_checking_when_offline(self):
+        self.signed('firmware');self.ui('wifi')
+    def test_update_ui_synchronizes_missing_clock_before_https(self):
+        self.signed('firmware');self.ui('sync-time')
+    def test_update_ui_time_sync_failure_does_not_download_or_install(self):
+        self.signed('firmware');self.ui('time-failed')
     def test_failed_boot_policy_safe_mode_and_manual_exit(self):
         self.run_c('boot-policy',self.card)
     def test_crash_records_are_readable_persistent_never_overwritten_and_fail_safely(self):

@@ -2,6 +2,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "pos_network_service.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 static bool valid(const pos_update_source_t *s) {
@@ -13,7 +14,7 @@ static bool valid(const pos_update_source_t *s) {
 }
 int pos_update_source_load(pos_update_source_t *s) {
   memset(s, 0, sizeof(*s));
-  s->format = 1;
+  pos_update_source_official(s);
   if (nvs_flash_init() != ESP_OK)
     return -1;
   nvs_handle_t h;
@@ -27,10 +28,13 @@ int pos_update_source_load(pos_update_source_t *s) {
   nvs_close(h);
   if (result == ESP_ERR_NVS_NOT_FOUND) {
     memset(s, 0, sizeof(*s));
-    s->format = 1;
+    pos_update_source_official(s);
     return 0;
   }
-  return result == ESP_OK && size == sizeof(*s) && valid(s) ? 0 : -1;
+  if (result != ESP_OK || size != sizeof(*s) || !valid(s))
+    return -1;
+  pos_update_source_use_default(s);
+  return 0;
 }
 int pos_update_source_save(const pos_update_source_t *s) {
   if (!valid(s) || nvs_flash_init() != ESP_OK)

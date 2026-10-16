@@ -130,8 +130,11 @@ def make_bundle(build_root: Path, payload: Path, output: Path) -> Path:
             shutil.copyfile(ROOT / "docs" / name, stage / name)
         # USB commands work with pip-installed esptool; no SDK/build is required.
         (stage / "tools").mkdir()
-        for name in ("posctl.py", "pos_validation.py", "pos_updates.py", "pos_deploy.py", "pos_setup.py", "pos_setup_storage.py", "build_setup.py"):
+        for name in ("posctl.py", "pos_validation.py", "pos_updates.py", "pos_deploy.py", "pos_setup.py", "pos_setup_storage.py", "build_setup.py", "pos_release_updates.py", "pos_release_assets.py"):
             shutil.copyfile(ROOT / "tools" / name, stage / "tools" / name)
+        (stage / "updates").mkdir()
+        for name in ("public-key.pem", "publisher.json"):
+            shutil.copyfile(ROOT / "updates" / name, stage / "updates" / name)
         from build_setup import build as build_setup
         build_setup(stage / "pos-setup")
         shutil.copyfile(ROOT / "THIRD_PARTY.md", stage / "THIRD_PARTY.md")

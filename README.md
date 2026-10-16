@@ -4,9 +4,9 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.5.2-dev switches navigation to arrow keys throughout POS. Left/Right moves
-between apps; Up or Enter opens one. Menus, color picking and audio controls use
-arrows too.** The guided Linux/Crostini `pos-setup` installer is included.
+**0.5.3-dev connects Software Update to the official signed POS feed. New
+installations include the trusted public key; no URL or key import is needed.
+The guided Linux/Crostini `pos-setup` installer and arrow navigation are included.**
 Both ESP32-S3 firmware roles and native tests are checked; physical Panputer
 validation is still outstanding.
 
@@ -96,7 +96,8 @@ Implemented:
   preferences-only reset, crash reports and safe-mode requests.
 - Signed HTTPS Software Update with explicit public-key trust, compatibility and
   sequence checks, streamed assets/firmware, preserved previous System and OTA
-  rollback recovery. [Configure a feed/key](docs/UPDATES.md); none is assumed by default.
+  rollback recovery. The [official feed and signing key](docs/UPDATES.md) are built in;
+  custom sources remain available.
 - Persistent readable SD crash reports, a retained RTC panic snapshot and NVS boot
   failure policy. Safe mode requires explicit normal-boot selection; online OTA
   waits for a healthy 60-second UI interval before confirmation.
@@ -119,14 +120,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.5.2-dev/launcher.png)
-![Color picker](downloads/0.5.2-dev/color-picker.png)
+![Launcher](downloads/0.5.3-dev/launcher.png)
+![Color picker](downloads/0.5.3-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.5.2-dev/boot-animation.png)
+![POS boot animation](downloads/0.5.3-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.5.2-dev/boot-splash.png)
+[Final splash frame](downloads/0.5.3-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -143,7 +144,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.2-dev --zip-output dist/pos-0.5.2-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.3-dev --zip-output dist/pos-0.5.3-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png

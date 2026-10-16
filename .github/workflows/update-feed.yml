@@ -1,0 +1,109 @@
+name: Publish signed POS update feed
+on:
+  push:
+    branches: [main]
+    paths: ['updates/releases/**', 'updates/manifest.json']
+  workflow_run:
+    workflows: ['Build and package POS']
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Published tag, for example v0.5.3-dev'
+        required: true
+permissions:
+  actions: read
+  contents: read
+concurrency:
+  group: pos-update-feed
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' || github.event_name == 'push' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'v') &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - name: Select published release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_RELEASE: ${{ inputs.release }}
+          EVENT_RELEASE: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          pos_tag=${INPUT_RELEASE:-$EVENT_RELEASE}
+          if [ -z "$pos_tag" ]; then
+            pos_tag=$(python3 -c 'import json,pathlib; print("v"+json.loads(json.loads(pathlib.Path("updates/manifest.json").read_text())["payload"])["release"])')
+          fi
+          python3 - "$pos_tag" <<'PY'
+          import re, sys
+          if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?', sys.argv[1]):
+              raise SystemExit('Invalid POS release tag')
+          PY
+          test "$(gh release view "$pos_tag" --json isDraft --jq .isDraft)" = false
+          printf 'tag=%s\n' "$pos_tag" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\n' "${pos_tag#v}" >> "$GITHUB_OUTPUT"
+      - name: Prepare signing tools
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pos-update-tools"
+          "$RUNNER_TEMP/pos-update-tools/bin/pip" install 'esptool==4.12.0'
+          printf '%s/bin\n' "$RUNNER_TEMP/pos-update-tools" >> "$GITHUB_PATH"
+      - name: Download exact published firmware bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          POS_TAG: ${{ steps.release.outputs.tag }}
+          POS_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/pos-release"
+          gh release download "$POS_TAG" --dir "$RUNNER_TEMP/pos-release" --pattern "pos-${POS_VERSION}.zip" --pattern "pos-${POS_VERSION}.zip.sha256"
+      - name: Verify release bytes against the successful tag build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          POS_TAG: ${{ steps.release.outputs.tag }}
+          POS_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          pos_commit=$(gh api "repos/$GITHUB_REPOSITORY/commits/$POS_TAG" --jq .sha)
+          pos_run=$(gh run list --workflow firmware.yml --commit "$pos_commit" --branch "$POS_TAG" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          test -n "$pos_run"
+          gh run download "$pos_run" --name "pos-firmware-$POS_VERSION" --dir "$RUNNER_TEMP/pos-built"
+          cmp "$RUNNER_TEMP/pos-built/pos-${POS_VERSION}.zip" "$RUNNER_TEMP/pos-release/pos-${POS_VERSION}.zip"
+          cmp "$RUNNER_TEMP/pos-built/pos-${POS_VERSION}.zip.sha256" "$RUNNER_TEMP/pos-release/pos-${POS_VERSION}.zip.sha256"
+      - name: Sign and verify update, or verify an already signed publication
+        env:
+          POS_UPDATE_SIGNING_KEY: ${{ secrets.POS_UPDATE_SIGNING_KEY }}
+          POS_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if [ -n "$POS_UPDATE_SIGNING_KEY" ]; then
+            echo "Signing mode: automatic (repository secret configured)."
+            python tools/pos_release_updates.py --bundle "$RUNNER_TEMP/pos-release/pos-${POS_VERSION}.zip" --export "$RUNNER_TEMP/pos-release/pos-update-${POS_VERSION}.zip"
+          else
+            echo "Signing mode: offline; automatic signing secret is not configured."
+            # Offline signing is supported, but only for this exact release and bundle.
+            python tools/pos_release_updates.py --verify-bundle "$RUNNER_TEMP/pos-release/pos-${POS_VERSION}.zip" --export "$RUNNER_TEMP/pos-release/pos-update-${POS_VERSION}.zip"
+          fi
+      - name: Publish verified feed without replacing existing releases
+        env:
+          POS_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          git add updates/manifest.json "updates/releases/$POS_VERSION"
+          if ! git diff --cached --quiet; then
+            git -c user.name='POS Update Publisher' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Publish signed POS $POS_VERSION update"
+            git push origin HEAD:main
+          fi
+      - name: Attach matching signed update download
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          POS_TAG: ${{ steps.release.outputs.tag }}
+          POS_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          python tools/pos_release_assets.py --tag "$POS_TAG" --directory "$RUNNER_TEMP/pos-release" --name "pos-update-${POS_VERSION}.zip" --name "pos-update-${POS_VERSION}.zip.sha256"
+          printf 'Published and verified signed POS %s update.\n' "$POS_VERSION" >> "$GITHUB_STEP_SUMMARY"

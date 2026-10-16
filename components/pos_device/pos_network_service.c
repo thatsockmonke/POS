@@ -134,8 +134,11 @@ int pos_network_sync_time(void) {
     }
     pos_event_t event;
     if (pos_device_event(&event, 0) && event.pressed &&
-        (event.key == POS_KEY_ESCAPE || event.key == POS_KEY_HOME))
+        (event.key == POS_KEY_ESCAPE || event.key == POS_KEY_HOME)) {
+      if (event.key == POS_KEY_HOME)
+        pos_home_request();
       break;
+    }
   }
   esp_netif_sntp_deinit();
   return result;

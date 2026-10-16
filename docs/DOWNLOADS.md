@@ -6,24 +6,25 @@ You do not need to compile the OS to use a prebuilt package.
 
 ## Current development package
 
-**POS 0.5.2-dev — experimental, hardware validation not yet performed.**
+**POS 0.5.3-dev — experimental, hardware validation not yet performed.**
 
-- **Beginner installer:** [download pos-setup](https://github.com/thatsockmonke/POS/releases/download/v0.5.2-dev/pos-setup) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.2-dev/pos-setup.sha256) · [easy instructions](EASY_INSTALL.md)
-- [POS 0.5.2-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.5.2-dev)
-- [Download pos-0.5.2-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.5.2-dev/pos-0.5.2-dev.zip)
-- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.2-dev/pos-0.5.2-dev.zip.sha256)
-- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.5.2-dev/boot-animation.png)
+- **Beginner installer:** [download pos-setup](https://github.com/thatsockmonke/POS/releases/download/v0.5.3-dev/pos-setup) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.3-dev/pos-setup.sha256) · [easy instructions](EASY_INSTALL.md)
+- [POS 0.5.3-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.5.3-dev)
+- [Download pos-0.5.3-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.5.3-dev/pos-0.5.3-dev.zip)
+- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.3-dev/pos-0.5.3-dev.zip.sha256)
+- [Signed OTA package](https://github.com/thatsockmonke/POS/releases/download/v0.5.3-dev/pos-update-0.5.3-dev.zip) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.3-dev/pos-update-0.5.3-dev.zip.sha256) · [on-device update instructions](UPDATES.md)
+- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.5.3-dev/boot-animation.png)
 - [Browse versioned downloads](https://github.com/thatsockmonke/POS/tree/main/downloads)
 - [Full installation guide](INSTALL.md)
 - [Implemented / partial / planned features](STATUS.md)
 
 The 0.3.6-dev candidate was withdrawn before release after an ESP32 stack audit.
-Use 0.5.2-dev, which includes the bounded-buffer fix and a compiler frame-size guard.
+Use 0.5.3-dev, which includes the bounded-buffer fix and a compiler frame-size guard.
 
 Every new POS version is published as a versioned GitHub Release with its matching
 installation ZIP and checksum. Development versions are marked **prerelease**.
 For a private repository, sign into the GitHub account with access before
-downloading; the repository does **not** need to be public. The versioned files
+downloading with the USB wizard. The official on-device update feed uses public downloads. The versioned files
 committed under `downloads/` remain available as a fallback.
 
 Extract the named POS ZIP, **not GitHub's automatic Source code ZIP**, and follow
@@ -54,7 +55,7 @@ From the source checkout with ESP-IDF v5.5.5 activated:
 ```sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.2-dev --zip-output dist/pos-0.5.2-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.3-dev --zip-output dist/pos-0.5.3-dev.zip
 ```
 
 Choose a fresh output name if one already exists. `bundle` verifies images and
