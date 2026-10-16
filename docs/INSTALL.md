@@ -1,17 +1,27 @@
 # Install POS on a Cardputer ADV
 
-POS 0.5.0-dev is an **experimental foundation**, not the complete master roadmap.
+POS 0.5.1-dev is an **experimental foundation**, not the complete master roadmap.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
 flashing, peripherals, factory boot recovery and electrical power-loss behavior
 have not been tested here. Read [STATUS.md](STATUS.md) before choosing to install.
 Only use the **Cardputer ADV** hardware profile, not the original Cardputer.
 
+## Guided route (recommended for a first install)
+
+Download **pos-setup** from the release, move it into your Linux home folder, run
+`chmod +x ~/pos-setup`, then `~/pos-setup`. Choose **Install POS** and follow its
+plain-English prompts. It downloads/verifies matching files, detects eligible
+cards, offers FAT32 with explicit erase confirmation, keeps a double-read backup,
+guides recovery proof and verifies USB flashing. Finish the on-device INSTALL and
+power-cycle steps below. [EASY_INSTALL.md](EASY_INSTALL.md) is the beginner guide,
+including Chromebook shared-folder/USB limits. The detailed manual route follows.
+
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.5.0-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.5.1-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.5.0-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.5.1-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -32,10 +42,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.5.0-dev.zip.sha256
-mkdir pos-0.5.0-dev
-unzip pos-0.5.0-dev.zip -d pos-0.5.0-dev
-cd pos-0.5.0-dev
+sha256sum -c pos-0.5.1-dev.zip.sha256
+mkdir pos-0.5.1-dev
+unzip pos-0.5.1-dev.zip -d pos-0.5.1-dev
+cd pos-0.5.1-dev
 sha256sum -c SHA256SUMS
 ```
 
@@ -110,8 +120,8 @@ not a replacement for knowing the ROM recovery procedure.
 Back up existing SD files to your computer. The card must be **FAT32**; a new 64-GB
 card often arrives as exFAT, which this build does not support. On Linux you can
 use Disks/GParted to create a FAT32 partition on the **correct removable card**.
-Changing/reformatting the filesystem erases its contents; POS itself never formats
-or automatically wipes your card. A card already using readable FAT32 need not
+Changing/reformatting the filesystem erases its contents. The on-device firmware never formats your card. The optional Linux `pos-setup`
+wizard can format a selected card only after exact typed erase confirmation. A card already using readable FAT32 need not
 be erased to copy the installer files.
 
 Extract `pos-install.zip` to the card's top level, or copy `card/pos-install/` from

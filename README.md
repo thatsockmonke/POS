@@ -4,14 +4,15 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.5.0-dev adds Recorder, a Files-only Audio Player, IR/IMU services,
-versioned app-save migrations and USB/LAN deployment tools.**
+**0.5.1-dev adds `pos-setup`, a guided Linux/Crostini installer that downloads
+and verifies POS, prepares FAT32 SD media and walks through USB backup/recovery
+and flashing.** Recorder, Files Audio Player, IR/IMU and deployment tools remain.
 Both ESP32-S3 firmware roles and native tests are checked; physical Panputer
 validation is still outstanding.
 
 ## Download and install
 
-[GitHub Releases](https://github.com/thatsockmonke/POS/releases) · [Download the complete package](docs/DOWNLOADS.md) · [Full installation guide](docs/INSTALL.md) · [Feature status / remaining roadmap](docs/STATUS.md)
+[Easy installation with pos-setup](docs/EASY_INSTALL.md) · [GitHub Releases](https://github.com/thatsockmonke/POS/releases) · [Download the complete package](docs/DOWNLOADS.md) · [Full installation guide](docs/INSTALL.md) · [Feature status / remaining roadmap](docs/STATUS.md)
 
 The complete master roadmap is not implemented. On-device maps/navigation,
 and Meshtastic compatibility remain. Wireless firmware deployment is evidence-gated
@@ -19,6 +20,21 @@ until physical USB recovery and OTA/rollback tests pass on your device/build.
 Games, a POS terminal, installable apps/package management and automatic power
 management have been removed from scope. The battery indicator replaces that
 power-management milestone. See the current [remaining list](docs/STATUS.md#remaining-software-roadmap-current-priorities).
+
+**Beginner route:** download **pos-setup** from the release, put it in your Linux
+home folder (ChromeOS: Files → Linux files), then run:
+
+```sh
+chmod +x ~/pos-setup
+~/pos-setup
+```
+
+Choose **Install POS**. The wizard handles downloads, hashes, device detection,
+FAT32 preparation, private backups and the USB flash/readback steps. Erasing a
+card and flashing each require explicit confirmation. Crostini can copy to a
+shared FAT32 card; raw formatting and USB forwarding depend on ChromeOS access.
+Read [the easy guide](docs/EASY_INSTALL.md) for those limits and the final on-device
+INSTALL/power-cycle steps. No ESP-IDF or compiler is needed for prebuilt releases.
 
 For the prebuilt bundle, you need Python/esptool on your Linux computer, a FAT32
 microSD and a USB data cable. Back up/prove factory recovery; copy the extracted
@@ -103,14 +119,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.5.0-dev/launcher.png)
-![Color picker](downloads/0.5.0-dev/color-picker.png)
+![Launcher](downloads/0.5.1-dev/launcher.png)
+![Color picker](downloads/0.5.1-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.5.0-dev/boot-animation.png)
+![POS boot animation](downloads/0.5.1-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.5.0-dev/boot-splash.png)
+[Final splash frame](downloads/0.5.1-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -127,7 +143,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.0-dev --zip-output dist/pos-0.5.0-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.1-dev --zip-output dist/pos-0.5.1-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png

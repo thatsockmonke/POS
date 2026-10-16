@@ -1,4 +1,4 @@
-POS 0.5.0-dev - Pan Operating System
+POS 0.5.1-dev - Pan Operating System
 
 Boot: pink -> yellow -> blue flashes. Yellow slides into the middle, then
 pink slides into the top starting halfway through yellow. Large POS fades
@@ -45,3 +45,6 @@ Settings > Developer deployment: temporary trusted-LAN session, signed HTTPS
 updates only, on-device approval and physical recovery/OTA evidence required.
 After firmware reboot reopen the session to verify; no always-on deployment service.
 Maps/navigation and Meshtastic compatibility remain future work.
+
+Computer installation: download pos-setup and follow EASY_INSTALL.md.
+Crostini shared folders support copy only; raw formatting/USB need OS access.

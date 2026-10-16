@@ -252,13 +252,11 @@ def deploy(args, api) -> dict:
     raise ValueError("Deployment not confirmed before timeout. Do not assume success; inspect Software Update, recovery and version on device")
 
 
-def flash(args, api) -> None:
-    if not args.confirm_flash:
-        raise ValueError("Flashing replaces the bootloader/partition table/NVS/installer. Review the verified factory backup and SD package, then supply --confirm-flash")
-    if (not re.fullmatch("[0-9a-f]{64}", args.sha256) or args.image.is_symlink() or
-            api.sha256(args.image) != args.sha256 or not 0x10120 <= args.image.stat().st_size <= 0x110000):
+def verify_installer(image: Path, expected_sha: str, api) -> None:
+    if (not re.fullmatch("[0-9a-f]{64}", expected_sha) or image.is_symlink() or
+            api.sha256(image) != expected_sha or not 0x10120 <= image.stat().st_size <= 0x110000):
         raise ValueError("Installer checksum/size invalid; no write attempted")
-    data = args.image.read_bytes()
+    data = image.read_bytes()
     # Enforce the existing POS layout, including both retained runtime slots.
     import struct
     records = []
@@ -286,6 +284,12 @@ def flash(args, api) -> None:
         boot = Path(temp) / "bootloader.bin"; boot.write_bytes(data[:0x8000])
         parsed = LoadFirmwareImage("esp32s3", str(boot))
         boot.write_bytes(data[:parsed.data_length+32]); api.verify_image(boot)
+
+
+def flash(args, api) -> None:
+    if not args.confirm_flash:
+        raise ValueError("Flashing replaces the bootloader/partition table/NVS/installer. Review the verified factory backup and SD package, then supply --confirm-flash")
+    verify_installer(args.image, args.sha256, api)
     backup = args.factory_backup
     metadata = json.loads(Path(str(backup) + ".json").read_text())
     current = api.hardware_probe(args.port)

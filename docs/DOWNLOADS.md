@@ -6,18 +6,19 @@ You do not need to compile the OS to use a prebuilt package.
 
 ## Current development package
 
-**POS 0.5.0-dev — experimental, hardware validation not yet performed.**
+**POS 0.5.1-dev — experimental, hardware validation not yet performed.**
 
-- [POS 0.5.0-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.5.0-dev)
-- [Download pos-0.5.0-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.5.0-dev/pos-0.5.0-dev.zip)
-- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.0-dev/pos-0.5.0-dev.zip.sha256)
-- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.5.0-dev/boot-animation.png)
+- **Beginner installer:** [download pos-setup](https://github.com/thatsockmonke/POS/releases/download/v0.5.1-dev/pos-setup) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.1-dev/pos-setup.sha256) · [easy instructions](EASY_INSTALL.md)
+- [POS 0.5.1-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.5.1-dev)
+- [Download pos-0.5.1-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.5.1-dev/pos-0.5.1-dev.zip)
+- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.1-dev/pos-0.5.1-dev.zip.sha256)
+- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.5.1-dev/boot-animation.png)
 - [Browse versioned downloads](https://github.com/thatsockmonke/POS/tree/main/downloads)
 - [Full installation guide](INSTALL.md)
 - [Implemented / partial / planned features](STATUS.md)
 
 The 0.3.6-dev candidate was withdrawn before release after an ESP32 stack audit.
-Use 0.5.0-dev, which includes the bounded-buffer fix and a compiler frame-size guard.
+Use 0.5.1-dev, which includes the bounded-buffer fix and a compiler frame-size guard.
 
 Every new POS version is published as a versioned GitHub Release with its matching
 installation ZIP and checksum. Development versions are marked **prerelease**.
@@ -53,7 +54,7 @@ From the source checkout with ESP-IDF v5.5.5 activated:
 ```sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.0-dev --zip-output dist/pos-0.5.0-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.1-dev --zip-output dist/pos-0.5.1-dev.zip
 ```
 
 Choose a fresh output name if one already exists. `bundle` verifies images and

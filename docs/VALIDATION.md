@@ -116,3 +116,16 @@ cover preserved legacy originals, schema backups, future/corrupt data refusal an
 interrupted-slot protection. Developer tests mock USB/LAN/HTTPS to check signatures,
 payload/hosted-manifest changes, physical-evidence hashes/identity, transfer hashes,
 private session keys and confirmation criteria. These are software checks only.
+
+
+The guided installer tests use synthetic lsblk/findmnt inventories and mocked
+privileged commands. They check internal/system/swap/work-directory exclusion,
+changed disk identity before/after partitioning, exact erase/flash confirmation,
+unmount failure, FAT32 command targeting, archive traversal/collision/size limits,
+verified staged copies, Crostini copy-only behavior, and original backup discovery
+and observed-boot requirements. The executable also runs a real read-only doctor
+and private GitHub download verification without a checkout. Real Debian sfdisk
+and mkfs.fat were exercised against 64 GB sparse regular-file images (MBR type
+0x0c, LBA 2048, FAT32 boot sector verified), without sudo or a block device. None
+of this establishes actual card hot-plug/ejection, ADV USB recovery or ChromeOS
+USB forwarding behavior; those remain physical checks.

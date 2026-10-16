@@ -55,6 +55,8 @@ jobs:
         run: |
           . "$GITHUB_WORKSPACE/esp-idf/export.sh"
           python tools/posctl.py bundle --output dist/bundle --zip-output "dist/pos-${POS_VERSION}.zip"
+          cp dist/bundle/pos-setup dist/pos-setup
+          cp dist/bundle/pos-setup.sha256 dist/pos-setup.sha256
           python tools/posctl.py preview --output dist/launcher.png
           python tools/posctl.py preview --screen picker --output dist/color-picker.png
           python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -66,6 +68,8 @@ jobs:
             POS/dist/*.zip
             POS/dist/*.zip.sha256
             POS/dist/*.png
+            POS/dist/pos-setup
+            POS/dist/pos-setup.sha256
           compression-level: 0
           if-no-files-found: error
   prerelease:
@@ -93,8 +97,8 @@ jobs:
               echo "Release $POS_TAG already exists; keeping its published assets."
               exit 0
             fi
-            gh release upload "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/*.png --clobber
+            gh release upload "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/*.png firmware-downloads/pos-setup --clobber
             gh release edit "$POS_TAG" --draft=false --prerelease --latest=false --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md
           else
-            gh release create "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/*.png --verify-tag --prerelease --latest=false --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md
+            gh release create "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/*.png firmware-downloads/pos-setup --verify-tag --prerelease --latest=false --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md
           fi

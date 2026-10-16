@@ -118,3 +118,8 @@ partitions. A host trusted by your computer may still use a root absent on POS;
 choose a supported chain or build a verified custom/full bundle. Never disable TLS
 validation to make a deployment pass. Keep exact release installers and known-good
 backups available while testing.
+
+For a guided first installation, [pos-setup](EASY_INSTALL.md) downloads current
+releases and automates safe SD preparation/USB backup and flashing. Build its
+standalone executable with `python tools/build_setup.py --output dist/pos-setup`.
+It embeds the verified USB helper modules and runs without a checkout.

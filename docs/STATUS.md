@@ -1,4 +1,4 @@
-# POS feature status — 0.5.0-dev
+# POS feature status — 0.5.1-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -19,6 +19,7 @@ are evidence of software behavior; actual ADV behavior is still unverified.
 | Diagnostics | Heap/stack, firmware/flash/SD, boot/frame metrics, battery ADC, raw keyboard coverage, SD test, app cycles, evidence tooling | Actual measured hardware baseline and battery calibration |
 | Wi-Fi | Shared scan/connect/status, passphrase-encrypted NVS profiles, SNTP, verified HTTPS GET/POST/downloads, temporary authenticated LAN file transfer | Physical radio/TLS interoperability validation, broader Share integration |
 | Firmware updates | Settings Software Update, trusted P-256 signatures, HTTPS, semantic/minimum versions, signed sequences, bounded downloads, asset-only updates, previous-System journal recovery and inactive-slot write/readback; online OTA waits for a healthy 60-second UI interval | Configure a publisher feed/key; physical TLS/OTA/rollback/power-cut validation |
+| Guided installer | Executable `pos-setup`: latest/private GitHub download, streamed checksum verification, card detection/FAT32 with exact erase confirmation, shared-folder route, factory backup/restore guidance, checked USB flash/readback and recovery menu | Real disk/Cardputer/Crostini forwarding validation; shared folders cannot format a physical card |
 | USB developer tools | Build/package, checksum/backup-checked flash/readback, probe, double-read factory backup, matching-device restore/readback, logs and evidence reports | Physical factory boot recovery proof |
 | Battery / recovery | Always-visible percentage/icon on black, smoothing/hysteresis and near-full voltage indication; RTC panic snapshot, persistent JSON crash logs, NVS failure counter and explicit Safe Mode exit; existing manual deep sleep retained | Battery percentage/full indication is an estimate; calibrate on hardware. Automatic power management is removed from scope |
 | Text editor / huge documents | SD-backed editor and streamed saves/search/line navigation; 32-level session undo/redo, highlighted selection, SD clipboard, word/page/line/document navigation and recoverable drafts | Physical large-file responsiveness; session history restarts after reopening/recovery |
