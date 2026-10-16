@@ -153,8 +153,9 @@ Commands are `ls [PATH]`, `pwd`, `cat PATH`, `cp SRC DST`, `free`, `reboot`,
 `shutdown`. Paths are relative to the SD root. `cp` streams and verifies a new
 destination, refuses system/reserved paths, preserves an existing destination and
 never removes its source. `cat` shows a small preview rather than loading a whole
-document. The browser pages through directories in batches of 12 entries; notices
-scroll across pages. This is not Bash or a general text editor.
+document. The browser pages through directories in batches of 12 entries with folder page
+counts, fixed Previous/Next actions, first/last labels and an explicit empty state;
+notices scroll across pages. Ctrl+U clears recovery terminal input and all text fields. This is not Bash or a general text editor.
 
 Linux can run the same portable recovery engine without hardware:
 

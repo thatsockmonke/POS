@@ -63,3 +63,12 @@ wireless update endpoints are not implemented.
 
 Use [the bring-up record](HARDWARE_VALIDATION.md) to distinguish compiled/simulated
 behavior from observed hardware evidence. No physical result has been filled in.
+
+
+## Boot flag palette
+
+The boot sequence follows the pansexual flag from top to bottom: pink `#FF218C`,
+yellow `#FFD800`, blue `#21B1FF`, each shown once for 180 ms. The reference is
+[this published flag SVG](https://github.com/JoeHart/pride-flag-api/blob/20320fccb7441847f60a66cdfb7c5ac6f3c7ad06/data/flags/svg/pansexual_2010.svg).
+The LCD uses RGB565 values `0xF911`, `0xFEC0`, `0x259F`;
+actual panel color appearance still requires on-device observation.

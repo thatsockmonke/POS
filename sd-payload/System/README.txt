@@ -1,7 +1,8 @@
-POS 0.3.1-dev - Pan Operating System
+POS 0.3.2-dev - Pan Operating System
 
-Panputer now has a keyboard launcher, settings/setup, Counter app, file browser,
-hardware diagnostics and recovery tools. Radio/GPS/audio apps remain future work.
+Boot: pink -> yellow -> blue, following the pansexual flag.
+Ctrl+U clears text fields; setup validates names before continuing.
+Files shows folder pages and empty folders. Keep SD inserted when restarting.
 
-System files are integrity checked on boot. Put your own files outside System.
-User data stays on a standard FAT microSD; no proprietary recovery tool is required.
+System files are integrity checked on boot. Put user files outside System.
+Radio/GPS/audio/editor apps remain future work. Physical hardware is unverified.

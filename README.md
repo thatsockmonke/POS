@@ -4,7 +4,7 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.3.1-dev adds the blue → yellow → pink boot flash and a complete installation download.** Both firmware images compile
+**0.3.2-dev corrects the pansexual-flag boot sequence and polishes everyday input, setup, browsing and installation.** Both firmware images compile
 for ESP32-S3. Native tests exercise the actual portable installer, UI, app,
 settings and recovery code. No physical Panputer has been flashed or tested here.
 
@@ -26,7 +26,7 @@ Follow the full guide for exact commands, checks, USB permissions and recovery.
 
 Implemented:
 
-- A single full-screen blue → yellow → pink sequence at boot (180 ms per color).
+- A single full-screen pink → yellow → blue sequence at boot (180 ms per color).
 - Native ST7789 display output and TCA8418 ADV keyboard input, with USB fallback.
 - A two-page graphical launcher with icons streamed from SD; WASD navigation.
 - Central input routing, protected Home shortcut, and a separate input supervisor.
@@ -47,7 +47,10 @@ Implemented:
   Device/SD measurements are saved as JSON; Wi-Fi and app-cycle samples can be compared by build and boot session.
 - Linux USB probe, double-read factory backup and identity/hash-checked factory
   restore tools, private serial capture, hardware evidence reports, native backup/restore and a launcher renderer.
-- Paginated notices and file browsing; owned partial folder backups can resume without deleting interrupted copies.
+- Paginated notices and file browsing with folder page counts, fixed Previous/Next controls
+  and an explicit empty-folder state; owned partial folder backups can resume.
+- Ctrl+U clears text fields; character counters show limits and passwords stay masked.
+  Setup checks each name before moving on and preserves saved settings when cancelled.
 
 This is unsigned development firmware. Physical display orientation, all key
 positions, SD performance, battery calibration, USB recovery and power-cut safety
@@ -63,7 +66,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --output dist/pos-0.3.1-dev --zip-output dist/pos-0.3.1-dev.zip
+python tools/posctl.py bundle --output dist/pos-0.3.2-dev --zip-output dist/pos-0.3.2-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 ```
 
@@ -90,11 +93,18 @@ standalone runtime at the factory address. Read [INSTALL.md](docs/INSTALL.md).
 | Context | Keys |
 | --- | --- |
 | Launcher/menus | WASD or Fn+arrow keys, Enter selects |
-| Text fields/terminal | WASD are ordinary letters; Shift, Backspace, Enter |
+| Text fields/terminal | WASD are ordinary letters; Shift, Backspace, Enter; Ctrl+U clears |
 | Back | Fn+backtick (Escape) |
 | Global launcher | Fn+Space or a short G0 button press |
 | Recover from a stalled app | Hold Fn+Space or G0 for two seconds; restart into recovery |
 | USB fallback | WASD, Enter, Escape, and byte 0x1d for Home; IDF monitor itself reserves Ctrl-] |
+
+Name validation runs when Enter accepts a field: display names use 1–48 printable
+ASCII characters; device names use 1–24 letters, digits or hyphens. Invalid input
+returns to the same field, and cancelling before save preserves existing settings.
+File browsing shows `Folder page N/M`; Previous and Next stay at the top and show
+first/last boundaries. A separate `Menu N/M` appears if the current list spans
+more than one screen.
 
 Home propagates through nested dialogs and cancels active file operations safely.
 Built-in apps are trusted C callbacks, not a sandbox for hostile native code.

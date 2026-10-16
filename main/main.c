@@ -124,7 +124,7 @@ static bool digest_matches(mbedtls_sha256_context *hash, const char *expected) {
 }
 
 static int verify_flash(const esp_partition_t *partition,
-                        const pos_package_t *package) {
+                        const pos_package_t *package, bool show_progress) {
   if (!partition || package->firmware.size > partition->size)
     return -1;
   unsigned char *buffer = malloc(POS_COPY_BUFFER);
@@ -141,6 +141,10 @@ static int verify_flash(const esp_partition_t *partition,
         mbedtls_sha256_update(&hash, buffer, bytes))
       result = -1;
     offset += bytes;
+    if (!result && show_progress &&
+        pos_ui_progress(NULL, "firmware_verify", "Runtime flash readback",
+                        offset, package->firmware.size))
+      result = -1;
   }
   if (!digest_matches(&hash, package->firmware.sha256))
     result = -1;
@@ -223,8 +227,8 @@ static int write_firmware(void *opaque, const char *path,
         mbedtls_sha256_update(&hash, buffer, n) ||
         esp_ota_write(handle, buffer, n) != ESP_OK)
       result = -1;
-    if (pos_ui_progress(NULL, "Writing firmware", "Inactive runtime slot",
-                        total, package->firmware.size))
+    if (pos_ui_progress(NULL, "firmware_write", "Inactive runtime slot", total,
+                        package->firmware.size))
       result = -1;
     vTaskDelay(1);
   }
@@ -242,7 +246,7 @@ static int write_firmware(void *opaque, const char *path,
    * selecting it. */
   free(buffer);
   if (!result)
-    result = verify_flash(context->target, package);
+    result = verify_flash(context->target, package, true);
   return result;
 }
 
@@ -254,7 +258,18 @@ static int select_firmware(void *opaque) {
 static void progress(void *context, const char *phase, const char *detail) {
   (void)context;
   ESP_LOGI(TAG, "%s: %s", phase, detail);
-  pos_ui_message(phase, detail);
+  const char *message = detail;
+  if (!strcmp(phase, "validated"))
+    message = "Package checks passed. Preparing the SD system.";
+  if (!strcmp(phase, "staged"))
+    message = "All staged SD files passed verification.";
+  if (!strcmp(phase, "sd_committed"))
+    message = "SD system ready. Writing runtime firmware next.";
+  if (!strcmp(phase, "firmware_written"))
+    message = "Runtime firmware passed flash verification.";
+  if (!strcmp(phase, "boot_selected"))
+    message = "Power off and back on. Keep the SD card inserted.";
+  pos_ui_message(pos_ui_phase_title(phase), message);
 }
 
 static void boot_existing(void) {
@@ -271,7 +286,7 @@ static void boot_existing(void) {
   for (int slot = 0; slot < 2; ++slot) {
     const esp_partition_t *p = esp_partition_find_first(
         ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0 + slot, NULL);
-    if (!verify_flash(p, installed)) {
+    if (!verify_flash(p, installed, true)) {
       match = p;
       break;
     }
@@ -408,10 +423,7 @@ static void installer(void) {
     if (result)
       goto failed;
     pos_package_free(package);
-    pos_ui_notice(
-        "Installation complete",
-        "Power off and back on. Installer media stays until the runtime "
-        "confirms a good boot. Backup and previous system are retained.");
+    pos_ui_install_complete();
     idle();
   failed:
     pos_ui_notice("Operation stopped", error.message);
@@ -444,7 +456,8 @@ static void runtime(void) {
   }
   if (!invalid)
     invalid = pos_validate_system(SD_ROOT, package, &error);
-  if (!invalid && verify_flash(esp_ota_get_running_partition(), package)) {
+  if (!invalid &&
+      verify_flash(esp_ota_get_running_partition(), package, false)) {
     snprintf(error.message, sizeof(error.message),
              "Running flash bytes do not match SD manifest");
     invalid = -1;

@@ -369,7 +369,7 @@ int pos_install(const char *root, const pos_package_t *p, const pos_platform_t *
         return fail(error, "Firmware write/readback failed; installer and package retained. Retry is safe");
     report(platform, "firmware_written", p->version);
     if (platform->select_firmware(platform->ctx)) return fail(error, "Cannot select runtime boot partition");
-    report(platform, "boot_selected", "Power off, then power on. Do not remove installer files yet");
+    report(platform, "boot_selected", "Power off, then power on. Keep the SD card inserted; leave installer files until a verified boot");
     return 0;
 }
 

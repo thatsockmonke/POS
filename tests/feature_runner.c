@@ -15,9 +15,26 @@
 #include <signal.h>
 #include <sys/resource.h>
 
-static pos_event_t ui_events[32];
+static pos_event_t ui_events[512];
 static unsigned ui_next, ui_count, ui_frames;
 static bool secret_leaked, notice_tail_seen;
+static pos_view_t ui_last;
+static bool display_error, device_error, empty_folder_seen, last_page_seen,
+    keep_sd_seen;
+static unsigned folder_pages_seen;
+static void push_key(int key, unsigned mods) {
+  assert(ui_count < sizeof(ui_events) / sizeof(ui_events[0]));
+  ui_events[ui_count++] = (pos_event_t){key, mods, true};
+}
+static void push_text(const char *text) {
+  for (; *text; ++text)
+    push_key(*text, 0);
+}
+static void replace_field(const char *text) {
+  push_key('u', POS_MOD_CTRL);
+  push_text(text);
+  push_key(POS_KEY_ENTER, 0);
+}
 int64_t esp_timer_get_time(void) {
   static int64_t time;
   return time += 200000;
@@ -34,6 +51,23 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout) {
 }
 void pos_device_show(const pos_view_t *view) {
   ++ui_frames;
+  ui_last = *view;
+  if (!strcmp(view->lines[0], "Display name not valid"))
+    display_error = true;
+  if (!strcmp(view->lines[0], "Device name not valid"))
+    device_error = true;
+  unsigned page = 0;
+  if (sscanf(view->lines[1], "Folder page %u/", &page) == 1 && page <= 3 &&
+      page)
+    folder_pages_seen |= 1u << (page - 1);
+  for (int row = 0; row < POS_ROWS; ++row) {
+    if (strstr(view->lines[row], "Empty folder"))
+      empty_folder_seen = true;
+    if (strstr(view->lines[row], "Next page (last)"))
+      last_page_seen = true;
+    if (strstr(view->lines[row], "Keep the SD card inserted."))
+      keep_sd_seen = true;
+  }
   for (int row = 0; row < POS_ROWS; ++row)
     if (strstr(view->lines[row], "s3cret"))
       secret_leaked = true;
@@ -91,6 +125,134 @@ static int ui_tests(void) {
   return 0;
 }
 
+static int text_qol_tests(void) {
+  char text[32] = "old contents";
+  pos_keyboard_t keyboard = {0};
+  pos_event_t event;
+  assert(!pos_keyboard_decode(&keyboard, 0x84, &event)); /* physical Ctrl */
+  assert(pos_keyboard_decode(&keyboard, 0xa4, &event) && event.key == 'u' &&
+         (event.modifiers & POS_MOD_CTRL));
+  ui_next = ui_count = 0;
+  ui_events[ui_count++] = event;
+  push_text("new");
+  push_key(POS_KEY_ENTER, 0);
+  assert(pos_ui_text("Text", "Replace", text, sizeof(text), false));
+  assert(!strcmp(text, "new") && !strcmp(ui_last.lines[10], "3/31 characters"));
+  ui_next = ui_count = 0;
+  push_key(21, 0);
+  push_text("s3cret");
+  push_key(POS_KEY_ENTER, 0);
+  assert(pos_ui_text("Password", "Masked", text, sizeof(text), true));
+  assert(!secret_leaked && !strcmp(text, "s3cret"));
+  ui_next = ui_count = 0;
+  push_key('U', POS_MOD_CTRL | POS_MOD_SHIFT);
+  push_key(POS_KEY_ENTER, 0);
+  assert(pos_ui_text("Text", "Clear", text, sizeof(text), false));
+  for (unsigned i = 0; i < sizeof(text); ++i)
+    assert(!text[i]);
+  char short_text[4] = "";
+  queue_text("abcdef");
+  assert(pos_ui_text("Text", "Limit", short_text, sizeof(short_text), false));
+  assert(!strcmp(short_text, "abc") &&
+         !strcmp(ui_last.lines[10], "3/3 characters"));
+  puts("{\"ctrl_u\":true,\"usb_ctrl_u\":true,\"password_masked\":true,\"limit_"
+       "enforced\":true}");
+  return 0;
+}
+static int setup_tests(const char *root, const char *mode) {
+  pos_settings_t current;
+  pos_settings_defaults(&current);
+  int loaded = pos_settings_load(root, &current);
+  assert(loaded == 0 || loaded == 1);
+  pos_settings_t before = current;
+  bool retry = strstr(mode, "retry") != NULL;
+  ui_next = ui_count = 0;
+  if (retry) {
+    replace_field("");
+    push_key(POS_KEY_ENTER, 0);
+  }
+  replace_field("Stevie");
+  if (retry) {
+    replace_field("PAN PUTER");
+    push_key(POS_KEY_ENTER, 0);
+  }
+  replace_field("PANPUTER");
+  if (strstr(mode, "cancel-time"))
+    push_key(POS_KEY_ESCAPE, 0);
+  else {
+    push_key('s', 0);
+    push_key(POS_KEY_ENTER, 0); /* Pacific */
+    if (strstr(mode, "home"))
+      push_key(POS_KEY_HOME, 0);
+    else if (strstr(mode, "cancel"))
+      push_key(POS_KEY_ESCAPE, 0);
+    else {
+      push_key('s', 0);
+      push_key(POS_KEY_ENTER, 0);
+    }
+  }
+  if (strstr(mode, "fail"))
+    push_key(POS_KEY_ENTER, 0); /* save-error notice */
+  bool saved = pos_ui_setup(root, &current, loaded == 1);
+  assert(ui_next == ui_count);
+  if (!saved)
+    assert(!memcmp(&current, &before, sizeof(current)));
+  if (saved)
+    assert(!strcmp(current.display_name, "Stevie") &&
+           !strcmp(current.device_name, "PANPUTER") &&
+           current.brightness == 70 &&
+           !strcmp(current.timezone, "PST8PDT,M3.2.0,M11.1.0"));
+  printf("{\"saved\":%s,\"display_error\":%s,\"device_error\":%s}\n",
+         saved ? "true" : "false", display_error ? "true" : "false",
+         device_error ? "true" : "false");
+  return 0;
+}
+static void choose(unsigned index) {
+  for (unsigned i = 0; i < index; ++i)
+    push_key('s', 0);
+  push_key(POS_KEY_ENTER, 0);
+}
+static int browser_tests(const char *root, const char *mode) {
+  ui_next = ui_count = 0;
+  if (!strcmp(mode, "browse-pages")) {
+    choose(2);
+    choose(2);
+    choose(1);
+    choose(1);
+  }
+  if (!strcmp(mode, "browse-empty")) {
+    choose(2);
+    choose(1);
+  }
+  if (!strcmp(mode, "browse-preview")) {
+    choose(2);
+    choose(3);
+    push_key(POS_KEY_ENTER, 0);
+  }
+  push_key(POS_KEY_ESCAPE, 0);
+  pos_ui_browse(root, "");
+  assert(ui_next == ui_count);
+  printf("{\"pages\":%u,\"empty\":%s,\"last_page\":%s,\"final_page\":\"%s\"}\n",
+         folder_pages_seen, empty_folder_seen ? "true" : "false",
+         last_page_seen ? "true" : "false", ui_last.lines[1]);
+  return 0;
+}
+static int phase_tests(void) {
+  const char *phases[] = {"copy", "verify", "firmware_write",
+                          "firmware_verify"};
+  const char *titles[] = {"Prepare SD system", "Verify files",
+                          "Write runtime firmware", "Verify runtime firmware"};
+  ui_next = ui_count = 0;
+  for (unsigned i = 0; i < 4; ++i) {
+    assert(!pos_ui_progress(NULL, phases[i], "file", 1, 2));
+    assert(!strcmp(ui_last.lines[0], titles[i]));
+  }
+  push_key(POS_KEY_ENTER, 0);
+  pos_ui_install_complete();
+  assert(keep_sd_seen && ui_next == ui_count);
+  puts("{\"phases_clear\":true,\"keep_sd_inserted\":true}");
+  return 0;
+}
 static const char *cancel_phase;
 static uint64_t cancel_after;
 static int recovery_progress(void *opaque, const char *phase, const char *name,
@@ -188,14 +350,18 @@ static int core_tests(void) {
   assert(!allocations && !core.app);
   assert(initialized == 101 && foregrounded == 100 && handled == 100 &&
          saved == 100 && exited == 101);
-  const uint16_t boot_colors[] = {0x001f, 0xffe0, 0xfb56};
-  for (unsigned i = 0; i < 3; ++i) {
+  const uint32_t rgb[] = {0xff218c, 0xffd800, 0x21b1ff};
+  assert(POS_BOOT_COLOR_COUNT == 3 && POS_BOOT_COLOR_MS == 180);
+  for (unsigned i = 0; i < POS_BOOT_COLOR_COUNT; ++i) {
+    uint16_t expected = ((rgb[i] >> 19) << 11) | (((rgb[i] >> 10) & 63) << 5) |
+                        ((rgb[i] >> 3) & 31);
+    assert(pos_boot_colors[i] == expected);
     pos_view_clear(&view, "Text must not cover solid splash");
     view.solid_color = true;
-    view.color_rgb565 = boot_colors[i];
+    view.color_rgb565 = pos_boot_colors[i];
     for (int y = 0; y < 135; ++y)
       for (int x = 0; x < 240; ++x)
-        assert(pos_view_pixel(&view, x, y) == boot_colors[i]);
+        assert(pos_view_pixel(&view, x, y) == pos_boot_colors[i]);
   }
   pos_view_clear(&view, "title");
   pos_view_line(&view, -1, "bad");
@@ -227,6 +393,14 @@ int main(int argc, char **argv) {
     puts("{\"nonblocking\":true}");
     return 0;
   }
+  if (!strcmp(argv[2], "text-qol"))
+    return text_qol_tests();
+  if (!strncmp(argv[2], "setup-", 6))
+    return setup_tests(argv[1], argv[2]);
+  if (!strncmp(argv[2], "browse-", 7))
+    return browser_tests(argv[1], argv[2]);
+  if (!strcmp(argv[2], "phase-labels"))
+    return phase_tests();
   if (!strcmp(argv[2], "core"))
     return core_tests();
   if (!strcmp(argv[2], "ui"))

@@ -33,7 +33,7 @@ class FeatureTests(unittest.TestCase):
         cls.compilation=tempfile.TemporaryDirectory(prefix="pos-features-native-")
         cls.runner=Path(cls.compilation.name)/"features"
         sdk=Path(os.environ.get("IDF_PATH","/workspace/pos-cloud/esp-idf-v5.5.5"));cjson=sdk/"components/json/cJSON"
-        sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
+        sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/browser.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
         for component in ("pos_core","pos_recovery"):
             sources.extend((ROOT/"components"/component).glob("*.c"))
         command=["gcc","-std=c11","-D_POSIX_C_SOURCE=200809L","-Wall","-Wextra","-Werror","-g","-fsanitize=undefined","-fno-sanitize-recover=all"]
@@ -229,6 +229,55 @@ class FeatureTests(unittest.TestCase):
         self.assertTrue((stage/"backup.json").exists())
         self.run_feature("resume-backup");self.run_feature("verify");self.run_feature("match")
         self.assertTrue((self.card/"POS-Filesystem-Backup/interrupted").is_dir())
+
+    def test_ctrl_u_character_limits_and_password_masking(self):
+        report=json.loads(self.run_feature("text-qol").stdout)
+        self.assertTrue(all(report.values()))
+
+    def test_setup_retries_invalid_names_without_discarding_other_fields(self):
+        self.run_feature("settings-save","--name","Before")
+        report=json.loads(self.run_feature("setup-retry-save").stdout)
+        self.assertTrue(report["saved"]);self.assertTrue(report["display_error"]);self.assertTrue(report["device_error"])
+        self.assertEqual(json.loads(self.run_feature("settings-read").stdout)["name"],"Stevie")
+
+    def test_setup_cancel_and_home_preserve_previous_saved_settings(self):
+        self.run_feature("settings-save","--name","Before")
+        before={str(p.relative_to(self.card)):p.read_bytes() for p in self.card.rglob('*') if p.is_file()}
+        for mode in ("setup-cancel-time","setup-retry-cancel","setup-home"):
+            with self.subTest(mode=mode):
+                report=json.loads(self.run_feature(mode).stdout);self.assertFalse(report["saved"])
+                after={str(p.relative_to(self.card)):p.read_bytes() for p in self.card.rglob('*') if p.is_file()}
+                self.assertEqual(after,before)
+
+    def test_cancelled_first_setup_does_not_create_settings(self):
+        report=json.loads(self.run_feature("setup-cancel-time").stdout)
+        self.assertFalse(report["saved"]);self.assertEqual(list(self.card.iterdir()),[])
+
+    def test_setup_save_failure_preserves_current_settings_and_unknown_partial_data(self):
+        self.run_feature("settings-save","--name","Before")
+        precious=self.write("POS/Users/settings.0.json.part/precious.txt",b"keep this partial")
+        report=json.loads(self.run_feature("setup-save-fail").stdout)
+        self.assertFalse(report["saved"])
+        self.assertEqual(json.loads(self.run_feature("settings-read").stdout)["name"],"Before")
+        self.assertEqual(precious.read_bytes(),b"keep this partial")
+
+    def test_browser_page_counts_and_previous_next_controls(self):
+        for n in range(25):self.write(f"file-{n:02}.txt",f"document {n}".encode())
+        report=json.loads(self.run_feature("browse-pages").stdout)
+        self.assertEqual(report["pages"],7);self.assertTrue(report["last_page"])
+        self.assertEqual(report["final_page"],"Folder page 1/3")
+        self.assertEqual(len(list(self.card.iterdir())),25)
+
+    def test_browser_empty_folder_boundary_actions_and_preview_keep_current_page(self):
+        empty=json.loads(self.run_feature("browse-empty").stdout)
+        self.assertTrue(empty["empty"]);self.assertEqual(empty["pages"],1)
+        self.assertEqual(empty["final_page"],"Folder page 1/1")
+        for n in range(25):self.write(f"file-{n:02}.txt",b"preview this file")
+        preview=json.loads(self.run_feature("browse-preview").stdout)
+        self.assertEqual(preview["final_page"],"Folder page 2/3")
+
+    def test_installer_phase_labels_and_keep_sd_completion_message(self):
+        self.assertTrue(all(json.loads(self.run_feature("phase-labels").stdout).values()))
 
     def test_input_context_global_escape_and_100_lifecycles(self):
         result=json.loads(self.run_feature("core").stdout);self.assertEqual(result["resources_remaining"],0);self.assertTrue(result["global_home_intercepted"])

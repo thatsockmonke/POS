@@ -18,18 +18,29 @@ void pos_settings_defaults(pos_settings_t *s) {
   s->brightness = 70;
 }
 
-bool pos_settings_valid(const pos_settings_t *s) {
-  if (!memchr(s->display_name, 0, sizeof(s->display_name)) ||
-      !*s->display_name || !memchr(s->device_name, 0, sizeof(s->device_name)) ||
-      !*s->device_name || !memchr(s->timezone, 0, sizeof(s->timezone)) ||
-      !*s->timezone || s->brightness < 10 || s->brightness > 100)
+bool pos_settings_display_name_valid(const char *name) {
+  if (!name || !*name || strnlen(name, 49) >= 49)
     return false;
-  for (const char *p = s->display_name; *p; ++p)
+  for (const char *p = name; *p; ++p)
     if ((unsigned char)*p < 32 || (unsigned char)*p > 126)
       return false;
-  for (const char *p = s->device_name; *p; ++p)
-    if (!isalnum((unsigned char)*p) && *p != '-')
+  return true;
+}
+bool pos_settings_device_name_valid(const char *name) {
+  if (!name || !*name || strnlen(name, 25) >= 25)
+    return false;
+  for (const char *p = name; *p; ++p)
+    if (!((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') ||
+          (*p >= '0' && *p <= '9') || *p == '-'))
       return false;
+  return true;
+}
+bool pos_settings_valid(const pos_settings_t *s) {
+  if (!pos_settings_display_name_valid(s->display_name) ||
+      !pos_settings_device_name_valid(s->device_name) ||
+      !memchr(s->timezone, 0, sizeof(s->timezone)) || !*s->timezone ||
+      s->brightness < 10 || s->brightness > 100)
+    return false;
   for (const char *p = s->timezone; *p; ++p)
     if (!isalnum((unsigned char)*p) && !strchr("<>+-:,./", *p))
       return false;

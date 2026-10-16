@@ -153,40 +153,11 @@ static void wifi_setup(services_t *services) {
           : "Connected. Password is not stored. Reconnect after restarting.");
 }
 static void setup(services_t *services, bool first) {
-  pos_settings_t next = services->settings;
-  if (!pos_ui_text(first ? "Welcome to POS" : "Settings", "Your display name",
-                   next.display_name, sizeof(next.display_name), false))
+  if (!pos_ui_setup(services->root, &services->settings, first))
     return;
-  if (!pos_ui_text("Device identity", "Device name", next.device_name,
-                   sizeof(next.device_name), false))
-    return;
-  const char *zones[] = {"UTC", "Los Angeles / Pacific", "New York / Eastern",
-                         "Keep current timezone"};
-  int choice = pos_ui_menu("Timezone", zones, 4);
-  if (choice < 0)
-    return;
-  if (choice == 0)
-    strcpy(next.timezone, "UTC0");
-  if (choice == 1)
-    strcpy(next.timezone, "PST8PDT,M3.2.0,M11.1.0");
-  if (choice == 2)
-    strcpy(next.timezone, "EST5EDT,M3.2.0,M11.1.0");
-  const char *levels[] = {"Dim (25%)", "Normal (70%)", "Bright (100%)"};
-  choice = pos_ui_menu("Display brightness", levels, 3);
-  if (choice < 0)
-    return;
-  next.brightness = choice == 0 ? 25 : choice == 1 ? 70 : 100;
-  next.setup_complete = true;
-  if (!pos_settings_valid(&next) || pos_settings_save(services->root, &next)) {
-    pos_ui_notice(
-        "Settings not saved",
-        "Check names and storage. Existing settings copies were preserved.");
-    return;
-  }
-  services->settings = next;
-  setenv("TZ", next.timezone, 1);
+  setenv("TZ", services->settings.timezone, 1);
   tzset();
-  pos_device_brightness(next.brightness);
+  pos_device_brightness(services->settings.brightness);
   wifi_setup(services);
   pos_ui_notice(
       "Setup complete",
@@ -589,98 +560,6 @@ static void diagnostics(services_t *s) {
   }
 }
 
-static void browse(services_t *s, const char *initial) {
-  char relative[256];
-  snprintf(relative, sizeof(relative), "%s", initial);
-  unsigned page = 0;
-  for (;;) {
-    char path[POS_FS_PATH];
-    if (pos_fs_join(path, s->root, relative))
-      return;
-    DIR *dir = opendir(path);
-    if (!dir) {
-      pos_ui_notice("Files", "Cannot open directory. Files were not changed.");
-      return;
-    }
-    char names[12][256];
-    const char *items[15];
-    int count = 0;
-    items[count++] = ".. (parent)";
-    struct dirent *entry;
-    unsigned skipped = 0;
-    while (count < 13 && (entry = readdir(dir))) {
-      if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
-        continue;
-      if (skipped++ < page * 12)
-        continue;
-      snprintf(names[count - 1], 256, "%s", entry->d_name);
-      items[count] = names[count - 1];
-      ++count;
-    }
-    bool more = false;
-    while ((entry = readdir(dir)))
-      if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) {
-        more = true;
-        break;
-      }
-    closedir(dir);
-    int previous = -1, next_page = -1;
-    if (page) {
-      previous = count;
-      items[count++] = "< Previous page";
-    }
-    if (more) {
-      next_page = count;
-      items[count++] = "Next page >";
-    }
-    int selected = pos_ui_menu(*relative ? relative : "SD files", items, count);
-    if (selected < 0)
-      return;
-    if (!selected) {
-      page = 0;
-      char *slash = strrchr(relative, '/');
-      if (slash)
-        *slash = 0;
-      else
-        *relative = 0;
-      continue;
-    }
-    if (selected == previous) {
-      --page;
-      continue;
-    }
-    if (selected == next_page) {
-      ++page;
-      continue;
-    }
-    size_t length = strlen(relative);
-    char next[256];
-    if (snprintf(next, sizeof(next), "%s%s%s", relative, length ? "/" : "",
-                 items[selected]) >= (int)sizeof(next))
-      continue;
-    if (pos_fs_join(path, s->root, next))
-      continue;
-    struct stat st;
-    if (stat(path, &st))
-      continue;
-    if (S_ISDIR(st.st_mode)) {
-      strcpy(relative, next);
-      page = 0;
-      continue;
-    }
-    FILE *f = fopen(path, "rb");
-    if (!f)
-      continue;
-    char text[361];
-    size_t n = fread(text, 1, sizeof(text) - 1, f);
-    fclose(f);
-    for (size_t i = 0; i < n; ++i)
-      if ((unsigned char)text[i] < 32 && text[i] != '\n')
-        text[i] = '.';
-    text[n] = 0;
-    pos_ui_notice(items[selected], *text ? text : "Empty file");
-  }
-}
 static void terminal(services_t *s) {
   for (;;) {
     char command[96] = "";
@@ -691,7 +570,7 @@ static void terminal(services_t *s) {
     if (arg)
       *arg++ = 0;
     if (!strcmp(command, "ls")) {
-      browse(s, arg ? arg : "");
+      pos_ui_browse(s->root, arg ? arg : "");
       continue;
     }
     if (!strcmp(command, "pwd")) {
@@ -826,7 +705,7 @@ static void recovery(services_t *s) {
     if (choice == 2)
       restore(s);
     if (choice == 3)
-      browse(s, "POS.previous");
+      pos_ui_browse(s->root, "POS.previous");
     if (choice == 4)
       terminal(s);
     if (choice == 5)
@@ -843,7 +722,7 @@ static void diagnostics_foreground(void *state) {
   diagnostics(*(services_t **)state);
 }
 static void files_foreground(void *state) {
-  browse(*(services_t **)state, "POS/Users/Owner");
+  pos_ui_browse((*(services_t **)state)->root, "POS/Users/Owner");
 }
 static void recovery_foreground(void *state) {
   recovery(*(services_t **)state);

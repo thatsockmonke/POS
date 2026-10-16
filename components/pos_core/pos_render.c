@@ -2,6 +2,9 @@
 #include "pos_core.h"
 #include <string.h>
 
+/* Pansexual flag: #FF218C, #FFD800, #21B1FF, quantized to LCD RGB565. */
+const uint16_t pos_boot_colors[POS_BOOT_COLOR_COUNT] = {0xf911, 0xfec0, 0x259f};
+
 uint16_t pos_view_pixel(const pos_view_t *v, int x, int y) {
   if (!v || x < 0 || x >= 240 || y < 0 || y >= 135)
     return 0;

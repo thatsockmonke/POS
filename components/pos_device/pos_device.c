@@ -264,16 +264,15 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout_ms) {
 void pos_device_boot_flash(void) {
   /* Once per boot, immediately after initialization; no SD assets or
    * framebuffer. */
-  static const uint16_t colors[] = {0x001f, 0xffe0, 0xfb56};
   if (!info.display_ok)
     return;
   pos_view_t view = {.solid_color = true};
-  for (unsigned i = 0; i < sizeof(colors) / sizeof(colors[0]); ++i) {
-    view.color_rgb565 = colors[i];
+  for (unsigned i = 0; i < POS_BOOT_COLOR_COUNT; ++i) {
+    view.color_rgb565 = pos_boot_colors[i];
     pos_device_show(&view);
     if (!info.display_ok)
       break;
-    vTaskDelay(pdMS_TO_TICKS(180));
+    vTaskDelay(pdMS_TO_TICKS(POS_BOOT_COLOR_MS));
   }
 }
 

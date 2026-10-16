@@ -78,7 +78,8 @@ void pos_ui_notice(const char *title, const char *body) {
   }
 }
 
-int pos_ui_menu(const char *title, const char *const *items, int count) {
+static int menu(const char *title, const char *const *items, int count,
+                unsigned page, unsigned pages, const char *status) {
   if (count < 1 || pos_home_pending())
     return -1;
   int selected = 0;
@@ -87,11 +88,18 @@ int pos_ui_menu(const char *title, const char *const *items, int count) {
     if (redraw) {
       pos_view_t view;
       pos_view_clear(&view, title);
+      if (pages)
+        pos_view_line(&view, 1, "Folder page %u/%u", page + 1, pages);
+      if (status)
+        pos_view_line(&view, 2, "%s", status);
       int first = selected / 10 * 10;
       for (int i = first; i < count && i < first + 10; ++i)
         pos_view_line(&view, 3 + i - first, "%s", items[i]);
       view.selected_row = 3 + selected - first;
-      pos_view_line(&view, 15, "W/S: move Enter: select Esc:back");
+      if (count > 10)
+        pos_view_line(&view, 14, "Menu %d/%d", selected / 10 + 1,
+                      (count + 9) / 10);
+      pos_view_line(&view, 15, "W/S:move Enter:select Esc:back");
       pos_device_show(&view);
       redraw = false;
     }
@@ -113,6 +121,13 @@ int pos_ui_menu(const char *title, const char *const *items, int count) {
       return selected;
   }
 }
+int pos_ui_menu(const char *title, const char *const *items, int count) {
+  return menu(title, items, count, 0, 0, NULL);
+}
+int pos_ui_menu_page(const char *title, const char *const *items, int count,
+                     unsigned page, unsigned pages, const char *status) {
+  return menu(title, items, count, page, pages, status);
+}
 bool pos_ui_text(const char *title, const char *label, char *text,
                  size_t capacity, bool secret) {
   if (!capacity || pos_home_pending())
@@ -132,7 +147,9 @@ bool pos_ui_text(const char *title, const char *label, char *text,
         v.lines[6][n - start] = 0;
       } else
         pos_view_line(&v, 6, "%s_", text + start);
-      pos_view_line(&v, 12, "Enter: accept  Backspace: erase");
+      pos_view_line(&v, 10, "%zu/%zu characters", n, capacity - 1);
+      pos_view_line(&v, 12, "Enter: accept  Ctrl+U: clear");
+      pos_view_line(&v, 13, "Backspace: erase");
       pos_view_line(&v, 15, "Fn+`: back  Fn+Space: home");
       pos_device_show(&v);
       redraw = false;
@@ -142,17 +159,48 @@ bool pos_ui_text(const char *title, const char *label, char *text,
       continue;
     if (cancelled(&e))
       return false;
+    if (e.key == 21 ||
+        ((e.modifiers & POS_MOD_CTRL) && (e.key == 'u' || e.key == 'U'))) {
+      memset(text, 0, capacity);
+      n = 0;
+      redraw = true;
+      continue;
+    }
     if (e.key == POS_KEY_ENTER)
       return true;
     if (e.key == POS_KEY_BACKSPACE && n) {
       text[--n] = 0;
       redraw = true;
-    } else if (e.key >= 32 && e.key <= 126 && n + 1 < capacity) {
+    } else if (!(e.modifiers & POS_MOD_CTRL) && e.key >= 32 && e.key <= 126 &&
+               n + 1 < capacity) {
       text[n++] = (char)e.key;
       text[n] = 0;
       redraw = true;
     }
   }
+}
+const char *pos_ui_phase_title(const char *phase) {
+  static const struct {
+    const char *phase, *title;
+  } names[] = {{"verify", "Verify files"},
+               {"copy", "Prepare SD system"},
+               {"validated", "Package verified"},
+               {"staged", "SD files verified"},
+               {"sd_committed", "SD system ready"},
+               {"firmware_write", "Write runtime firmware"},
+               {"firmware_verify", "Verify runtime firmware"},
+               {"firmware_written", "Firmware verified"},
+               {"boot_selected", "Ready to restart"}};
+  for (unsigned i = 0; i < sizeof(names) / sizeof(names[0]); ++i)
+    if (!strcmp(phase, names[i].phase))
+      return names[i].title;
+  return phase;
+}
+void pos_ui_install_complete(void) {
+  pos_ui_notice("Installation complete",
+                "Power off and back on.\nKeep the SD card inserted.\n"
+                "Let POS validate its first boot before removing installer "
+                "files. Your backups and previous system are retained.");
 }
 int pos_ui_progress(void *ctx, const char *phase, const char *name,
                     uint64_t done, uint64_t total) {
@@ -166,7 +214,7 @@ int pos_ui_progress(void *ctx, const char *phase, const char *name,
     snprintf(previous, sizeof(previous), "%s", phase);
     last = now;
     pos_view_t v;
-    pos_view_clear(&v, phase);
+    pos_view_clear(&v, pos_ui_phase_title(phase));
     pos_view_line(&v, 3, "%s", name);
     if (strlen(name) > 30)
       pos_view_line(&v, 4, "%.30s", name + 30);

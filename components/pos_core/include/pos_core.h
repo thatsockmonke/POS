@@ -34,6 +34,8 @@ int pos_navigation(
 
 #define POS_ROWS 16
 #define POS_COLS 30
+enum { POS_BOOT_COLOR_COUNT = 3, POS_BOOT_COLOR_MS = 180 };
+extern const uint16_t pos_boot_colors[POS_BOOT_COLOR_COUNT];
 typedef struct {
   char lines[POS_ROWS][POS_COLS + 1];
   int selected_row;

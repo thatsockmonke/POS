@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.3.1-dev is an **experimental foundation**, not the complete master roadmap.
+POS 0.3.2-dev is an **experimental foundation**, not the complete master roadmap.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
 flashing, peripherals, factory boot recovery and electrical power-loss behavior
 have not been tested here. Read [STATUS.md](STATUS.md) before choosing to install.
@@ -9,9 +9,9 @@ Only use the **Cardputer ADV** hardware profile, not the original Cardputer.
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.3.1-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.3.2-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.3.1-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.3.2-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -32,10 +32,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.3.1-dev.zip.sha256
-mkdir pos-0.3.1-dev
-unzip pos-0.3.1-dev.zip -d pos-0.3.1-dev
-cd pos-0.3.1-dev
+sha256sum -c pos-0.3.2-dev.zip.sha256
+mkdir pos-0.3.2-dev
+unzip pos-0.3.2-dev.zip -d pos-0.3.2-dev
+cd pos-0.3.2-dev
 sha256sum -c SHA256SUMS
 ```
 
@@ -152,14 +152,17 @@ with the final runtime. Close the serial program and reset/power-cycle if needed
 
 ## 6. Let the installer install POS
 
-1. The LCD shows **blue → yellow → pink once**, about 180 ms per color, then boot
+1. The LCD shows **pink → yellow → blue once**, about 180 ms per color, then boot
    status. The animation runs on each firmware boot, including recovery boots.
 2. In **POS Installer / Recovery**, choose **Install POS / resume** with W/S and Enter.
 3. The installer checks package/model/version, file sizes/hashes, runtime header,
    destination ownership, flash capacity and conservative SD free space.
-4. Read the summary, then type **INSTALL** exactly and press Enter. Fn+backtick
+4. Read the summary, then type **INSTALL** exactly and press Enter. **Ctrl+U**
+   clears a text field; a character counter shows its limit. Fn+backtick
    goes back; Fn+Space requests Home/cancellation. No formatting option is offered.
-5. Leave power and SD connected. POS streams/verifies `/POS.installing`, commits
+5. Leave power and SD connected. Progress labels distinguish **Prepare SD system**,
+   **Verify files**, **Write runtime firmware** and **Verify runtime firmware**.
+   POS streams/verifies `/POS.installing`, commits
    the SD system as `/POS`, writes an inactive runtime slot, verifies flash and
    selects that slot for next boot. **You do not manually flash the runtime.**
 6. When **Installation complete** appears, power off and back on as instructed.
@@ -167,7 +170,10 @@ with the final runtime. Close the serial program and reset/power-cycle if needed
 7. The runtime validates its SD files and firmware before confirming a good boot.
    If a filesystem backup is present, it offers restore before setup.
 8. Complete display/user name, device name (default PANPUTER), timezone and brightness.
-   Wi-Fi is optional. Passwords are currently session-only; reconnect after reboot.
+   A display name uses 1–48 printable ASCII characters; a device name uses 1–24
+   letters, digits or hyphens. Invalid names are explained and retried in place.
+   Cancelling before save preserves the previous settings. Wi-Fi is optional.
+   Passwords stay masked and are session-only; reconnect after reboot.
 9. The launcher opens. Try Counter, Settings, Diagnostics, Files, Recovery and About.
 
 After a verified normal boot, POS removes only known, unchanged obsolete installer
@@ -180,12 +186,17 @@ for normal use. Music/maps/editor/radio features are not yet included in this re
 | Action | Control |
 | --- | --- |
 | Navigate/select | WASD or Fn+arrows, Enter |
+| Clear a text field | Ctrl+U (also byte 0x15 from a raw USB terminal) |
 | Back | Fn+backtick (Escape) |
 | Return Home | Fn+Space or a short G0 press |
 | Escape a stalled foreground app | Hold Fn+Space or G0 for two seconds to restart into recovery |
 | See measured hardware data | Diagnostics; JSON files go to `/Diagnostics` |
 | Repair/reinstall | Recovery → Repair / reinstall (factory) |
 | Restore original factory software | Use the saved private `.bin` **and** `.json` with factory-restore |
+
+Files shows a folder page number, fixed Previous/Next actions and an explicit
+`Empty folder` message. At a boundary, the actions say `(first)` or `(last)` and
+keep you on that page. Returning from a file preview keeps the current folder page.
 
 Sleep is deep sleep, not the physical power switch; actual wake behavior still
 needs testing. The warm-reset failure counter uses RTC memory and may reset on cold
