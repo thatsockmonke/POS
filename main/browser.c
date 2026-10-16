@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 enum { PAGE_FILES = 12 };
@@ -129,5 +130,75 @@ void pos_ui_browse(const char *root, const char *initial) {
         text[i] = '.';
     text[n] = 0;
     pos_ui_notice(items[selected], *text ? text : "Empty file");
+  }
+}
+
+bool pos_ui_pick_file(const char *root, const char *title, char result[241]) {
+  char relative[241] = "POS/Users/Owner/Documents";
+  directory_page_t *page = calloc(1, sizeof(*page));
+  if (!page)
+    return false;
+  for (;;) {
+    char full[POS_FS_PATH];
+    if (pos_fs_join(full, root, relative) || read_page(full, page)) {
+      if (*relative) {
+        *relative = 0;
+        page->page = 0;
+        continue;
+      }
+      free(page);
+      return false;
+    }
+    const char *items[3 + PAGE_FILES] = {".. (parent)", "< Previous page",
+                                         "Next page >"};
+    for (unsigned i = 0; i < page->count; ++i)
+      items[i + 3] = page->names[i];
+    int choice = pos_ui_menu_page(title, items, page->count + 3, page->page,
+                                  page->pages, relative);
+    if (choice < 0) {
+      free(page);
+      return false;
+    }
+    if (choice == 0) {
+      char *slash = strrchr(relative, '/');
+      if (slash)
+        *slash = 0;
+      else
+        *relative = 0;
+      page->page = 0;
+      continue;
+    }
+    if (choice == 1) {
+      if (page->page)
+        --page->page;
+      continue;
+    }
+    if (choice == 2) {
+      if (page->page + 1 < page->pages)
+        ++page->page;
+      continue;
+    }
+    char next[241];
+    if (snprintf(next, sizeof(next), "%s%s%s", relative, *relative ? "/" : "",
+                 items[choice]) >= (int)sizeof(next) ||
+        !pos_fs_archive_path(next) || !pos_fs_user_path(next) ||
+        !strncmp(next, "POS/Users/settings.", 19)) {
+      pos_ui_notice("Protected system data",
+                    "Choose a file from your user folders.");
+      continue;
+    }
+    struct stat st;
+    if (pos_fs_join(full, root, next) || pos_fs_lstat(full, &st))
+      continue;
+    if (S_ISDIR(st.st_mode)) {
+      strcpy(relative, next);
+      page->page = 0;
+      continue;
+    }
+    if (S_ISREG(st.st_mode)) {
+      strcpy(result, next);
+      free(page);
+      return true;
+    }
   }
 }

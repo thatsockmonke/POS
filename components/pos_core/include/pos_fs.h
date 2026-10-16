@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <sys/stat.h>
 #define POS_FS_PATH 512
+typedef int (*pos_io_progress_t)(void *, const char *, uint64_t, uint64_t);
 int pos_fs_join(char out[POS_FS_PATH], const char *root, const char *relative);
 int pos_fs_mkdirs(const char *path);
 int pos_fs_write_new(const char *path, const void *bytes, size_t length);

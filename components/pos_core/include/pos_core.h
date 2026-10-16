@@ -63,6 +63,8 @@ typedef struct {
   bool color_picker;
   uint16_t picker_hue, picker_saturation, picker_value;
   uint32_t picker_rgb;
+  bool text_editor;
+  uint8_t editor_cursor_row, editor_cursor_col;
 } pos_view_t;
 void pos_view_clear(pos_view_t *view, const char *title);
 void pos_view_line(pos_view_t *view, int row, const char *format, ...);

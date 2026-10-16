@@ -22,6 +22,7 @@ void pos_device_sleep(void);
 /* A session-only network: password never written to SD/NVS or logs. */
 int pos_device_wifi(const char *ssid, const char *password,
                     uint32_t timeout_ms);
+int pos_device_wifi_prepare(void);
 void pos_device_wifi_stop(void);
 
 void pos_device_keyboard_begin(void);

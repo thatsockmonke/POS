@@ -14,6 +14,9 @@ int pos_ui_menu_page(const char *title, const char *const *items, int count,
                      unsigned page, unsigned pages, const char *status);
 bool pos_ui_setup(const char *root, pos_settings_t *settings, bool first);
 void pos_ui_browse(const char *root, const char *initial);
+bool pos_ui_pick_file(const char *root, const char *title, char relative[241]);
+void pos_ui_editor(const char *root);
+void pos_ui_wifi(const char *root);
 const char *pos_ui_phase_title(const char *phase);
 void pos_ui_install_complete(void);
 /* Returns false on global Home/Escape; edits remain local until caller saves.

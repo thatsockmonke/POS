@@ -7,12 +7,15 @@
 #include "pos_console.h"
 #include "pos_core.h"
 #include "pos_device.h"
+#include "pos_editor.h"
 #include "pos_fs.h"
 #include "pos_launcher.h"
+#include "pos_network_service.h"
 #include "pos_recovery.h"
 #include "pos_settings.h"
 #include "ui.h"
 #include <assert.h>
+#include <limits.h>
 #include <signal.h>
 #include <sys/resource.h>
 
@@ -43,7 +46,14 @@ int64_t esp_timer_get_time(void) {
   return time += 200000;
 }
 bool pos_device_event(pos_event_t *event, uint32_t timeout) {
+  if (!timeout && ui_next < ui_count && ui_events[ui_next].key == INT_MIN) {
+    return false; /* Later input arrives after the current operation finishes.
+                   */
+  }
   if (ui_next >= ui_count) {
+    if (timeout)
+      fprintf(stderr, "UI blocked at: %s / %s / %s\n", ui_last.lines[0],
+              ui_last.lines[2], ui_last.lines[3]);
     assert(!timeout);
     return false;
   }
@@ -82,6 +92,148 @@ void pos_device_show(const pos_view_t *view) {
       secret_leaked = true;
     else if (strstr(view->lines[row], "FINAL_LINE"))
       notice_tail_seen = true;
+}
+static pos_network_status_t fake_network;
+static uint8_t fake_vault[POS_WIFI_VAULT_BYTES];
+static bool has_vault, share_active;
+static unsigned share_stops;
+int pos_device_wifi(const char *ssid, const char *password, uint32_t timeout) {
+  (void)timeout;
+  assert(!strcmp(ssid, "Test WiFi"));
+  assert(!strcmp(password, "network-password"));
+  fake_network.connected = true;
+  strcpy(fake_network.ssid, ssid);
+  strcpy(fake_network.ip, "192.0.2.1");
+  return 0;
+}
+void pos_device_wifi_stop(void) { fake_network.connected = false; }
+pos_network_status_t pos_network_status(void) { return fake_network; }
+int pos_network_scan(pos_network_ap_t *aps, unsigned capacity,
+                     unsigned *count) {
+  assert(capacity);
+  memset(aps, 0, sizeof(*aps));
+  strcpy(aps[0].ssid, "Test WiFi");
+  aps[0].secured = true;
+  *count = 1;
+  return 0;
+}
+int pos_network_profiles(const char *pass, pos_wifi_profiles_t *profiles) {
+  if (!has_vault) {
+    memset(profiles, 0, sizeof(*profiles));
+    return 1;
+  }
+  return pos_wifi_vault_unlock(fake_vault, pass, profiles);
+}
+int pos_network_remember(const char *pass,
+                         const pos_wifi_profiles_t *profiles) {
+  uint8_t salt[16] = {1}, nonce[12] = {2};
+  int result = pos_wifi_vault_encrypt(profiles, pass, salt, nonce, fake_vault);
+  if (!result)
+    has_vault = true;
+  return result;
+}
+int pos_network_sync_time(void) { return fake_network.connected ? 0 : -1; }
+int pos_network_https(const char *url, const char *method, const char *body,
+                      const char *type, const char *root, const char *dest,
+                      const char *hash, pos_io_progress_t progress, void *ctx,
+                      pos_error_t *error) {
+  (void)url;
+  (void)method;
+  (void)body;
+  (void)type;
+  (void)root;
+  (void)dest;
+  (void)hash;
+  (void)progress;
+  (void)ctx;
+  strcpy(error->message, "simulated transport failure");
+  return -1;
+}
+int pos_network_share_start(const char *root, const char *file, char key[17]) {
+  (void)root;
+  (void)file;
+  assert(!share_active);
+  share_active = true;
+  strcpy(key, "0123456789abcdef");
+  return 0;
+}
+void pos_network_share_stop(void) {
+  share_active = false;
+  ++share_stops;
+}
+static void idle_event(void) {
+  ui_events[ui_count++] = (pos_event_t){INT_MIN, 0, false};
+}
+static int editor_ui_tests(const char *root, const char *mode) {
+  assert(!pos_fs_layout(root));
+  ui_next = ui_count = 0;
+  push_key(POS_KEY_ENTER, 0); /* New */
+  push_key(POS_KEY_ENTER, 0); /* Untitled.txt */
+  push_text("wasd");
+  if (!strcmp(mode, "editor-ui-save")) {
+    push_key('s', POS_MOD_CTRL);
+    idle_event();
+    push_key(POS_KEY_HOME, 0);
+  } else if (!strcmp(mode, "editor-ui-draft")) {
+    push_key(POS_KEY_HOME, 0);
+    push_text("s");
+    push_key(POS_KEY_ENTER, 0);
+    idle_event();
+    push_key(POS_KEY_ENTER, 0); /* draft save and notice */
+  } else {
+    push_key(POS_KEY_HOME, 0);
+    push_text("ss");
+    push_key(POS_KEY_ENTER, 0);
+  }
+  pos_ui_editor(root);
+  assert(ui_next == ui_count);
+  puts("editor UI passed");
+  return 0;
+}
+static int wifi_ui_tests(const char *root, const char *mode) {
+  ui_next = ui_count = 0;
+  if (!strcmp(mode, "wifi-ui-remember")) {
+    push_text("ss");
+    push_key(POS_KEY_ENTER, 0); /* manual network */
+    push_text("Test WiFi");
+    push_key(POS_KEY_ENTER, 0);
+    push_text("network-password");
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER, 0); /* connected notice */
+    push_text("s");
+    push_key(POS_KEY_ENTER, 0);
+    push_text("correct horse battery staple");
+    push_key(POS_KEY_ENTER, 0);
+    push_text("correct horse battery staple");
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER, 0); /* saved notice */
+    push_text("sssssss");
+    push_key(POS_KEY_ENTER, 0); /* Back */
+    pos_ui_wifi(root);
+    assert(has_vault && fake_network.connected);
+    pos_wifi_profiles_t profiles = {0};
+    assert(!pos_wifi_vault_unlock(fake_vault, "correct horse battery staple",
+                                  &profiles));
+    assert(profiles.count == 1 &&
+           !strcmp(profiles.networks[0].ssid, "Test WiFi"));
+    assert(!strcmp(profiles.networks[0].password, "network-password"));
+    pos_secure_zero(&profiles, sizeof(profiles));
+  } else {
+    fake_network.connected = true;
+    strcpy(fake_network.ip, "192.0.2.1");
+    push_text("sssssss");
+    push_key(POS_KEY_ENTER, 0); /* transfer */
+    push_key(POS_KEY_ENTER, 0); /* receive only */
+    push_key(POS_KEY_ENTER, 0); /* LAN notice */
+    push_key(POS_KEY_ENTER, 0); /* start */
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_wifi(root);
+    assert(!share_active && share_stops >= 2);
+    assert(pos_ui_take_home());
+  }
+  assert(ui_next == ui_count);
+  puts("Wi-Fi UI passed");
+  return 0;
 }
 static void queue_text(const char *text) {
   ui_next = ui_count = 0;
@@ -456,7 +608,7 @@ static int picker_tests(void) {
   return 0;
 }
 static int launcher_tests(const char *root) {
-  assert(POS_LAUNCHER_APP_COUNT == 7);
+  assert(POS_LAUNCHER_APP_COUNT == 9);
   pos_event_t event = {'w', 0, true};
   assert(pos_launcher_action(&event) == POS_KEY_ENTER);
   event.key = 'a';
@@ -668,6 +820,10 @@ int main(int argc, char **argv) {
     puts("{\"nonblocking\":true}");
     return 0;
   }
+  if (!strncmp(argv[2], "editor-ui-", 10))
+    return editor_ui_tests(argv[1], argv[2]);
+  if (!strncmp(argv[2], "wifi-ui-", 8))
+    return wifi_ui_tests(argv[1], argv[2]);
   if (!strcmp(argv[2], "picker"))
     return picker_tests();
   if (!strcmp(argv[2], "launcher"))

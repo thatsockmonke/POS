@@ -5,7 +5,7 @@
 
 const char *const pos_launcher_names[POS_LAUNCHER_APP_COUNT] = {
     "Counter",  "Settings", "Diagnostics", "Files",
-    "Recovery", "About",    "Background"};
+    "Recovery", "About",    "Background", "Text Editor", "Wi-Fi"};
 
 int pos_launcher_action(const pos_event_t *event) {
   if (!event || !event->pressed ||

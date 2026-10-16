@@ -34,7 +34,7 @@ class FeatureTests(unittest.TestCase):
         cls.compilation=tempfile.TemporaryDirectory(prefix="pos-features-native-")
         cls.runner=Path(cls.compilation.name)/"features"
         sdk=Path(os.environ.get("IDF_PATH","/workspace/pos-cloud/esp-idf-v5.5.5"));cjson=sdk/"components/json/cJSON"
-        sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/browser.c",ROOT/"main/background.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
+        sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/browser.c",ROOT/"main/background.c",ROOT/"main/editor.c",ROOT/"main/wifi.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
         for component in ("pos_core","pos_recovery"):
             sources.extend((ROOT/"components"/component).glob("*.c"))
         command=["gcc","-std=c11","-D_POSIX_C_SOURCE=200809L","-Wall","-Wextra","-Werror","-g","-fsanitize=undefined","-fno-sanitize-recover=all"]
@@ -230,6 +230,25 @@ class FeatureTests(unittest.TestCase):
         self.assertTrue((stage/"backup.json").exists())
         self.run_feature("resume-backup");self.run_feature("verify");self.run_feature("match")
         self.assertTrue((self.card/"POS-Filesystem-Backup/interrupted").is_dir())
+
+    def test_editor_ui_types_wasd_as_text_saves_and_closes_with_home(self):
+        self.run_feature("editor-ui-save")
+        self.assertEqual((self.card/"POS/Users/Owner/Documents/Untitled.txt").read_bytes(),b"wasd")
+
+    def test_editor_unsaved_close_keeps_plain_draft_or_discards_explicitly(self):
+        for mode in ("editor-ui-draft","editor-ui-discard"):
+            card=self.base/mode;card.mkdir();self.run_feature(mode,card=card)
+            docs=card/"POS/Users/Owner/Documents"
+            self.assertFalse((docs/"Untitled.txt").exists())
+            if mode=="editor-ui-draft":self.assertEqual((docs/"Draft-0.txt").read_bytes(),b"wasd")
+            else:self.assertFalse(list(docs.glob("Draft-*.txt")))
+
+    def test_wifi_ui_remembers_encrypted_profile_without_sd_credentials(self):
+        self.run_feature("wifi-ui-remember")
+        self.assertFalse(list(self.card.rglob("*")))
+
+    def test_wifi_transfer_session_stops_on_global_home(self):
+        self.run_feature("wifi-ui-transfer")
 
     def test_wasd_color_picker_accept_cancel_fine_adjustment_and_bounds(self):
         report=json.loads(self.run_feature("picker").stdout)

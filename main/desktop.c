@@ -13,6 +13,7 @@
 #include "pos_device.h"
 #include "pos_fs.h"
 #include "pos_launcher.h"
+#include "pos_network.h"
 #include "pos_recovery.h"
 #include "pos_settings.h"
 #include "ui.h"
@@ -109,12 +110,6 @@ static void measurement(services_t *s, const char *phase) {
   free(text);
 }
 
-static void wipe(void *data, size_t size) {
-  volatile unsigned char *bytes = data;
-  while (size--)
-    *bytes++ = 0;
-}
-
 static uint64_t free_space(const char *root) {
   uint64_t total, free = 0;
   esp_vfs_fat_info(root, &total, &free);
@@ -129,6 +124,9 @@ static void factory(void) {
                 "Factory installer could not be selected. Use USB recovery.");
 }
 static void wifi_setup(services_t *services) {
+#ifndef POS_INSTALLER
+  pos_ui_wifi(services->root);
+#else
   const char *options[] = {"Connect for this session", "Skip Wi-Fi"};
   if (pos_ui_menu("Optional Wi-Fi", options, 2) != 0)
     return;
@@ -138,21 +136,23 @@ static void wifi_setup(services_t *services) {
     return;
   if (!pos_ui_text("Wi-Fi", "Password (empty = open)", password,
                    sizeof(password), true)) {
-    wipe(password, sizeof(password));
+    pos_secure_zero(password, sizeof(password));
     return;
   }
   pos_ui_message("Wi-Fi", "Connecting...\nCredentials stay in RAM only.");
   measurement(services, "wifi-before");
   int result = pos_device_wifi(ssid, password, 15000);
   measurement(services, result ? "wifi-failed" : "wifi-connected");
-  wipe(password, sizeof(password));
+  pos_secure_zero(password, sizeof(password));
   pos_ui_notice(
       "Wi-Fi",
       result
           ? "No connection. Check network and password; offline use still "
             "works."
           : "Connected. Password is not stored. Reconnect after restarting.");
+#endif
 }
+
 static void setup(services_t *services, bool first) {
   if (!pos_ui_setup(services->root, &services->settings, first))
     return;
@@ -729,6 +729,20 @@ static void background_foreground(void *state) {
   services_t *services = *(services_t **)state;
   (void)pos_ui_background(services->root, &services->settings);
 }
+static void editor_foreground(void *state) {
+#ifndef POS_INSTALLER
+  pos_ui_editor((*(services_t **)state)->root);
+#else
+  (void)state;
+#endif
+}
+static void wifi_foreground(void *state) {
+#ifndef POS_INSTALLER
+  pos_ui_wifi((*(services_t **)state)->root);
+#else
+  (void)state;
+#endif
+}
 static void recovery_foreground(void *state) {
   recovery(*(services_t **)state);
 }
@@ -760,6 +774,16 @@ static const pos_app_t modal_apps[] = {{.name = "Settings",
                                         .state_size = sizeof(services_t *),
                                         .initialize = service_init,
                                         .foreground = background_foreground,
+                                        .render = modal_render},
+                                       {.name = "Text Editor",
+                                        .state_size = sizeof(services_t *),
+                                        .initialize = service_init,
+                                        .foreground = editor_foreground,
+                                        .render = modal_render},
+                                       {.name = "Wi-Fi",
+                                        .state_size = sizeof(services_t *),
+                                        .initialize = service_init,
+                                        .foreground = wifi_foreground,
                                         .render = modal_render}};
 
 void pos_desktop(const char *root, bool recovery_only) {
@@ -831,8 +855,8 @@ void pos_desktop(const char *root, bool recovery_only) {
               pos_ui_notice("App unavailable",
                             "Could not allocate or initialize the app.");
           }
-          if ((selected >= 1 && selected <= 4) || selected == 6) {
-            int modal = selected == 6 ? 4 : selected - 1;
+          if ((selected >= 1 && selected <= 4) || selected >= 6) {
+            int modal = selected >= 6 ? selected - 2 : selected - 1;
             if (pos_core_open(&core, &modal_apps[modal]))
               pos_ui_notice("App unavailable", "Initialization failed.");
             else if (pos_core_close(&core))

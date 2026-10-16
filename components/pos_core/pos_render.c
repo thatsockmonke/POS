@@ -162,6 +162,10 @@ uint16_t pos_view_pixel(const pos_view_t *v, int x, int y) {
     if (row >= 14)
       bg = 0;
   }
+  if (v->text_editor && row == v->editor_cursor_row && column == v->editor_cursor_col) {
+    bg = 0xffff;
+    fg = 0;
+  }
   if (row < POS_ROWS && column < POS_COLS) {
     size_t n = strnlen(v->lines[row], POS_COLS);
     unsigned char c =

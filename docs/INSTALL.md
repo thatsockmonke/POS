@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.3.5-dev is an **experimental foundation**, not the complete master roadmap.
+POS 0.3.6-dev is an **experimental foundation**, not the complete master roadmap.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
 flashing, peripherals, factory boot recovery and electrical power-loss behavior
 have not been tested here. Read [STATUS.md](STATUS.md) before choosing to install.
@@ -9,9 +9,9 @@ Only use the **Cardputer ADV** hardware profile, not the original Cardputer.
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.3.5-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.3.6-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.3.5-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.3.6-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -32,10 +32,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.3.5-dev.zip.sha256
-mkdir pos-0.3.5-dev
-unzip pos-0.3.5-dev.zip -d pos-0.3.5-dev
-cd pos-0.3.5-dev
+sha256sum -c pos-0.3.6-dev.zip.sha256
+mkdir pos-0.3.6-dev
+unzip pos-0.3.6-dev.zip -d pos-0.3.6-dev
+cd pos-0.3.6-dev
 sha256sum -c SHA256SUMS
 ```
 
@@ -177,13 +177,14 @@ with the final runtime. Close the serial program and reset/power-cycle if needed
    A display name uses 1–48 printable ASCII characters; a device name uses 1–24
    letters, digits or hyphens. Invalid names are explained and retried in place.
    Cancelling before save preserves the previous settings. Wi-Fi is optional.
-   Passwords stay masked and are session-only; reconnect after reboot.
-9. The launcher opens. Try Counter, Settings, Diagnostics, Files, Recovery and About.
+   Passwords stay masked. The Wi-Fi app offers session-only connections or an
+   encrypted saved-network vault; unlock saved networks after reboot.
+9. The launcher opens. Try Text Editor, Wi-Fi, Background, Files, Settings, Diagnostics and Counter.
 
 After a verified normal boot, POS removes only known, unchanged obsolete installer
 files. A pending/failed restore retains the installation media. Unknown files and
 backups are not recursively deleted. The SD is the system drive: leave it inserted
-for normal use. Music/maps/editor/radio features are not yet included in this release.
+for normal use. Music/maps/radio features remain future work.
 
 ## 7. Normal use and recovery
 
@@ -259,6 +260,89 @@ that save succeeds. **Cancel**, Esc from the main Background menu, or **Fn+Space
 discards unsaved edits. New stripes start white; **Pan flag preset** restores
 pink/yellow/blue in the draft. Saved backgrounds do not change the boot animation.
 
-Only one foreground app runs. **Fn+Space** (or a short G0 press) closes it from
-any screen and returns to the launcher. **Fn+backtick** is Escape: back within
+Only one foreground app runs. **Fn+Space** (or a short G0 press) requests closing
+the app from any screen. The editor asks what to do with unsaved changes. **Fn+backtick** is Escape: back within
 an app, or close it from its main screen. Background system services may continue.
+
+
+## Text Editor
+
+Center **Text Editor** with A/D and press W. Choose **New document**, **Open
+text file** or **Recover working draft**. The file picker allows ordinary user
+files, never protected system files. New files and Save As go to
+`/POS/Users/Owner/Documents`; enter a simple filename including `.txt`.
+
+- Type normally: WASD inserts letters. Shift and Backspace work; Tab inserts four spaces.
+- **Fn+arrows** moves the cursor. **Ctrl+S** saves, **Ctrl+F** finds and **Ctrl+G**
+  goes to a line. Search and line navigation stream through the document.
+- **Esc** opens the editor menu: continue, save, save as, find, go to line,
+  start/end or close. Enter selects a menu action.
+- **Fn+Space** requests closing the app. With unsaved changes choose Save & close,
+  Keep draft & close, Discard edits or Continue editing. Keeping a draft creates
+  a normal `Draft-N.txt` document you can open on any computer.
+
+Opening takes a verified SD snapshot; editing keeps text and piece indexes on SD,
+not all in RAM. The source file stays untouched until a verified save. Saving an
+existing document keeps its old contents as `filename.previous-N`. A changed
+original is never silently overwritten: use Save As. Existing Save As targets
+are refused. Staged files and originals remain available if a save fails.
+
+Allow free SD space for the working snapshot, inserted text, new saved copy and
+retained previous copy. The current file/seek limit is **2 GiB minus one byte**;
+large files can take time to snapshot, verify, search and save. The physical
+keyboard/font currently supports ASCII entry; existing UTF-8 is preserved, with
+unsupported characters displayed as `?`. This is a basic editor without undo or
+selection. After an interrupted session, use Recover working draft. Copy the
+whole `/POS/Users/Owner/EditorDrafts` folder when recovering data elsewhere; see
+[RECOVERY.md](RECOVERY.md#text-editor-working-drafts).
+
+## Wi-Fi services
+
+Open **Wi-Fi** from the ribbon, or Settings → Wi-Fi. Choose **Scan / connect**
+for nearby networks or **Manual / hidden network** to type an SSID. Use a
+2.4-GHz network. An SSID is 1–32 bytes; a password is empty for open networks,
+8–63 characters or a 64-digit hexadecimal PSK. Status shows association, IP and
+signal strength. Closing the app keeps the shared connection available;
+**Disconnect** or sleep stops it.
+
+After connecting, **Use for this session only** is the default. **Remember
+encrypted network** creates/unlocks a vault with a 12–64-character passphrase.
+The first save asks twice. Up to four network profiles are encrypted using
+AES-256-GCM with a PBKDF2-HMAC-SHA256-derived key (100,000 iterations) and fresh
+salt/nonce. Only the encrypted blob is stored in internal NVS; neither passwords
+nor the vault passphrase are written to SD. After restarting, open **Saved
+networks**, unlock, and select Connect. Forget a profile from the same menu.
+The vault is not part of an SD backup. Keep its passphrase somewhere safe; a
+forgotten passphrase cannot be recovered. A vault error preserves existing data
+and still permits session-only use; POS never erases NVS to repair it.
+
+For Internet features, connect then choose **Sync time**. HTTPS requires a valid
+clock and validates certificate chains, hostnames and dates using the ESP-IDF
+certificate bundle; no insecure fallback is offered. **HTTPS download** asks for
+a URL, a new filename in Downloads and an optional expected SHA-256. **HTTPS API**
+supports GET or POST with a small JSON body (UI limit 256 characters; service
+limit 4096 bytes). Responses stream to new files in `/Downloads`. GET may follow
+up to three absolute HTTPS redirects; relative redirects require the final URL.
+POST is not automatically replayed to another address.
+
+Downloads use unique temporary files, check declared length where available,
+read back their contents and verify any supplied SHA-256 before publishing.
+Existing files are preserved. Esc/Home cancels between chunks; failed transfers
+remain `.part-N` for inspection and are not presented as complete downloads.
+
+### Local Wi-Fi file transfer
+
+1. Connect Panputer and your computer/phone to the same **trusted local network**;
+   Internet access is unnecessary.
+2. Choose **Local file transfer**. Optionally select one user file to export, or
+   enable uploads only. POS shows its IP, port 8080 and a temporary session key.
+3. In a browser enter `http://IP:8080/?key=KEY` using those displayed values.
+   Uploads go only to Downloads, require a simple filename and never overwrite
+   existing files. The download button exports only the file selected on Panputer.
+4. Enter/Esc stops sharing; Fn+Space closes the app and stops the server. Each new
+   session has a new random key. No file server runs while this screen is closed.
+
+This local transfer uses **unencrypted HTTP**, including the session key and
+file contents. Use it only on a trusted network. Outbound Internet downloads
+continue to use validated HTTPS. Wi-Fi file transfer is implemented; BLE sharing
+and the common transport-independent Share interface remain future work.

@@ -39,7 +39,7 @@ static adc_oneshot_unit_handle_t adc;
 static adc_cali_handle_t calibration;
 static uint16_t *stripe;
 static pos_view_t previous;
-static bool previous_valid, backlight, wifi_initialized;
+static bool previous_valid, backlight, wifi_initialized, wifi_started;
 static bool serial_input;
 static RTC_NOINIT_ATTR uint32_t boot_magic, boot_attempts, force_recovery;
 #define BOOT_MAGIC 0x504f5332u
@@ -278,7 +278,8 @@ void pos_device_boot_flash(void) {
     int64_t remaining = (int64_t)hold_ms * 1000;
     if (view.boot_splash && i != POS_BOOT_HOLD_FRAME)
       remaining -= esp_timer_get_time() - start;
-    TickType_t ticks = remaining > 0 ? pdMS_TO_TICKS((remaining + 999) / 1000) : 0;
+    TickType_t ticks =
+        remaining > 0 ? pdMS_TO_TICKS((remaining + 999) / 1000) : 0;
     vTaskDelay(ticks ? ticks : 1);
   }
 }
@@ -337,6 +338,10 @@ int pos_device_battery_mv(void) {
 }
 pos_device_info_t pos_device_info(void) {
   pos_device_info_t snapshot = info;
+  if (wifi_initialized) {
+    wifi_ap_record_t ap;
+    snapshot.wifi_connected = esp_wifi_sta_get_ap_info(&ap) == ESP_OK;
+  }
   snapshot.keys = atomic_load_explicit(&key_count, memory_order_relaxed);
   snapshot.raw_keys[0] =
       atomic_load_explicit(&raw_keys[0], memory_order_relaxed);
@@ -363,11 +368,9 @@ void pos_device_wifi_stop(void) {
   if (wifi_initialized)
     esp_wifi_stop();
   info.wifi_connected = false;
+  wifi_started = false;
 }
-int pos_device_wifi(const char *ssid, const char *password,
-                    uint32_t timeout_ms) {
-  if (!ssid || strlen(ssid) > 32 || !password || strlen(password) > 63)
-    return -1;
+int pos_device_wifi_prepare(void) {
   if (!wifi_initialized) {
     esp_err_t err = esp_netif_init();
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
@@ -385,19 +388,36 @@ int pos_device_wifi(const char *ssid, const char *password,
       return -1;
     wifi_initialized = true;
   }
+  if (!wifi_started) {
+    if (esp_wifi_start() != ESP_OK)
+      return -1;
+    wifi_started = true;
+  }
+  return 0;
+}
+int pos_device_wifi(const char *ssid, const char *password,
+                    uint32_t timeout_ms) {
+  if (!ssid || !*ssid || strlen(ssid) > 32 || !password ||
+      strlen(password) > 64)
+    return -1;
   pos_device_wifi_stop();
+  if (pos_device_wifi_prepare())
+    return -1;
   wifi_config_t cfg = {0};
   memcpy(cfg.sta.ssid, ssid, strlen(ssid));
   memcpy(cfg.sta.password, password, strlen(password));
   cfg.sta.pmf_cfg.capable = true;
   int result = -1;
   if (esp_wifi_set_config(WIFI_IF_STA, &cfg) == ESP_OK &&
-      esp_wifi_start() == ESP_OK && esp_wifi_connect() == ESP_OK) {
+      esp_wifi_connect() == ESP_OK) {
     int64_t start = esp_timer_get_time();
     while (esp_timer_get_time() - start < (int64_t)timeout_ms * 1000) {
       esp_netif_t *net = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
       esp_netif_ip_info_t ip;
-      if (net && esp_netif_get_ip_info(net, &ip) == ESP_OK && ip.ip.addr) {
+      wifi_ap_record_t ap;
+      if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK &&
+          !strncmp((const char *)ap.ssid, ssid, 32) && net &&
+          esp_netif_get_ip_info(net, &ip) == ESP_OK && ip.ip.addr) {
         info.wifi_connected = true;
         result = 0;
         break;

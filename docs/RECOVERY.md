@@ -183,3 +183,94 @@ for app schemas that do not yet exist. ZIP CRC/folder SHA checks detect corrupti
 FAT is not transactional: file flushes and logical resume tests do not guarantee
 survival of torn sectors, card-controller faults or power loss. Keep off-device
 copies and perform the hardware test matrix before trusting real data.
+
+## Text Editor working drafts
+
+Saved documents, `Draft-N.txt`, `.previous-N` originals and `.pos-save-N.part`
+files are ordinary files readable on a computer. Editor working folders live in
+`POS/Users/Owner/EditorDrafts/editor-N` and are included as user data in backups.
+They are not disposable cache. Copy the whole folder before attempting recovery.
+On Panputer choose Text Editor → Recover working draft, then Save As to a new name.
+
+Each folder contains ordinary `base.txt` and append-only `added.txt`, two CSV
+piece indexes and two JSON checkpoints. A CSV row `O,offset,length` references
+bytes of base.txt; `A,offset,length` references added.txt. Concatenate those byte
+ranges in CSV order to reconstruct the document. Checkpoints contain a JSON
+`payload` string plus its SHA-256. Inside the payload, `generation` selects the
+latest valid state, `slot` selects the matching index, `length` is the result
+size, and CRC-32 values protect the index, base and committed added prefix.
+An interrupted append can leave extra, uncommitted bytes at the end of added.txt.
+The previous valid checkpoint remains a recovery option. Never mix an index
+from one slot with metadata from the other.
+
+For recovery without POS, this Python 3 example uses only the standard library.
+Run it on a **copy**, from the chosen `editor-N` directory. It validates both
+slots and reconstructs the newest valid one into a new `recovered.txt`. Existing
+output is refused; failures retain the input files and any partial output.
+
+```python
+import csv, hashlib, json, pathlib, zlib
+root = pathlib.Path('.')
+
+def crc_prefix(path, length):
+    crc = 0
+    with path.open('rb') as stream:
+        while length:
+            block = stream.read(min(length, 4096))
+            if not block:
+                raise ValueError('Truncated working text')
+            crc = zlib.crc32(block, crc)
+            length -= len(block)
+    return crc
+
+valid = []
+for slot in (0, 1):
+    try:
+        envelope = json.loads((root / f'state.{slot}.json').read_text())
+        payload = envelope['payload'].encode()
+        assert hashlib.sha256(payload).hexdigest() == envelope['sha256']
+        state = json.loads(payload)
+        assert state['format'] == 1 and state['slot'] == slot
+        index = root / f'pieces.{slot}.csv'
+        assert crc_prefix(index, index.stat().st_size) == state['index_crc']
+        assert (root / 'base.txt').stat().st_size == state['base_size']
+        for name in ('base', 'added'):
+            assert crc_prefix(root / f'{name}.txt', state[f'{name}_size']) == state[f'{name}_crc']
+        total = 0
+        with index.open(newline='') as stream:
+            for kind, offset, length in csv.reader(stream):
+                offset, length = int(offset), int(length)
+                name = {'O': 'base', 'A': 'added'}[kind]
+                assert offset >= 0 and length > 0
+                assert offset + length <= state[f'{name}_size']
+                total += length
+        assert total == state['length']
+        valid.append(state)
+    except (OSError, ValueError, KeyError, AssertionError, TypeError):
+        pass
+if not valid:
+    raise RuntimeError('No verified checkpoint; preserve every input file')
+state = max(valid, key=lambda s: s['generation'])
+with (root / 'recovered.txt').open('xb') as output:
+    with (root / f"pieces.{state['slot']}.csv").open(newline='') as stream:
+        for kind, offset, length in csv.reader(stream):
+            with (root / {'O': 'base.txt', 'A': 'added.txt'}[kind]).open('rb') as source:
+                source.seek(int(offset))
+                remaining = int(length)
+                while remaining:
+                    block = source.read(min(remaining, 4096))
+                    if not block:
+                        raise ValueError('Truncated piece; output is incomplete')
+                    output.write(block)
+                    remaining -= len(block)
+print('Recovered', state['length'], 'bytes from generation', state['generation'])
+```
+
+Run Python normally, without `-O` (which disables these assertions). Review the
+recovered file before using it. Even if both checkpoints are damaged, base.txt
+preserves the opening snapshot and added.txt preserves inserted text for manual
+recovery. POS does not delete an unrecoverable working folder automatically.
+
+Saved Wi-Fi profiles are separately encrypted in internal NVS and are not part of
+an SD backup. Keep the vault passphrase; the SD cannot recover it. A factory-flash
+restore can replace the NVS region, so reconnect/re-enter networks if necessary.

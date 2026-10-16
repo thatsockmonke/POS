@@ -4,7 +4,7 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.3.5-dev adds custom stripe backgrounds and a keyboard-driven app ribbon.** Both firmware images compile
+**0.3.6-dev adds an SD-backed text editor and shared Wi-Fi services.** Both firmware images compile
 for ESP32-S3. Native tests exercise the actual portable installer, UI, app,
 settings and recovery code. No physical Panputer has been flashed or tested here.
 
@@ -12,9 +12,9 @@ settings and recovery code. No physical Panputer has been flashed or tested here
 
 [GitHub Releases](https://github.com/thatsockmonke/POS/releases) · [Download the complete package](docs/DOWNLOADS.md) · [Full installation guide](docs/INSTALL.md) · [Feature status / remaining roadmap](docs/STATUS.md)
 
-The master roadmap is **not all implemented**: music, the paged editor, BLE sharing,
+The master roadmap is **not all implemented**: music, BLE sharing,
 GPS/LoRa, maps, online updates and wireless deployment are future work. This release
-contains the core, launcher, setup, storage, installer/recovery and diagnostics.
+contains the core, launcher, setup, editor, Wi-Fi, storage, installer/recovery and diagnostics.
 
 For the prebuilt bundle, you need Python/esptool on your Linux computer, a FAT32
 microSD and a USB data cable. Back up/prove factory recovery; copy the extracted
@@ -30,7 +30,7 @@ Implemented:
   over blue. Pink slides into the top when yellow is halfway across. Large centered
   **POS** lettering fades in across all three stripes, holds for one second, then normal boot continues.
 - Native ST7789 display output and TCA8418 ADV keyboard input, with USB fallback.
-- A seven-app horizontal launcher with black icons outlined in white, streamed from SD.
+- A nine-app horizontal launcher with black icons outlined in white, streamed from SD.
   A/D moves the ribbon; W opens the centered app. Only one foreground app runs.
 - Background app: 1-12 horizontal stripes, visual WASD color picker, Q/E hue,
   Shift fine adjustments, launcher preview and explicit Save & Apply.
@@ -39,8 +39,15 @@ Implemented:
 - One foreground application with initialize/foreground/event/update/render/save/
   exit callbacks and resource release. Counter demonstrates a persistent app;
   Settings, Diagnostics, Files, Recovery and About also use the app manager.
-- First-time name/device/timezone/brightness setup, plus optional session Wi-Fi.
-  Passwords stay in RAM and are never written to SD/NVS or displayed in plaintext.
+- First-time name/device/timezone/brightness setup, plus optional Wi-Fi.
+  Connect for a session or save up to four networks in a passphrase-encrypted NVS vault.
+  Passwords remain masked and are never written to SD.
+- Text Editor: New/Open/Recover, SD-backed editing beyond available RAM, protected
+  streamed saves, Find, Go to line and an unsaved-changes prompt. Ctrl+S saves;
+  Fn+arrows move the cursor; WASD types ordinary letters.
+- Shared Wi-Fi services: scan/manual/saved connections, status, SNTP time sync,
+  certificate-validated HTTPS downloads and GET/POST API requests. Responses stream
+  to Downloads. A temporary, session-key-protected LAN web page transfers files.
 - Redundant, checksummed settings; formal system/user boundaries and standard folders.
 - On-device installer confirmation, verification/progress/cancellation, factory
   recovery and separate OTA runtime slots. Files and flash are read back before boot selection.
@@ -60,14 +67,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.3.5-dev/launcher.png)
-![Color picker](downloads/0.3.5-dev/color-picker.png)
+![Launcher](downloads/0.3.6-dev/launcher.png)
+![Color picker](downloads/0.3.6-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.3.5-dev/boot-animation.png)
+![POS boot animation](downloads/0.3.6-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.3.5-dev/boot-splash.png)
+[Final splash frame](downloads/0.3.6-dev/boot-splash.png)
 
 This is unsigned development firmware. Physical display orientation, all key
 positions, SD performance, battery calibration, USB recovery and power-cut safety
@@ -83,7 +90,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --output dist/pos-0.3.5-dev --zip-output dist/pos-0.3.5-dev.zip
+python tools/posctl.py bundle --output dist/pos-0.3.6-dev --zip-output dist/pos-0.3.6-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -101,7 +108,10 @@ vendored public-domain font; no Arduino board framework is required.
 Builds use four Ninja jobs and separate ignored `build/installer` and
 `build/runtime` directories and sdkconfigs. When upgrading generated 0.1 configs,
 set main task stack to 16384 and FAT filesystem locks to 32, or preserve the old
-configs and use a fresh `--build-root` so the new defaults apply.
+configs and use a fresh `--build-root` so the new defaults apply. Version 0.3.6
+also enables the full TLS certificate bundle; existing generated configs must
+enable it or be replaced using a fresh build root. Pass that same build root to
+`bundle` so installer and runtime come from the matching build.
 
 `bundle`, `package`, preview and backup commands refuse existing output names.
 A bundle contains the merged `pos-installer-usb.bin`, `pos-install.zip`, an
@@ -115,11 +125,15 @@ standalone runtime at the factory address. Read [INSTALL.md](docs/INSTALL.md).
 | Launcher | A/D or left/right arrows move; W or Enter opens the centered app |
 | Menus | W/S or arrows move; Enter selects |
 | Color picker | WASD moves color cursor; Q/E changes hue; Shift makes finer steps; Enter accepts |
-| Text fields/terminal | WASD are ordinary letters; Shift, Backspace, Enter; Ctrl+U clears |
+| Text fields | WASD are ordinary letters; Shift, Backspace, Enter; Ctrl+U clears |
+| Text Editor | Type normally; Fn+arrows move; Ctrl+S saves; Ctrl+F finds; Ctrl+G goes to line; Esc opens menu |
 | Back/cancel | Fn+backtick (Escape); closes an app from its main screen |
-| Close app / launcher | Fn+Space or a short G0 button press, from any screen; unsaved background edits are discarded |
+| Close app / launcher | Fn+Space or a short G0 button press, from any screen; editor asks about unsaved text; unsaved background edits are discarded |
 | Recover from a stalled app | Hold Fn+Space or G0 for two seconds; restart into recovery |
 | USB fallback | WASD, Enter, Escape, and byte 0x1d for Home; IDF monitor itself reserves Ctrl-] |
+
+See the [editor and Wi-Fi guide](docs/INSTALL.md#text-editor) for draft recovery,
+encrypted network profiles, HTTPS and local transfer controls.
 
 Name validation runs when Enter accepts a field: display names use 1–48 printable
 ASCII characters; device names use 1–24 letters, digits or hyphens. Invalid input
@@ -168,5 +182,5 @@ for the actual-device workflow.
 See [format and transaction details](docs/FORMAT.md),
 [recovery semantics](docs/RECOVERY.md), [hardware profile](docs/HARDWARE.md) and
 [third-party notices](THIRD_PARTY.md). The card is never formatted or automatically
-wiped. Music, text editing, maps, GPS/LoRa/audio/IMU/IR services, installable apps,
+wiped. Music, maps, GPS/LoRa/audio/IMU/IR services, installable apps,
 signed updates and wireless deployment remain later milestones.
