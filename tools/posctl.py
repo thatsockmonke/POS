@@ -344,21 +344,31 @@ def preview(output: Path, screen: str = "launcher", animate: bool = False) -> No
             stream.write(png)
 
 
+class USBCommandError(ValueError):
+    """Esptool failed; distinguish transport/tool errors from local file errors."""
+
+
 def hardware_command(port: str, *arguments: str) -> str:
     result = subprocess.run([sys.executable, "-m", "esptool", "--chip", "esp32s3", "--port", port,
                              *arguments], capture_output=True, text=True)
     if result.returncode:
-        raise ValueError(f"USB operation failed: {' '.join(arguments)}\n{(result.stdout + result.stderr)[-2500:]}")
+        raise USBCommandError(f"USB operation failed: {' '.join(arguments)}\n{(result.stdout + result.stderr)[-2500:]}")
     return result.stdout
 
 
-def hardware_probe(port: str) -> dict:
-    results = {command: hardware_command(port, command) for command in ("chip_id", "flash_id", "get_security_info")}
+def hardware_probe(port: str, *, rom=False) -> dict:
+    # During backup, keep the original application stopped: booting it between
+    # reads could change NVS and make a correct pair of reads disagree.
+    options = ("--no-stub", "--after", "no_reset") if rom else ()
+    results = {command: hardware_command(port, *options, command) for command in ("chip_id", "flash_id", "get_security_info")}
     match = re.search(r"\bMAC:\s*([0-9a-fA-F:]{17})", results["chip_id"])
     security=results["get_security_info"]
     plain=bool(re.search(r"(?m)^Secure Boot: Disabled\s*$",security) and
                re.search(r"(?m)^Flash Encryption: Disabled\s*$",security))
+    capacity = re.search(r"(?mi)^Detected flash size:\s*(\d+)([KM])B\s*$", results["flash_id"])
+    flash_bytes = int(capacity[1]) * (1024 if capacity[2].upper() == "K" else 1024*1024) if capacity else None
     return {"format": 1, "chip": "esp32s3", "device_id": match.group(1).lower() if match else None,
+            "flash_bytes": flash_bytes,
             "plain_development_flash": plain,
             "observations": results}
 
@@ -366,20 +376,58 @@ def hardware_probe(port: str) -> dict:
 def factory_backup(port: str, output: Path) -> None:
     output = output.absolute()
     part, readback, metadata = [Path(str(output) + suffix) for suffix in (".part", ".readback.part", ".json")]
-    if any(p.exists() or p.is_symlink() for p in (output, part, readback, metadata)):
+    failed = [Path(str(p) + ".stub-failed") for p in (part, readback)]
+    if any(p.exists() or p.is_symlink() for p in (output, part, readback, metadata, *failed)):
         raise ValueError("Factory backup output or partial files exist; preserve them and choose a new filename")
-    report = hardware_probe(port)
+    report = hardware_probe(port, rom=True)
+    size = report.get("flash_bytes")
+    if (not report.get("device_id") or not report.get("plain_development_flash") or
+            type(size) is not int or not 4*1024*1024 <= size <= 128*1024*1024 or size & (size-1)):
+        raise ValueError("Cannot verify device identity, security state or full flash capacity; no backup/write attempted")
+
+    def check_device():
+        current = hardware_probe(port, rom=True)
+        if any(current.get(key) != report.get(key) for key in ("device_id", "flash_bytes", "plain_development_flash")):
+            raise ValueError("Connected device identity, security or flash capacity changed; incomplete backup retained, no write attempted")
+
     output.parent.mkdir(parents=True, exist_ok=True)
-    # Device access is explicit. Partial reads stay available for diagnosis on failure.
-    for destination in (part, readback):
+    methods = []
+    rom = False
+    for number, destination in enumerate((part, readback), 1):
         with destination.open("xb"):
             pass
         destination.chmod(0o600)
-        hardware_command(port, "read_flash", "0", "ALL", str(destination))
-    size = part.stat().st_size
-    if size < 4*1024*1024 or size > 128*1024*1024 or size & (size-1) or sha256(part) != sha256(readback):
-        raise ValueError("Factory reads do not agree or have an unexpected size; partial files retained")
-    report.update({"bytes": size, "sha256": sha256(part), "readback_verified": True,
+
+        def read():
+            print(f"Backup read {number}/2: {size//(1024*1024)} MiB, " +
+                  ("ROM compatibility mode (slower; allow several minutes)." if rom else "fast USB mode."), flush=True)
+            options = ("--no-stub",) if rom else ()
+            hardware_command(port, *options, "--after", "no_reset", "read_flash", "0", str(size), str(destination))
+
+        try:
+            read()
+        except USBCommandError as error:
+            if rom:
+                raise USBCommandError(f"ROM backup read failed; no firmware was written. Incomplete files are not verified backups.\n{error}") from error
+            print("Fast USB backup read failed. Keeping its incomplete file and restarting this read from byte zero\n"
+                  "using the ROM's smaller request/response transfers. No firmware has been written.", flush=True)
+            destination.rename(failed[number-1])
+            check_device()
+            with destination.open("xb"):
+                pass
+            destination.chmod(0o600)
+            rom = True
+            try:
+                read()
+            except USBCommandError as retry_error:
+                raise USBCommandError(f"ROM backup read also failed; no firmware was written. Incomplete files are not verified backups.\n{retry_error}") from retry_error
+        if destination.stat().st_size != size:
+            raise ValueError("Backup read did not contain the detected full flash capacity; partial files retained, no write attempted")
+        check_device()
+        methods.append("rom" if rom else "stub")
+    if sha256(part) != sha256(readback):
+        raise ValueError("Factory reads do not agree; partial files retained, no write attempted")
+    report.update({"bytes": size, "sha256": sha256(part), "read_methods": methods, "readback_verified": True,
                    "recovery_restore_verified": False})
     part.rename(output)
     with metadata.open("x") as stream:

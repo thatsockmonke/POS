@@ -8,7 +8,7 @@ manual flash addresses or an understanding of partitions.
 
 ## Start here
 
-1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.3-dev).
+1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.4-dev).
 2. Download **`pos-setup`**. This is the executable wizard, not the Source code ZIP.
    Its optional `pos-setup.sha256` checksum is beside it. The complete POS ZIP
    also includes a copy of the wizard.
@@ -51,6 +51,9 @@ prompts. Everything is a numbered menu or a plain-English confirmation.
 - Reads its complete existing flash **twice**, verifies the copies match, and
   keeps a private backup on the computer. If a matching earlier verified backup
   exists, you can choose it instead, including after an interrupted attempt.
+  A failed fast read restarts from byte zero with the ROM's smaller transfers;
+  the remaining pass uses ROM mode too. This can take several minutes. Two
+  complete, matching reads of the detected flash capacity are still mandatory.
 - Restores that verified backup and asks you to look at the Cardputer and confirm
   its previous software boots. It cannot observe the screen for you. If that
   recovery check fails, it stops before installing POS.
@@ -147,12 +150,37 @@ completed install. Preserve/move that folder before retrying. A different existi
 `pos-install` or `/POS` installation is not overwritten. For an existing POS
 system, use [RECOVERY.md](RECOVERY.md) to back up/reinstall or the signed updater.
 
+### Backup stops with “Corrupt data” or the screen stays black
+
+This can happen during a fast esptool USB read through ChromeOS forwarding.
+Version 0.5.4-dev adds one automatic ROM compatibility retry, using smaller
+request/response transfers instead of the fast streaming stub protocol. Progress
+is displayed as readable, rate-limited lines. The retry is slower; leave USB
+connected while it is making progress. Do not start another serial program.
+
+If the backup still stops, **no restore or POS firmware write has been attempted**.
+A `.part` / `.stub-failed` file is incomplete and cannot be used to restore.
+After the wizard has stopped, unplug USB, switch OFF, release G0/all keys,
+wait 10 seconds and switch ON. The previous firmware should boot; reconnect
+USB and share it with Linux again before retrying. If ROM reads also fail,
+try another data cable/port or a regular Linux computer: the tool cannot repair
+ChromeOS USB forwarding. Keep all completed backups.
+
+If your card was already prepared using **0.5.3-dev**, download the new
+**0.5.4-dev `pos-setup` executable**, then run it with `--release v0.5.3-dev`
+and choose **3. Flash Cardputer only**. The new executable supplies the fixed
+USB helpers while using the matching old firmware/card package. You do not
+need to format or prepare that card again. With one USB port, leave the card
+inside the powered-off Cardputer, then connect the Cardputer; the card reader
+is not needed during flashing. For a fresh 0.5.4-dev install, prepare the card
+and flash using that same version instead.
+
 Optional commands for troubleshooting:
 
 ```sh
 ~/pos-setup --download-only                 # Download/verify without device changes
-~/pos-setup --release v0.5.3-dev             # Use a specific published version
-~/pos-setup --bundle /path/pos-0.5.3-dev.zip # Use a ZIP and matching .sha256 offline
+~/pos-setup --release v0.5.4-dev             # Use a specific published version
+~/pos-setup --bundle /path/pos-0.5.4-dev.zip # Use a ZIP and matching .sha256 offline
 ~/pos-setup --sd-folder '/mnt/chromeos/removable/YOUR CARD'
 ```
 

@@ -284,13 +284,41 @@ class SetupTests(unittest.TestCase):
         self.assertTrue(backup.exists())
 
     def test_live_usb_progress_captures_identity_and_restores_embedded_helper(self):
-        process=Mock();process.stdout=iter(["MAC: aa:bb:cc:dd:ee:ff\n","Writing 100%\n"]);process.wait.return_value=0;process.poll.return_value=0
+        process=Mock();process.stdout=io.StringIO("MAC: aa:bb:cc:dd:ee:ff\nWriting 100%\n");process.wait.return_value=0;process.poll.return_value=0
         original=posctl.hardware_command
         with patch.object(wizard.subprocess,"Popen",return_value=process):
             with wizard.live_usb():
                 text=posctl.hardware_command("/dev/SIMULATED","chip_id")
                 self.assertIn("MAC: aa:bb:cc:dd:ee:ff",text)
         self.assertIs(posctl.hardware_command,original)
+
+    def test_esptool_backspace_progress_is_streamed_and_rate_limited(self):
+        frames=[f"{n*4096} ({n//10} %)" for n in range(1,1000)]
+        raw="esptool.py v4.12.0\n"+"".join(f+"\b"*len(f) for f in frames)+"4194304 (100 %)\n"
+        process=Mock();process.stdout=io.StringIO(raw);process.wait.return_value=0;process.poll.return_value=0
+        with patch.object(wizard.subprocess,"Popen",return_value=process),patch.object(wizard.time,"monotonic",return_value=100),patch.object(wizard,"say") as say:
+            text=wizard.hardware_command_live("mock-port","read_flash","0","ALL","unused.bin")
+        displayed="\n".join(call.args[0] for call in say.call_args_list)
+        self.assertIn("4096 (0 %)",displayed);self.assertIn("4194304 (100 %)",displayed)
+        self.assertLess(say.call_count,10);self.assertNotIn("?",displayed);self.assertNotIn("\b",text)
+        self.assertIn("4091904 (99 %)",text)
+
+    def test_live_usb_preserves_fatal_reason_and_raises_retryable_error(self):
+        process=Mock();process.stdout=io.StringIO("458752 (5 %)\b\b\nA fatal error occurred: Corrupt data, expected 0x1000 bytes but received 0xdac bytes\n")
+        process.wait.return_value=2;process.poll.return_value=2
+        with patch.object(wizard.subprocess,"Popen",return_value=process),patch.object(wizard,"say"):
+            with self.assertRaisesRegex(posctl.USBCommandError,"received 0xdac bytes"):
+                wizard.hardware_command_live("mock-port","read_flash","0","ALL","unused.bin")
+
+    def test_backup_failure_gives_power_cycle_help_without_restoring_or_flashing(self):
+        probe=dict(device_id="aa:bb:cc:dd:ee:ff",plain_development_flash=True)
+        with patch.object(wizard,"serial_port",return_value="mock-port"),patch.object(wizard,"ask",return_value=True), \
+             patch.object(posctl,"hardware_probe",return_value=probe),patch.object(posctl,"factory_backup",side_effect=posctl.USBCommandError("ROM read failed")), \
+             patch.object(posctl,"factory_restore") as restore:
+            with self.assertRaisesRegex(storage.SetupError,"POS has NOT been flashed") as error:
+                wizard.backup_and_recovery(self.state)
+        self.assertIn("wait 10 seconds",str(error.exception));self.assertIn("Incomplete files",str(error.exception))
+        restore.assert_not_called()
 
     def test_copy_card_change_keeps_partial_and_cannot_publish(self):
         guard=Mock(side_effect=[None,None,storage.SetupError("card removed")])

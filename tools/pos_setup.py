@@ -25,7 +25,7 @@ import zipfile
 import pos_setup_storage as storage
 from pos_setup_storage import SetupError
 
-VERSION = "0.5.3-dev"
+VERSION = "0.5.4-dev"
 REPOSITORY = "thatsockmonke/POS"
 MAX_DOWNLOAD = 256 * 1024 * 1024
 MAX_UNPACK = 256 * 1024 * 1024
@@ -356,22 +356,39 @@ def serial_port() -> str:
             raise SetupError("USB flashing paused. The downloaded package is kept. SD-only preparation is available in the main menu.")
 
 
+def usb_output_lines(stream):
+    """Esptool progress erases with backspaces, often without any newline."""
+    pending = ""
+    while char := stream.read(1):
+        if char in "\b\r\n" or len(pending) >= 4096:
+            if pending.strip():
+                yield pending.strip()
+            pending = ""
+        if char not in "\b\r\n" and (char == "\t" or char.isprintable()):
+            pending += char
+    if pending.strip():
+        yield pending.strip()
+
+
 def hardware_command_live(port: str, *arguments: str) -> str:
+    from posctl import USBCommandError
     process = subprocess.Popen([sys.executable, "-u", "-m", "esptool", "--chip", "esp32s3", "--port", port, *arguments],
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1)
     output = ""; displayed = 0.0
     try:
-        for line in process.stdout:
-            output = (output + line)[-65536:]
-            if "%" not in line or time.monotonic()-displayed >= 1 or "100" in line:
-                say("  " + re.sub(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]", "?", line.rstrip()))
-                displayed = time.monotonic()
+        for line in usb_output_lines(process.stdout):
+            output = (output + line + "\n")[-65536:]
+            if "%" not in line or time.monotonic()-displayed >= 1 or re.search(r"\b100\s*%", line):
+                say("  " + line)
+                if "%" in line:
+                    displayed = time.monotonic()
         if process.wait():
-            raise SetupError("USB operation failed. Check the data cable, Linux USB sharing/permissions and the ADV download-mode procedure. Your verified backups are kept.")
+            raise USBCommandError("USB operation failed. Check the data cable and Linux USB sharing.\n" + output[-2500:])
         return output
     finally:
         if process.poll() is None:
             process.kill(); process.wait()
+        process.stdout.close()
 
 
 @contextmanager
@@ -427,7 +444,13 @@ def backup_and_recovery(state: Path) -> tuple[str, Path]:
         backup = folder / ("panputer-" + probe["device_id"].replace(":", "") + "-" + str(time.time_ns()) + ".bin")
         say("Making a private full-flash backup of the software currently on your Cardputer. The entire flash is read twice and the copies must match. This is the manufacturer's factory software only if it is still installed.")
         with live_usb():
-            posctl.factory_backup(port, backup)
+            try:
+                posctl.factory_backup(port, backup)
+            except (ValueError, OSError) as error:
+                raise SetupError("Backup did not complete. POS has NOT been flashed; no restore/write was attempted.\n"
+                                 "Incomplete files are kept at " + str(backup) + ".* and cannot be used as verified backups.\n"
+                                 "If the screen stays black after this stopped command: unplug USB, switch OFF, release G0/all keys, "
+                                 "wait 10 seconds, then switch ON. Reconnect/share USB with Linux before retrying.\n" + str(error)) from error
         say("Verified backup saved: " + str(backup))
         say("Keep this .bin AND its .json file on your computer. They are never saved onto the card being erased.")
     metadata = json.loads(Path(str(backup)+".json").read_text())
@@ -554,7 +577,7 @@ def main(argv=None) -> int:
     parser.add_argument("--version", action="version", version="POS Setup " + VERSION)
     parser.add_argument("--doctor", action="store_true", help="Read-only check of Linux/Crostini card/USB access")
     parser.add_argument("--download-only", action="store_true", help="Download and verify the latest published POS, including development releases")
-    parser.add_argument("--release", help="Choose a specific release, e.g. v0.5.3-dev")
+    parser.add_argument("--release", help="Choose a specific release, e.g. v0.5.4-dev")
     parser.add_argument("--bundle", type=Path, help="Use an already downloaded POS ZIP plus matching .sha256 file")
     parser.add_argument("--sd-folder", type=Path, help="Offer this mounted/shared card folder (copy only; never formats)")
     parser.add_argument("--work-dir", type=Path, default=Path.home()/".local/share/pos-setup", help="Private download/backup folder; default ~/.local/share/pos-setup")
