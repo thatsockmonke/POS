@@ -4,7 +4,7 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.3.4-dev animates the flag stripes and fades in a larger POS logo.** Both firmware images compile
+**0.3.5-dev adds custom stripe backgrounds and a keyboard-driven app ribbon.** Both firmware images compile
 for ESP32-S3. Native tests exercise the actual portable installer, UI, app,
 settings and recovery code. No physical Panputer has been flashed or tested here.
 
@@ -30,7 +30,11 @@ Implemented:
   over blue. Pink slides into the top when yellow is halfway across. Large centered
   **POS** lettering fades in across all three stripes, holds for one second, then normal boot continues.
 - Native ST7789 display output and TCA8418 ADV keyboard input, with USB fallback.
-- A two-page graphical launcher with icons streamed from SD; WASD navigation.
+- A seven-app horizontal launcher with black icons outlined in white, streamed from SD.
+  A/D moves the ribbon; W opens the centered app. Only one foreground app runs.
+- Background app: 1-12 horizontal stripes, visual WASD color picker, Q/E hue,
+  Shift fine adjustments, launcher preview and explicit Save & Apply.
+  Backgrounds survive restarts, settings changes and verified backup/restore.
 - Central input routing, protected Home shortcut, and a separate input supervisor.
 - One foreground application with initialize/foreground/event/update/render/save/
   exit callbacks and resource release. Counter demonstrates a persistent app;
@@ -54,11 +58,16 @@ Implemented:
 - Ctrl+U clears text fields; character counters show limits and passwords stay masked.
   Setup checks each name before moving on and preserves saved settings when cancelled.
 
+Software-rendered launcher and color picker:
+
+![Launcher](downloads/0.3.5-dev/launcher.png)
+![Color picker](downloads/0.3.5-dev/color-picker.png)
+
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.3.4-dev/boot-animation.png)
+![POS boot animation](downloads/0.3.5-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.3.4-dev/boot-splash.png)
+[Final splash frame](downloads/0.3.5-dev/boot-splash.png)
 
 This is unsigned development firmware. Physical display orientation, all key
 positions, SD performance, battery calibration, USB recovery and power-cut safety
@@ -74,8 +83,9 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --output dist/pos-0.3.4-dev --zip-output dist/pos-0.3.4-dev.zip
+python tools/posctl.py bundle --output dist/pos-0.3.5-dev --zip-output dist/pos-0.3.5-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
+python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
 python tools/posctl.py preview --screen boot --animate --output dist/boot-animation.png
 ```
@@ -102,10 +112,12 @@ standalone runtime at the factory address. Read [INSTALL.md](docs/INSTALL.md).
 
 | Context | Keys |
 | --- | --- |
-| Launcher/menus | WASD or Fn+arrow keys, Enter selects |
+| Launcher | A/D or left/right arrows move; W or Enter opens the centered app |
+| Menus | W/S or arrows move; Enter selects |
+| Color picker | WASD moves color cursor; Q/E changes hue; Shift makes finer steps; Enter accepts |
 | Text fields/terminal | WASD are ordinary letters; Shift, Backspace, Enter; Ctrl+U clears |
-| Back | Fn+backtick (Escape) |
-| Global launcher | Fn+Space or a short G0 button press |
+| Back/cancel | Fn+backtick (Escape); closes an app from its main screen |
+| Close app / launcher | Fn+Space or a short G0 button press, from any screen; unsaved background edits are discarded |
 | Recover from a stalled app | Hold Fn+Space or G0 for two seconds; restart into recovery |
 | USB fallback | WASD, Enter, Escape, and byte 0x1d for Home; IDF monitor itself reserves Ctrl-] |
 

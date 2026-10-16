@@ -134,14 +134,17 @@ preferences are preserved at `POS/Recovered/<archive-id>/<original-path>`.
 Original destination files and the backup are never overwritten to make restore pass.
 An interrupted restore can be rerun; verified completed files are reused.
 
-Current settings format 1 uses checksummed generation slots. Both restore backends
+Current settings format 2 uses checksummed generation slots and includes
+1-12 launcher stripe colors as ordinary `#RRGGBB` strings. Format 1 remains
+readable and receives the default pan-flag background; saving writes format 2.
+Both restore backends
 validate the complete envelope, SHA-256, schema and values. Raw settings originals
 are preserved under Recovered; the newest valid archived generation becomes a
 candidate for a fresh current settings slot only after all file copies finish.
 Existing valid or future destination preferences take priority, including on retries.
 Known corrupt or future settings are preserved rather than activated. Known legacy format 0
 at `POS/Users/settings.json` maps `user_name`, `device_name`, `timezone` and optional
-`brightness` into format 1 only when no current valid preferences exist. The old
+`brightness` into format 2 only when no current valid preferences exist. The old
 JSON remains under Recovered. Unsupported newer preferences are never activated
 or silently replaced; first-time setup uses defaults where possible and preserves
 the unknown files. Data/apps requiring unknown migrations stay accessible as files;

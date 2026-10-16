@@ -6,12 +6,12 @@ You do not need to compile the OS to use a prebuilt package.
 
 ## Current development package
 
-**POS 0.3.4-dev — experimental, hardware validation not yet performed.**
+**POS 0.3.5-dev — experimental, hardware validation not yet performed.**
 
-- [POS 0.3.4-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.3.4-dev)
-- [Download pos-0.3.4-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.3.4-dev/pos-0.3.4-dev.zip)
-- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.3.4-dev/pos-0.3.4-dev.zip.sha256)
-- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.3.4-dev/boot-animation.png)
+- [POS 0.3.5-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.3.5-dev)
+- [Download pos-0.3.5-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.3.5-dev/pos-0.3.5-dev.zip)
+- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.3.5-dev/pos-0.3.5-dev.zip.sha256)
+- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.3.5-dev/boot-animation.png)
 - [Browse versioned downloads](https://github.com/thatsockmonke/POS/tree/main/downloads)
 - [Full installation guide](INSTALL.md)
 - [Implemented / partial / planned features](STATUS.md)
@@ -50,7 +50,7 @@ From the source checkout with ESP-IDF v5.5.5 activated:
 ```sh
 python tools/posctl.py build
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --output dist/pos-0.3.4-dev --zip-output dist/pos-0.3.4-dev.zip
+python tools/posctl.py bundle --output dist/pos-0.3.5-dev --zip-output dist/pos-0.3.5-dev.zip
 ```
 
 Choose a fresh output name if one already exists. `bundle` verifies images and

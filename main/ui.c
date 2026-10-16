@@ -79,10 +79,10 @@ void pos_ui_notice(const char *title, const char *body) {
 }
 
 static int menu(const char *title, const char *const *items, int count,
-                unsigned page, unsigned pages, const char *status) {
+                unsigned page, unsigned pages, const char *status, int initial) {
   if (count < 1 || pos_home_pending())
     return -1;
-  int selected = 0;
+  int selected = initial >= 0 && initial < count ? initial : 0;
   bool redraw = true;
   for (;;) {
     if (redraw) {
@@ -122,11 +122,15 @@ static int menu(const char *title, const char *const *items, int count,
   }
 }
 int pos_ui_menu(const char *title, const char *const *items, int count) {
-  return menu(title, items, count, 0, 0, NULL);
+  return menu(title, items, count, 0, 0, NULL, 0);
+}
+int pos_ui_menu_from(const char *title, const char *const *items, int count,
+                      int selected) {
+  return menu(title, items, count, 0, 0, NULL, selected);
 }
 int pos_ui_menu_page(const char *title, const char *const *items, int count,
                      unsigned page, unsigned pages, const char *status) {
-  return menu(title, items, count, page, pages, status);
+  return menu(title, items, count, page, pages, status, 0);
 }
 bool pos_ui_text(const char *title, const char *label, char *text,
                  size_t capacity, bool secret) {

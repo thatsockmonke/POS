@@ -321,7 +321,7 @@ def preview(output: Path, screen: str = "launcher", animate: bool = False) -> No
                     sequence += 1
         else:
             ppm = directory / "preview.ppm"
-            subprocess.run([helper, payload, "boot-preview" if screen == "boot" else "preview",
+            subprocess.run([helper, payload, {"boot": "boot-preview", "picker": "color-preview", "launcher": "preview"}[screen],
                             str(ppm)], check=True)
             png += chunk(b"IDAT", pixels(ppm))
         png += chunk(b"IEND", b"")
@@ -409,7 +409,7 @@ def main() -> int:
     p.add_argument("--output", type=Path, required=True)
     p = commands.add_parser("preview", help="Render the actual portable launcher primitives to PNG")
     p.add_argument("--output", type=Path, required=True)
-    p.add_argument("--screen", choices=["launcher", "boot"], default="launcher")
+    p.add_argument("--screen", choices=["launcher", "boot", "picker"], default="launcher")
     p.add_argument("--animate", action="store_true", help="Export the boot sequence as an animated PNG")
     p = commands.add_parser("recovery", help="Run POS's portable backup/restore services on a Linux SD mount")
     p.add_argument("action", choices=["scan", "backup", "backup-set", "resume-backup", "verify", "restore"])

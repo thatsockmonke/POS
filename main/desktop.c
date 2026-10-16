@@ -12,6 +12,7 @@
 #include "freertos/task.h"
 #include "pos_device.h"
 #include "pos_fs.h"
+#include "pos_launcher.h"
 #include "pos_recovery.h"
 #include "pos_settings.h"
 #include "ui.h"
@@ -724,6 +725,10 @@ static void diagnostics_foreground(void *state) {
 static void files_foreground(void *state) {
   pos_ui_browse((*(services_t **)state)->root, "POS/Users/Owner");
 }
+static void background_foreground(void *state) {
+  services_t *services = *(services_t **)state;
+  (void)pos_ui_background(services->root, &services->settings);
+}
 static void recovery_foreground(void *state) {
   recovery(*(services_t **)state);
 }
@@ -750,6 +755,11 @@ static const pos_app_t modal_apps[] = {{.name = "Settings",
                                         .state_size = sizeof(services_t *),
                                         .initialize = service_init,
                                         .foreground = recovery_foreground,
+                                        .render = modal_render},
+                                       {.name = "Background",
+                                        .state_size = sizeof(services_t *),
+                                        .initialize = service_init,
+                                        .foreground = background_foreground,
                                         .render = modal_render}};
 
 void pos_desktop(const char *root, bool recovery_only) {
@@ -799,8 +809,8 @@ void pos_desktop(const char *root, bool recovery_only) {
   pos_core_t core = {.services = &services};
   int selected = 0;
   uint64_t refreshed = 0;
-  const char *names[] = {"Counter", "Settings", "Diagnostics",
-                         "Files",   "Recovery", "About"};
+  char system_root[POS_FS_PATH];
+  pos_fs_join(system_root, root, "POS");
   for (;;) {
     pos_event_t event;
     if (pos_device_event(&event, 30)) {
@@ -810,19 +820,20 @@ void pos_desktop(const char *root, bool recovery_only) {
                         "The app closed, but its state could not be saved. "
                         "Existing saved files are retained.");
       } else {
-        int key = pos_navigation(&event);
-        if (key == POS_KEY_RIGHT || key == POS_KEY_DOWN)
-          selected = (selected + 1) % 6;
-        if (key == POS_KEY_LEFT || key == POS_KEY_UP)
-          selected = (selected + 5) % 6;
+        int key = pos_launcher_action(&event);
+        if (key == POS_KEY_RIGHT)
+          selected = (selected + 1) % POS_LAUNCHER_APP_COUNT;
+        if (key == POS_KEY_LEFT)
+          selected = (selected + POS_LAUNCHER_APP_COUNT - 1) % POS_LAUNCHER_APP_COUNT;
         if (key == POS_KEY_ENTER) {
           if (selected == 0) {
             if (pos_core_open(&core, &counter_app))
               pos_ui_notice("App unavailable",
                             "Could not allocate or initialize the app.");
           }
-          if (selected >= 1 && selected <= 4) {
-            if (pos_core_open(&core, &modal_apps[selected - 1]))
+          if ((selected >= 1 && selected <= 4) || selected == 6) {
+            int modal = selected == 6 ? 4 : selected - 1;
+            if (pos_core_open(&core, &modal_apps[modal]))
               pos_ui_notice("App unavailable", "Initialization failed.");
             else if (pos_core_close(&core))
               pos_ui_notice("App save failed",
@@ -844,24 +855,8 @@ void pos_desktop(const char *root, bool recovery_only) {
     if (core.app)
       pos_core_tick(&core, now, &view);
     else {
-      pos_view_clear(&view, services.settings.device_name);
-      pos_view_line(&view, 2, "Hello, %s", services.settings.display_name);
-      view.tiles = true;
-      view.selected_tile = selected % 3;
-      char path[POS_FS_PATH];
-      pos_fs_join(path, root, "POS/System/Assets/apps.icons");
-      FILE *f = fopen(path, "rb");
-      if (f) {
-        if (!fseek(f, (selected / 3) * 24, SEEK_SET))
-          fread(view.icons, 1, 24, f);
-        fclose(f);
-      }
-      pos_view_line(&view, 12, "%-10.10s%-10.10s%-10.10s",
-                    names[(selected / 3) * 3], names[(selected / 3) * 3 + 1],
-                    names[(selected / 3) * 3 + 2]);
-      pos_view_line(&view, 14, "Page %d/2   %s", selected / 3 + 1,
-                    names[selected]);
-      pos_view_line(&view, 15, "WASD: move  Enter: open");
+      pos_launcher_view(system_root, services.settings.device_name,
+                        &services.settings.background, selected, &view);
     }
     pos_device_show(&view);
   }

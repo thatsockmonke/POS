@@ -16,6 +16,7 @@ void pos_settings_defaults(pos_settings_t *s) {
   strcpy(s->device_name, "PANPUTER");
   strcpy(s->timezone, "UTC0");
   s->brightness = 70;
+  pos_background_defaults(&s->background);
 }
 
 bool pos_settings_display_name_valid(const char *name) {
@@ -39,7 +40,8 @@ bool pos_settings_valid(const pos_settings_t *s) {
   if (!pos_settings_display_name_valid(s->display_name) ||
       !pos_settings_device_name_valid(s->device_name) ||
       !memchr(s->timezone, 0, sizeof(s->timezone)) || !*s->timezone ||
-      s->brightness < 10 || s->brightness > 100)
+      s->brightness < 10 || s->brightness > 100 ||
+      !pos_background_valid(&s->background))
     return false;
   for (const char *p = s->timezone; *p; ++p)
     if (!isalnum((unsigned char)*p) && !strchr("<>+-:,./", *p))
@@ -86,7 +88,8 @@ int pos_settings_decode(const char *buffer, size_t n, pos_settings_t *s) {
     goto done;
   cJSON *format = cJSON_GetObjectItemCaseSensitive(j, "format"),
         *generation = cJSON_GetObjectItemCaseSensitive(j, "generation");
-  if (!cJSON_IsNumber(format) || format->valuedouble != 1) {
+  if (!cJSON_IsNumber(format) ||
+      (format->valuedouble != 1 && format->valuedouble != 2)) {
     result = -2;
     cJSON_Delete(j);
     goto done;
@@ -95,7 +98,8 @@ int pos_settings_decode(const char *buffer, size_t n, pos_settings_t *s) {
              *tz = str(j, "timezone");
   cJSON *bright = cJSON_GetObjectItemCaseSensitive(j, "brightness"),
         *complete = cJSON_GetObjectItemCaseSensitive(j, "setup_complete");
-  if (cJSON_GetArraySize(j) != 7 || !name ||
+  bool legacy = format->valuedouble == 1;
+  if (cJSON_GetArraySize(j) != (legacy ? 7 : 8) || !name ||
       strlen(name) >= sizeof(s->display_name) || !device ||
       strlen(device) >= sizeof(s->device_name) || !tz ||
       strlen(tz) >= sizeof(s->timezone) || !cJSON_IsNumber(generation) ||
@@ -115,6 +119,26 @@ int pos_settings_decode(const char *buffer, size_t n, pos_settings_t *s) {
   s->brightness = bright->valueint;
   s->generation = (uint32_t)generation->valuedouble;
   s->setup_complete = cJSON_IsTrue(complete);
+  pos_background_defaults(&s->background);
+  if (!legacy) {
+    cJSON *colors = cJSON_GetObjectItemCaseSensitive(j, "background");
+    int count = cJSON_GetArraySize(colors);
+    if (!cJSON_IsArray(colors) || count < 1 ||
+        count > POS_BACKGROUND_MAX_STRIPES) {
+      cJSON_Delete(j);
+      goto done;
+    }
+    pos_background_resize(&s->background, count);
+    for (int i = 0; i < count; ++i) {
+      cJSON *color = cJSON_GetArrayItem(colors, i);
+      if (!cJSON_IsString(color) || strlen(color->valuestring) != 7 ||
+          *color->valuestring != '#' ||
+          !pos_color_parse(color->valuestring, &s->background.colors[i])) {
+        cJSON_Delete(j);
+        goto done;
+      }
+    }
+  }
   result = pos_settings_valid(s) ? 0 : -1;
   cJSON_Delete(j);
 done:
@@ -145,13 +169,28 @@ int pos_settings_save(const char *root, pos_settings_t *s) {
   cJSON *j = cJSON_CreateObject();
   if (!j)
     return -1;
-  cJSON_AddNumberToObject(j, "format", 1);
+  cJSON_AddNumberToObject(j, "format", 2);
   cJSON_AddNumberToObject(j, "generation", generation);
   cJSON_AddStringToObject(j, "display_name", s->display_name);
   cJSON_AddStringToObject(j, "device_name", s->device_name);
   cJSON_AddStringToObject(j, "timezone", s->timezone);
   cJSON_AddNumberToObject(j, "brightness", s->brightness);
   cJSON_AddBoolToObject(j, "setup_complete", s->setup_complete);
+  cJSON *colors = cJSON_AddArrayToObject(j, "background");
+  if (!colors) {
+    cJSON_Delete(j);
+    return -1;
+  }
+  for (unsigned i = 0; i < s->background.count; ++i) {
+    char color[8];
+    snprintf(color, sizeof(color), "#%06X", (unsigned)s->background.colors[i]);
+    cJSON *item = cJSON_CreateString(color);
+    if (!item || !cJSON_AddItemToArray(colors, item)) {
+      cJSON_Delete(item);
+      cJSON_Delete(j);
+      return -1;
+    }
+  }
   char *body = cJSON_PrintUnformatted(j);
   cJSON_Delete(j);
   if (!body)

@@ -1,14 +1,18 @@
-POS 0.3.4-dev is an experimental Cardputer ADV operating-environment foundation.
+POS 0.3.5-dev is an experimental Cardputer ADV operating-environment foundation.
 
-- Keeps the pansexual-flag color sequence: pink #FF218C → yellow #FFD800
-  → blue #21B1FF, once per boot at 180 ms per color.
-- After blue, yellow slides into the middle from the left. Pink begins sliding
-  into the top when yellow is halfway across; blue remains at the bottom.
-- Fades in a larger centered POS logo over 400 ms. Its visible 198x91-pixel
-  lettering reaches halfway into the pink and blue stripes.
-- Holds the completed flag and logo for one second before validated startup.
-- Includes a looping animated PNG preview rendered by the actual portable code;
-  the device plays the animation once per boot. No SD image assets are needed.
+- Adds the Background app: choose 1-12 horizontal stripes and each stripe color.
+- Visual picker: WASD moves the cursor, Q/E changes hue, Shift makes finer
+  adjustments, Enter accepts and Escape cancels. Includes a live swatch.
+- Preview a draft, then Save & Apply. Cancel/Home and failed saves keep the
+  previous background. Preferences survive restarts and backup/restore.
+- Replaces launcher pages with a seven-app ribbon: A/D moves left/right;
+  W opens the centered app. Icons are black with white outlines.
+- Fn+Space closes the foreground app from any screen; Escape goes back and
+  closes apps from their main screen. Only one foreground app runs at a time.
+- Settings format 2 stores readable RGB colors. Format 1 remains readable and
+  gains the default pan-flag background without losing identity/preferences.
+- Includes launcher, color-picker and boot-animation previews. The existing
+  animated boot sequence is retained.
 
 Download the named pos-VERSION.zip and its checksum, extract it, and read INSTALL.md.
 Flash the small USB installer at 0x0. Extract the inner pos-install.zip onto a FAT32

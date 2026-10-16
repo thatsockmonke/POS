@@ -1,4 +1,5 @@
 #pragma once
+#include "pos_background.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -9,6 +10,7 @@ typedef struct {
   uint8_t brightness;
   bool setup_complete;
   uint32_t generation;
+  pos_background_t background;
 } pos_settings_t;
 void pos_settings_defaults(pos_settings_t *settings);
 bool pos_settings_valid(const pos_settings_t *settings);

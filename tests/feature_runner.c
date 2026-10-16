@@ -8,6 +8,7 @@
 #include "pos_core.h"
 #include "pos_device.h"
 #include "pos_fs.h"
+#include "pos_launcher.h"
 #include "pos_recovery.h"
 #include "pos_settings.h"
 #include "ui.h"
@@ -21,7 +22,9 @@ static bool secret_leaked, notice_tail_seen;
 static pos_view_t ui_last;
 static bool display_error, device_error, empty_folder_seen, last_page_seen,
     keep_sd_seen;
-static unsigned folder_pages_seen;
+static unsigned folder_pages_seen, picker_frames;
+static bool background_preview_seen;
+static pos_view_t picker_last;
 static void push_key(int key, unsigned mods) {
   assert(ui_count < sizeof(ui_events) / sizeof(ui_events[0]));
   ui_events[ui_count++] = (pos_event_t){key, mods, true};
@@ -52,6 +55,12 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout) {
 void pos_device_show(const pos_view_t *view) {
   ++ui_frames;
   ui_last = *view;
+  if (view->color_picker) {
+    ++picker_frames;
+    picker_last = *view;
+  }
+  if (view->tiles && strstr(view->lines[14], "PREVIEW"))
+    background_preview_seen = true;
   if (!strcmp(view->lines[0], "Display name not valid"))
     display_error = true;
   if (!strcmp(view->lines[0], "Device name not valid"))
@@ -339,6 +348,165 @@ static int phase_tests(void) {
   puts("{\"phases_clear\":true,\"keep_sd_inserted\":true}");
   return 0;
 }
+static int background_tests(const char *root, const char *mode) {
+  pos_settings_t settings;
+  pos_settings_defaults(&settings);
+  (void)pos_settings_load(root, &settings);
+  pos_settings_t before = settings;
+  ui_next = ui_count = 0;
+  push_key(POS_KEY_ENTER, 0);
+  replace_field(!strcmp(mode, "background-invalid-count") ? "0" : "4");
+  if (!strcmp(mode, "background-invalid-count")) {
+    push_key(POS_KEY_ENTER, 0); /* dismiss invalid count */
+    push_key(POS_KEY_ESCAPE, 0);
+  } else {
+    push_text("s");
+    push_key(POS_KEY_ENTER, 0); /* first stripe */
+    push_text("dse");
+    push_key('W', POS_MOD_SHIFT);
+    if (!strcmp(mode, "background-home")) {
+      push_key(POS_KEY_HOME, 0);
+    } else {
+      push_key(POS_KEY_ENTER, 0); /* accept color */
+      if (!strcmp(mode, "background-cancel")) {
+        push_key(POS_KEY_ESCAPE, 0);
+      } else {
+        push_text("ssss");
+        push_key(POS_KEY_ENTER, 0); /* preview at index 5 */
+        push_key(POS_KEY_ENTER, 0); /* return to editor */
+        push_text("s");
+        push_key(POS_KEY_ENTER, 0); /* Save & Apply */
+        if (!strcmp(mode, "background-save-failure")) {
+          push_key(POS_KEY_ENTER, 0); /* save error */
+          push_key(POS_KEY_ESCAPE, 0);
+        }
+      }
+    }
+  }
+  bool saved_background = pos_ui_background(root, &settings);
+  bool success = !strcmp(mode, "background-save");
+  assert(saved_background == success);
+  if (success) {
+    assert(background_preview_seen && picker_frames > 1);
+    assert(settings.background.count == 4);
+    assert(settings.background.colors[0] != before.background.colors[0]);
+    assert(settings.background.colors[3] == 0xffffff);
+    pos_settings_t reloaded;
+    assert(!pos_settings_load(root, &reloaded));
+    assert(!memcmp(&settings.background, &reloaded.background,
+                   sizeof(settings.background)));
+    assert(!strcmp(settings.display_name, before.display_name));
+  } else {
+    assert(!memcmp(&settings, &before, sizeof(settings)));
+  }
+  if (!strcmp(mode, "background-home"))
+    assert(pos_ui_take_home());
+  assert(ui_next == ui_count);
+  puts("{\"draft_save_cancel_verified\":true}");
+  return 0;
+}
+static int picker_tests(void) {
+  uint32_t rgb = 0x808080, original = rgb;
+  ui_next = ui_count = 0;
+  push_text("dse");
+  push_key('W', POS_MOD_SHIFT);
+  push_key(POS_KEY_ENTER, 0);
+  assert(pos_ui_color("Pick a color", &rgb));
+  assert(picker_last.picker_hue == 10 && picker_last.picker_saturation == 25 &&
+         picker_last.picker_value == 481 && rgb != original);
+  assert(picker_frames == 5);
+  original = rgb;
+  ui_next = ui_count = 0;
+  push_key(POS_KEY_ENTER, 0);
+  assert(pos_ui_color("Keep exact color", &rgb) && rgb == original);
+  ui_next = ui_count = 0;
+  push_text("aaa");
+  push_key(POS_KEY_ESCAPE, 0);
+  assert(!pos_ui_color("Cancel color", &rgb) && rgb == original);
+  ui_next = ui_count = 0;
+  push_key(POS_KEY_HOME, 0);
+  assert(!pos_ui_color("Close app", &rgb) && rgb == original &&
+         pos_ui_take_home());
+  rgb = 0xffffff;
+  ui_next = ui_count = 0;
+  push_text("aw"); /* clamp saturation and brightness at the edges */
+  push_key('d', POS_MOD_CTRL);
+  ui_events[ui_count++] = (pos_event_t){'s', 0, false};
+  push_key(POS_KEY_ENTER, 0);
+  assert(pos_ui_color("Bounds", &rgb) && rgb == 0xffffff);
+  pos_view_t color_view;
+  pos_color_picker_view("Color", 0xabcdef, 0, 500, 500, &color_view);
+  assert(pos_view_pixel(&color_view, 8, 28) == 0xffff);
+  assert(pos_view_pixel(&color_view, 167, 28) == 0xf800);
+  assert(pos_view_pixel(&color_view, 8, 99) == 0);
+  assert(pos_view_pixel(&color_view, 90, 64) == 0xffff); /* cursor ring */
+  assert(pos_view_pixel(&color_view, 91, 64) == 0);      /* cursor contrast */
+  assert(pos_view_pixel(&color_view, 200, 40) == pos_color_rgb565(0xabcdef));
+  assert(pos_color_hsv_rgb(0, 1000, 1000) == 0xff0000);
+  assert(pos_color_hsv_rgb(60, 1000, 1000) == 0xffff00);
+  assert(pos_color_hsv_rgb(120, 1000, 1000) == 0x00ff00);
+  assert(pos_color_hsv_rgb(180, 1000, 1000) == 0x00ffff);
+  assert(pos_color_hsv_rgb(240, 1000, 1000) == 0x0000ff);
+  assert(pos_color_hsv_rgb(300, 1000, 1000) == 0xff00ff);
+  assert(pos_color_parse("#aB12ef", &rgb) && rgb == 0xab12ef);
+  assert(!pos_color_parse("#GG0000", &rgb) &&
+         !pos_color_parse("FFFFFFF", &rgb));
+  puts("{\"wasd_picker\":true,\"fine_adjustment\":true,\"cancel_preserves_"
+       "color\":true}");
+  return 0;
+}
+static int launcher_tests(const char *root) {
+  assert(POS_LAUNCHER_APP_COUNT == 7);
+  pos_event_t event = {'w', 0, true};
+  assert(pos_launcher_action(&event) == POS_KEY_ENTER);
+  event.key = 'a';
+  assert(pos_launcher_action(&event) == POS_KEY_LEFT);
+  event.key = 'd';
+  assert(pos_launcher_action(&event) == POS_KEY_RIGHT);
+  event.key = 's';
+  assert(!pos_launcher_action(&event));
+  event.key = 'w';
+  event.pressed = false;
+  assert(!pos_launcher_action(&event));
+  event.pressed = true;
+  event.modifiers = POS_MOD_CTRL;
+  assert(!pos_launcher_action(&event));
+  pos_view_t view;
+  pos_background_t background;
+  pos_background_defaults(&background);
+  for (unsigned count = 1; count <= 12; ++count) {
+    assert(pos_background_resize(&background, count));
+    for (unsigned i = 0; i < count; ++i)
+      background.colors[i] = (i + 1) * 0x112233;
+    for (int app = 0; app < POS_LAUNCHER_APP_COUNT; ++app) {
+      pos_launcher_view(root, "PANPUTER", &background, app, &view);
+      assert(view.selected_tile == 1 &&
+             strstr(view.lines[12], pos_launcher_names[app]));
+      for (int y = 8; y < 112; ++y)
+        assert(pos_view_pixel(&view, 0, y) ==
+               pos_color_rgb565(background.colors[y * count / 135]));
+      /* Icons can only contribute black ink or a white outline. */
+      unsigned black = 0, white = 0;
+      for (int y = 47; y <= 80; ++y)
+        for (int x = 23; x <= 56; ++x) {
+          uint16_t pixel = pos_view_pixel(&view, x, y);
+          if (pixel == 0)
+            ++black;
+          else if (pixel == 0xffff)
+            ++white;
+          else
+            assert(pixel ==
+                   pos_color_rgb565(background.colors[y * count / 135]));
+        }
+      assert(black && white);
+    }
+  }
+  assert(!pos_background_resize(&background, 0) &&
+         !pos_background_resize(&background, 13));
+  puts("{\"launcher_controls\":true,\"all_stripe_counts\":true,\"outlined_"
+       "black_icons\":true}");
+  return 0;
+}
 static const char *cancel_phase;
 static uint64_t cancel_after;
 static int recovery_progress(void *opaque, const char *phase, const char *name,
@@ -352,11 +520,14 @@ static int recovery_progress(void *opaque, const char *phase, const char *name,
 }
 
 static int initialized, foregrounded, handled, saved, exited, allocations;
+static bool fail_save;
 typedef struct {
   void *resource;
 } test_app_state_t;
 static int app_initialize(void *opaque, void *services) {
   test_app_state_t *s = opaque;
+  assert(!allocations); /* Prior app must release resources before
+                           initialization. */
   s->resource = malloc(128);
   if (!s->resource)
     return -1;
@@ -380,7 +551,7 @@ static void app_render(void *opaque, pos_view_t *view) {
 static int app_save(void *opaque) {
   (void)opaque;
   ++saved;
-  return 0;
+  return fail_save ? -1 : 0;
 }
 static void app_exit(void *opaque) {
   test_app_state_t *s = opaque;
@@ -436,6 +607,24 @@ static int core_tests(void) {
   assert(!allocations && !core.app);
   assert(initialized == 101 && foregrounded == 100 && handled == 100 &&
          saved == 100 && exited == 101);
+  core.services = NULL;
+  assert(!pos_core_open(&core, &app));
+  int init_before = initialized, exits_before = exited, saves_before = saved;
+  assert(!pos_core_open(&core, &app));
+  assert(initialized == init_before + 1 && exited == exits_before + 1 &&
+         saved == saves_before + 1 && allocations == 1);
+  core.services =
+      &core; /* Failed replacement must clean up both old and new. */
+  assert(pos_core_open(&core, &app) == -1);
+  assert(!allocations && !core.app && !core.state);
+  core.services = NULL;
+  assert(!pos_core_open(&core, &app));
+  init_before = initialized;
+  fail_save = true;
+  assert(pos_core_open(&core, &app) == -1);
+  assert(initialized == init_before && !allocations && !core.app &&
+         !core.state);
+  fail_save = false;
   const uint32_t rgb[] = {0xff218c, 0xffd800, 0x21b1ff};
   assert(POS_BOOT_COLOR_COUNT == 3 && POS_BOOT_COLOR_MS == 180);
   for (unsigned i = 0; i < POS_BOOT_COLOR_COUNT; ++i) {
@@ -479,6 +668,12 @@ int main(int argc, char **argv) {
     puts("{\"nonblocking\":true}");
     return 0;
   }
+  if (!strcmp(argv[2], "picker"))
+    return picker_tests();
+  if (!strcmp(argv[2], "launcher"))
+    return launcher_tests(argv[1]);
+  if (!strncmp(argv[2], "background-", 11))
+    return background_tests(argv[1], argv[2]);
   if (!strcmp(argv[2], "boot-splash"))
     return boot_splash_tests();
   if (!strcmp(argv[2], "text-qol"))
@@ -566,6 +761,10 @@ int main(int argc, char **argv) {
       cJSON_AddStringToObject(json, "name", settings.display_name);
       cJSON_AddNumberToObject(json, "generation", settings.generation);
       cJSON_AddNumberToObject(json, "brightness", settings.brightness);
+      cJSON *colors = cJSON_AddArrayToObject(json, "background");
+      for (unsigned i = 0; i < settings.background.count; ++i)
+        cJSON_AddItemToArray(colors,
+                             cJSON_CreateNumber(settings.background.colors[i]));
       char *text = cJSON_PrintUnformatted(json);
       puts(text);
       free(text);

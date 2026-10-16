@@ -34,7 +34,7 @@ class FeatureTests(unittest.TestCase):
         cls.compilation=tempfile.TemporaryDirectory(prefix="pos-features-native-")
         cls.runner=Path(cls.compilation.name)/"features"
         sdk=Path(os.environ.get("IDF_PATH","/workspace/pos-cloud/esp-idf-v5.5.5"));cjson=sdk/"components/json/cJSON"
-        sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/browser.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
+        sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/browser.c",ROOT/"main/background.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
         for component in ("pos_core","pos_recovery"):
             sources.extend((ROOT/"components"/component).glob("*.c"))
         command=["gcc","-std=c11","-D_POSIX_C_SOURCE=200809L","-Wall","-Wextra","-Werror","-g","-fsanitize=undefined","-fno-sanitize-recover=all"]
@@ -230,6 +230,82 @@ class FeatureTests(unittest.TestCase):
         self.assertTrue((stage/"backup.json").exists())
         self.run_feature("resume-backup");self.run_feature("verify");self.run_feature("match")
         self.assertTrue((self.card/"POS-Filesystem-Backup/interrupted").is_dir())
+
+    def test_wasd_color_picker_accept_cancel_fine_adjustment_and_bounds(self):
+        report=json.loads(self.run_feature("picker").stdout)
+        self.assertTrue(all(report.values()))
+
+    def test_launcher_controls_all_stripe_counts_and_black_white_icons(self):
+        report=json.loads(self.run_feature("launcher").stdout)
+        self.assertTrue(all(report.values()))
+
+    def test_background_app_saves_draft_and_persists_it_after_restart(self):
+        self.run_feature("settings-save","--name","Keep my name")
+        self.run_feature("background-save")
+        saved=json.loads(self.run_feature("settings-read").stdout)
+        self.assertEqual(saved["name"],"Keep my name")
+        self.assertEqual(len(saved["background"]),4)
+        self.assertEqual(saved["background"][-1],0xffffff)
+        self.run_feature("settings-save","--name","New display name")
+        self.assertEqual(json.loads(self.run_feature("settings-read").stdout)["background"],saved["background"])
+        latest=max((self.card/"POS/Users").glob("settings.[01].json"),key=lambda p:json.loads(json.loads(p.read_text())["payload"])["generation"])
+        latest.write_text("torn write")
+        self.assertEqual(json.loads(self.run_feature("settings-read").stdout)["background"],saved["background"])
+
+    def test_background_cancel_home_and_invalid_count_preserve_saved_preferences(self):
+        self.run_feature("settings-save")
+        before={p.name:p.read_bytes() for p in (self.card/"POS/Users").glob("settings.*.json")}
+        for mode in ("background-cancel","background-home","background-invalid-count"):
+            with self.subTest(mode=mode):
+                self.run_feature(mode)
+                self.assertEqual({p.name:p.read_bytes() for p in (self.card/"POS/Users").glob("settings.*.json")},before)
+
+    def test_background_failed_save_keeps_previous_background_and_unknown_partial(self):
+        self.run_feature("settings-save")
+        before=json.loads(self.run_feature("settings-read").stdout)
+        partial=self.write("POS/Users/settings.0.json.part/precious.txt",b"keep this")
+        self.run_feature("background-save-failure")
+        self.assertEqual(json.loads(self.run_feature("settings-read").stdout),before)
+        self.assertEqual(partial.read_bytes(),b"keep this")
+
+    def test_v1_settings_keep_identity_and_gain_default_background_when_upgraded(self):
+        self.run_feature("settings-save","--name","Legacy identity")
+        path=self.card/"POS/Users/settings.1.json"
+        envelope=json.loads(path.read_text());body=json.loads(envelope["payload"])
+        body["format"]=1;del body["background"]
+        envelope["payload"]=json.dumps(body);envelope["sha256"]=hashlib.sha256(envelope["payload"].encode()).hexdigest()
+        path.write_text(json.dumps(envelope));before=path.read_bytes()
+        read=json.loads(self.run_feature("settings-read").stdout)
+        self.assertEqual(read["name"],"Legacy identity")
+        self.assertEqual(read["background"],[0xff218c,0xffd800,0x21b1ff])
+        self.assertEqual(path.read_bytes(),before)
+        self.run_feature("settings-save")
+        upgraded=json.loads(json.loads((self.card/"POS/Users/settings.0.json").read_text())["payload"])
+        self.assertEqual(upgraded["format"],2)
+        self.assertEqual(upgraded["background"],["#FF218C","#FFD800","#21B1FF"])
+
+    def test_invalid_background_settings_are_rejected_without_modification(self):
+        self.run_feature("settings-save")
+        path=self.card/"POS/Users/settings.1.json";original=json.loads(path.read_text())
+        for bad in ([],["#000000"]*13,["#FFFFFG"],["#00000000"],[123],"#FF0000"):
+            with self.subTest(background=bad):
+                envelope=original.copy();body=json.loads(envelope["payload"]);body["background"]=bad
+                envelope["payload"]=json.dumps(body);envelope["sha256"]=hashlib.sha256(envelope["payload"].encode()).hexdigest()
+                path.write_text(json.dumps(envelope));before=path.read_bytes()
+                self.run_feature("settings-read",expected=1)
+                self.assertEqual(path.read_bytes(),before)
+
+    def test_background_preferences_survive_zip_and_folder_backup_restore(self):
+        self.run_feature("settings-save");self.run_feature("background-save")
+        saved=json.loads(self.run_feature("settings-read").stdout)["background"]
+        for mode in ("backup","backup-set"):
+            with self.subTest(mode=mode):
+                source=self.base/(mode+"-source");shutil.copytree(self.card,source)
+                self.run_feature(mode,card=source)
+                destination=self.base/mode;destination.mkdir()
+                archive=source/(BACKUP if mode=="backup" else "POS-Filesystem-Backup")
+                self.run_feature("restore","--archive",archive,card=destination)
+                self.assertEqual(json.loads(self.run_feature("settings-read",card=destination).stdout)["background"],saved)
 
     def test_boot_slides_yellow_then_pink_and_fades_large_centered_pos(self):
         report=json.loads(self.run_feature("boot-splash").stdout)

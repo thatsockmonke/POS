@@ -6,6 +6,10 @@ bool pos_ui_take_home(void);
 void pos_ui_message(const char *title, const char *body);
 void pos_ui_notice(const char *title, const char *body);
 int pos_ui_menu(const char *title, const char *const *items, int count);
+int pos_ui_menu_from(const char *title, const char *const *items, int count,
+                      int selected);
+bool pos_ui_color(const char *title, uint32_t *rgb);
+bool pos_ui_background(const char *root, pos_settings_t *settings);
 int pos_ui_menu_page(const char *title, const char *const *items, int count,
                      unsigned page, unsigned pages, const char *status);
 bool pos_ui_setup(const char *root, pos_settings_t *settings, bool first);

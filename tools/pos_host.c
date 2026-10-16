@@ -1,6 +1,7 @@
 /* Native companion for exercising the exact portable POS services on Linux. */
 #include "pos_core.h"
 #include "pos_fs.h"
+#include "pos_launcher.h"
 #include "pos_recovery.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,29 +20,23 @@ static int progress(void *ctx, const char *phase, const char *name,
   }
   return 0;
 }
-static int preview(const char *root, const char *output, bool boot,
+static int preview(const char *root, const char *output, unsigned screen,
                    unsigned frame) {
   pos_view_t v;
-  if (boot) {
+  if (screen == 1) {
     uint32_t hold;
     if (!pos_boot_frame(frame, &v, &hold))
       return 2;
+  } else if (screen == 2) {
+    uint16_t hue, saturation, value;
+    pos_color_rgb_hsv(0xff218c, &hue, &saturation, &value);
+    pos_color_picker_view("Stripe 1 color", 0xff218c, hue, saturation, value,
+                          &v);
   } else {
-    pos_view_clear(&v, "PANPUTER");
-    pos_view_line(&v, 2, "Hello, Stevie");
-    v.tiles = true;
-    v.selected_tile = 0;
-    char path[POS_FS_PATH];
-    pos_fs_join(path, root, "System/Assets/apps.icons");
-    FILE *icons = fopen(path, "rb");
-    if (icons) {
-      if (fread(v.icons, 1, sizeof(v.icons), icons) != sizeof(v.icons))
-        memset(v.icons, 0, sizeof(v.icons));
-      fclose(icons);
-    }
-    pos_view_line(&v, 12, "Counter   Settings  Diagnostic");
-    pos_view_line(&v, 14, "Page 1/2   Counter");
-    pos_view_line(&v, 15, "WASD: move  Enter: open");
+    pos_background_t background;
+    pos_background_defaults(&background);
+    pos_launcher_view(root, "PANPUTER", &background, POS_LAUNCHER_APP_COUNT - 1,
+                      &v);
   }
   FILE *f = fopen(output, "wbx");
   if (!f)
@@ -82,8 +77,12 @@ int main(int argc, char **argv) {
     }
     return 0;
   }
-  if (!strcmp(command, "preview") || !strcmp(command, "boot-preview"))
-    return argc == 4 ? preview(root, argv[3], !strcmp(command, "boot-preview"),
+  if (!strcmp(command, "preview") || !strcmp(command, "boot-preview") ||
+      !strcmp(command, "color-preview"))
+    return argc == 4 ? preview(root, argv[3],
+                               !strcmp(command, "color-preview")
+                                   ? 2
+                                   : !strcmp(command, "boot-preview"),
                                POS_BOOT_HOLD_FRAME)
                      : 2;
   struct statvfs fs;

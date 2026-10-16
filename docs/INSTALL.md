@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.3.4-dev is an **experimental foundation**, not the complete master roadmap.
+POS 0.3.5-dev is an **experimental foundation**, not the complete master roadmap.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
 flashing, peripherals, factory boot recovery and electrical power-loss behavior
 have not been tested here. Read [STATUS.md](STATUS.md) before choosing to install.
@@ -9,9 +9,9 @@ Only use the **Cardputer ADV** hardware profile, not the original Cardputer.
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.3.4-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.3.5-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.3.4-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.3.5-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -32,10 +32,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.3.4-dev.zip.sha256
-mkdir pos-0.3.4-dev
-unzip pos-0.3.4-dev.zip -d pos-0.3.4-dev
-cd pos-0.3.4-dev
+sha256sum -c pos-0.3.5-dev.zip.sha256
+mkdir pos-0.3.5-dev
+unzip pos-0.3.5-dev.zip -d pos-0.3.5-dev
+cd pos-0.3.5-dev
 sha256sum -c SHA256SUMS
 ```
 
@@ -189,7 +189,9 @@ for normal use. Music/maps/editor/radio features are not yet included in this re
 
 | Action | Control |
 | --- | --- |
-| Navigate/select | WASD or Fn+arrows, Enter |
+| Launcher | A/D or left/right arrows move; W or Enter opens the centered app |
+| Menus | W/S or arrows, Enter |
+| Color picker | WASD moves cursor; Q/E hue; Shift fine steps; Enter accepts; Esc cancels |
 | Clear a text field | Ctrl+U (also byte 0x15 from a raw USB terminal) |
 | Back | Fn+backtick (Escape) |
 | Return Home | Fn+Space or a short G0 press |
@@ -242,3 +244,21 @@ its inventory/metadata. See [RECOVERY.md](RECOVERY.md) for resume and migration.
 For meaningful physical tests and evidence, follow [VALIDATION.md](VALIDATION.md)
 and [HARDWARE_VALIDATION.md](HARDWARE_VALIDATION.md). Host process-interruption tests
 do not prove FAT survives torn sectors or actual electrical power loss.
+
+## Set your launcher background
+
+From the launcher, use **A/D** to center **Background**, then press **W**.
+Choose **Stripe count** (1-12), then open each stripe's color picker. **A/D**
+changes saturation; **W/S** changes brightness; **Q/E** changes hue along the
+rainbow bar. Hold **Shift** for finer steps. The cursor and swatch show your
+selection. **Enter** accepts a color; **Esc** cancels that color edit.
+
+Choose **Preview launcher** to inspect the draft. Press Enter/Esc to return,
+then choose **Save & Apply** to save and return home. Changes remain local until
+that save succeeds. **Cancel**, Esc from the main Background menu, or **Fn+Space**
+discards unsaved edits. New stripes start white; **Pan flag preset** restores
+pink/yellow/blue in the draft. Saved backgrounds do not change the boot animation.
+
+Only one foreground app runs. **Fn+Space** (or a short G0 press) closes it from
+any screen and returns to the launcher. **Fn+backtick** is Escape: back within
+an app, or close it from its main screen. Background system services may continue.

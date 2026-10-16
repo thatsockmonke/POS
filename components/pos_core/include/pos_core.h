@@ -1,4 +1,5 @@
 #pragma once
+#include "pos_background.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -58,10 +59,16 @@ typedef struct {
   uint16_t boot_pink_width;
   uint16_t boot_yellow_width;
   uint8_t boot_text_alpha;
+  pos_background_t background;
+  bool color_picker;
+  uint16_t picker_hue, picker_saturation, picker_value;
+  uint32_t picker_rgb;
 } pos_view_t;
 void pos_view_clear(pos_view_t *view, const char *title);
 void pos_view_line(pos_view_t *view, int row, const char *format, ...);
 uint16_t pos_view_pixel(const pos_view_t *view, int x, int y);
+void pos_color_picker_view(const char *title, uint32_t rgb, uint16_t hue,
+                            uint16_t saturation, uint16_t value, pos_view_t *view);
 /* Three color flashes, staggered flag slides, text fade, then a one-second
  * hold. False after the last frame. Frames require no SD assets. */
 bool pos_boot_frame(unsigned step, pos_view_t *view, uint32_t *hold_ms);

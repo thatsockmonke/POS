@@ -1,4 +1,4 @@
-# POS feature status — 0.3.4-dev
+# POS feature status — 0.3.5-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -8,13 +8,14 @@ are evidence of software behavior; actual ADV behavior is still unverified.
 | --- | --- | --- |
 | Boot appearance | Pink → yellow → blue flashes (180 ms each), yellow slides into the middle over blue, pink follows halfway through; large POS fades across all stripes, holds 1 second, then normal boot | Observe orientation/color on actual ADV |
 | Display/input | ST7789 output, TCA8418 decode, WASD/context routing, global Home, held recovery shortcut, nonblocking USB fallback | Verify all 56 positions, wiring, timing and stalled-app recovery physically |
-| Core/UI/apps | Central event loop, streamed icons, six-app launcher, one foreground app, lifecycle and cleanup, paginated menus/notices/browser with page counts and empty state | More apps, user-installable package format, sandboxing where practical |
+| Core/UI/apps | Central event loop, streamed icons, seven-app ribbon launcher, A/D navigation and W to open, black icons outlined in white, one foreground app, lifecycle and cleanup, paginated menus/notices/browser with page counts and empty state | More apps, user-installable package format, sandboxing where practical |
+| Background app | 1-12 horizontal stripes, visual WASD picker, Q/E hue, Shift fine steps, preview, Save & Apply and protected persistence | Optional richer styling later |
 | Setup/settings | Display/device name, timezone presets, brightness, skip/session Wi-Fi, checksummed redundant preferences, in-place name validation, Ctrl+U and field limits | Persistent secure Wi-Fi profiles, time synchronization, broader preferences |
 | SD/files | FAT32 layout, standard user/system boundary, streaming copies, basic browser/preview | A full file manager and richer file operations |
 | Installer | USB factory installer, package validation, SD staging/readback, inactive runtime write/readback and boot selection | Physical flashing/SD/OTA rollback/power-cut validation |
 | Repair/reinstall | Exact-package repair, backup-bound journal, previous tree retained, resume/refusal at interrupted states | Real card-removal/low-space/power-cut experiments and recovery UX refinement from results |
 | Backup/restore | Standard small ZIPs, scalable readable folder backups, owned folder resume, full verification, conflict preservation and reports | Measure large real-card performance; archives/settings from unknown formats remain preserved, not guessed compatible |
-| Settings migration | Strict current schema, latest valid generation, defined legacy format-0 migration, current destination takes priority | App-specific migrations as actual app/save schemas are defined |
+| Settings migration | Strict current schema, latest valid generation, format-1 settings compatibility and legacy format-0 migration, current destination takes priority | App-specific migrations as actual app/save schemas are defined |
 | Shell | ls, pwd, cat preview, streamed cp, free, reboot, shutdown | cd, mv, rm, mkdir, sysinfo and the rest of the proposed service commands |
 | Diagnostics | Heap/stack, firmware/flash/SD, boot/frame metrics, battery ADC, raw keyboard coverage, SD test, app cycles, evidence tooling | Actual measured hardware baseline and battery calibration |
 | Wi-Fi | Optional shared session connection; credentials remain in RAM | Saved secure profiles, HTTPS/download/time/API/file-transfer services |

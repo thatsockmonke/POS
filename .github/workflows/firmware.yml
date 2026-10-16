@@ -55,6 +55,8 @@ jobs:
         run: |
           . "$GITHUB_WORKSPACE/esp-idf/export.sh"
           python tools/posctl.py bundle --output dist/bundle --zip-output "dist/pos-${POS_VERSION}.zip"
+          python tools/posctl.py preview --output dist/launcher.png
+          python tools/posctl.py preview --screen picker --output dist/color-picker.png
           python tools/posctl.py preview --screen boot --output dist/boot-splash.png
           python tools/posctl.py preview --screen boot --animate --output dist/boot-animation.png
       - uses: actions/upload-artifact@v4
@@ -63,7 +65,7 @@ jobs:
           path: |
             POS/dist/*.zip
             POS/dist/*.zip.sha256
-            POS/dist/boot-*.png
+            POS/dist/*.png
           compression-level: 0
           if-no-files-found: error
   prerelease:
