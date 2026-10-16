@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.3.2-dev is an **experimental foundation**, not the complete master roadmap.
+POS 0.3.3-dev is an **experimental foundation**, not the complete master roadmap.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
 flashing, peripherals, factory boot recovery and electrical power-loss behavior
 have not been tested here. Read [STATUS.md](STATUS.md) before choosing to install.
@@ -9,9 +9,9 @@ Only use the **Cardputer ADV** hardware profile, not the original Cardputer.
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.3.2-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.3.3-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.3.2-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.3.3-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -32,10 +32,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.3.2-dev.zip.sha256
-mkdir pos-0.3.2-dev
-unzip pos-0.3.2-dev.zip -d pos-0.3.2-dev
-cd pos-0.3.2-dev
+sha256sum -c pos-0.3.3-dev.zip.sha256
+mkdir pos-0.3.3-dev
+unzip pos-0.3.3-dev.zip -d pos-0.3.3-dev
+cd pos-0.3.3-dev
 sha256sum -c SHA256SUMS
 ```
 
@@ -152,8 +152,11 @@ with the final runtime. Close the serial program and reset/power-cycle if needed
 
 ## 6. Let the installer install POS
 
-1. The LCD shows **pink → yellow → blue once**, about 180 ms per color, then boot
-   status. The animation runs on each firmware boot, including recovery boots.
+1. The LCD shows **pink → yellow → blue once**, about 180 ms per color, then the
+   full flag with horizontal pink/yellow/blue stripes and centered **POS** for
+   **one second**. Normal boot status follows. The sequence runs once on each
+   firmware boot, including recovery boots. Setup, SD validation and recovery
+   checks still run before the launcher opens.
 2. In **POS Installer / Recovery**, choose **Install POS / resume** with W/S and Enter.
 3. The installer checks package/model/version, file sizes/hashes, runtime header,
    destination ownership, flash capacity and conservative SD free space.

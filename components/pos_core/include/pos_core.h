@@ -34,7 +34,11 @@ int pos_navigation(
 
 #define POS_ROWS 16
 #define POS_COLS 30
-enum { POS_BOOT_COLOR_COUNT = 3, POS_BOOT_COLOR_MS = 180 };
+enum {
+  POS_BOOT_COLOR_COUNT = 3,
+  POS_BOOT_COLOR_MS = 180,
+  POS_BOOT_SPLASH_MS = 1000
+};
 extern const uint16_t pos_boot_colors[POS_BOOT_COLOR_COUNT];
 typedef struct {
   char lines[POS_ROWS][POS_COLS + 1];
@@ -44,10 +48,14 @@ typedef struct {
   uint8_t icons[3][8];
   bool solid_color;
   uint16_t color_rgb565;
+  bool boot_splash;
 } pos_view_t;
 void pos_view_clear(pos_view_t *view, const char *title);
 void pos_view_line(pos_view_t *view, int row, const char *format, ...);
 uint16_t pos_view_pixel(const pos_view_t *view, int x, int y);
+/* Three color flashes, then the full flag/POS splash; false after the last
+ * frame. */
+bool pos_boot_frame(unsigned step, pos_view_t *view, uint32_t *hold_ms);
 
 typedef struct {
   const char *name;

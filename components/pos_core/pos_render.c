@@ -5,9 +5,36 @@
 /* Pansexual flag: #FF218C, #FFD800, #21B1FF, quantized to LCD RGB565. */
 const uint16_t pos_boot_colors[POS_BOOT_COLOR_COUNT] = {0xf911, 0xfec0, 0x259f};
 
+bool pos_boot_frame(unsigned step, pos_view_t *view, uint32_t *hold_ms) {
+  if (step > POS_BOOT_COLOR_COUNT || !view || !hold_ms)
+    return false;
+  pos_view_clear(view, "POS");
+  if (step < POS_BOOT_COLOR_COUNT) {
+    view->solid_color = true;
+    view->color_rgb565 = pos_boot_colors[step];
+    *hold_ms = POS_BOOT_COLOR_MS;
+  } else {
+    view->boot_splash = true;
+    *hold_ms = POS_BOOT_SPLASH_MS;
+  }
+  return true;
+}
+
 uint16_t pos_view_pixel(const pos_view_t *v, int x, int y) {
   if (!v || x < 0 || x >= 240 || y < 0 || y >= 135)
     return 0;
+  if (v->boot_splash) {
+    /* Three equal 45-pixel horizontal stripes; 4x font centered on yellow. */
+    int tx = x - (240 - 3 * 8 * 4) / 2, ty = y - (135 - 8 * 4) / 2;
+    if (tx >= 0 && tx < 3 * 8 * 4 && ty >= 0 && ty < 8 * 4) {
+      static const char title[] = "POS";
+      if ((font8x8_basic[(unsigned char)title[tx / 32]][ty / 4] >>
+           ((tx / 4) % 8)) &
+          1)
+        return 0; /* Black letters stay legible against the yellow stripe. */
+    }
+    return pos_boot_colors[y / 45];
+  }
   if (v->solid_color)
     return v->color_rgb565;
   int row = y / 8, column = x / 8;

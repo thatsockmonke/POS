@@ -266,13 +266,13 @@ void pos_device_boot_flash(void) {
    * framebuffer. */
   if (!info.display_ok)
     return;
-  pos_view_t view = {.solid_color = true};
-  for (unsigned i = 0; i < POS_BOOT_COLOR_COUNT; ++i) {
-    view.color_rgb565 = pos_boot_colors[i];
+  pos_view_t view;
+  uint32_t hold_ms;
+  for (unsigned i = 0; pos_boot_frame(i, &view, &hold_ms); ++i) {
     pos_device_show(&view);
     if (!info.display_ok)
       break;
-    vTaskDelay(pdMS_TO_TICKS(POS_BOOT_COLOR_MS));
+    vTaskDelay(pdMS_TO_TICKS(hold_ms));
   }
 }
 

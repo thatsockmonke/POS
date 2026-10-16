@@ -6,10 +6,10 @@ You do not need to compile the OS to use a prebuilt package.
 
 ## Current development package
 
-**POS 0.3.2-dev — experimental, hardware validation not yet performed.**
+**POS 0.3.3-dev — experimental, hardware validation not yet performed.**
 
-- [Download pos-0.3.2-dev.zip](https://github.com/thatsockmonke/POS/raw/refs/heads/main/downloads/0.3.2-dev/pos-0.3.2-dev.zip)
-- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/raw/refs/heads/main/downloads/0.3.2-dev/pos-0.3.2-dev.zip.sha256)
+- [Download pos-0.3.3-dev.zip](https://github.com/thatsockmonke/POS/raw/refs/heads/main/downloads/0.3.3-dev/pos-0.3.3-dev.zip)
+- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/raw/refs/heads/main/downloads/0.3.3-dev/pos-0.3.3-dev.zip.sha256)
 - [Browse versioned downloads](https://github.com/thatsockmonke/POS/tree/main/downloads)
 - [Full installation guide](INSTALL.md)
 - [Implemented / partial / planned features](STATUS.md)
@@ -45,7 +45,7 @@ From the source checkout with ESP-IDF v5.5.5 activated:
 ```sh
 python tools/posctl.py build
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --output dist/pos-0.3.2-dev --zip-output dist/pos-0.3.2-dev.zip
+python tools/posctl.py bundle --output dist/pos-0.3.3-dev --zip-output dist/pos-0.3.3-dev.zip
 ```
 
 Choose a fresh output name if one already exists. `bundle` verifies images and

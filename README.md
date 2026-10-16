@@ -4,7 +4,7 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.3.2-dev corrects the pansexual-flag boot sequence and polishes everyday input, setup, browsing and installation.** Both firmware images compile
+**0.3.3-dev adds a one-second full-flag POS splash after the boot color flashes.** Both firmware images compile
 for ESP32-S3. Native tests exercise the actual portable installer, UI, app,
 settings and recovery code. No physical Panputer has been flashed or tested here.
 
@@ -26,7 +26,8 @@ Follow the full guide for exact commands, checks, USB permissions and recovery.
 
 Implemented:
 
-- A single full-screen pink → yellow → blue sequence at boot (180 ms per color).
+- A single pink → yellow → blue sequence at boot (180 ms per color), then the full
+  three-stripe flag with large centered **POS** for one second, followed by normal boot.
 - Native ST7789 display output and TCA8418 ADV keyboard input, with USB fallback.
 - A two-page graphical launcher with icons streamed from SD; WASD navigation.
 - Central input routing, protected Home shortcut, and a separate input supervisor.
@@ -52,6 +53,10 @@ Implemented:
 - Ctrl+U clears text fields; character counters show limits and passwords stay masked.
   Setup checks each name before moving on and preserves saved settings when cancelled.
 
+Software-rendered preview of the one-second splash:
+
+![POS flag splash](downloads/0.3.3-dev/boot-splash.png)
+
 This is unsigned development firmware. Physical display orientation, all key
 positions, SD performance, battery calibration, USB recovery and power-cut safety
 still require [hardware validation](docs/HARDWARE_VALIDATION.md).
@@ -66,8 +71,9 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --output dist/pos-0.3.2-dev --zip-output dist/pos-0.3.2-dev.zip
+python tools/posctl.py bundle --output dist/pos-0.3.3-dev --zip-output dist/pos-0.3.3-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
+python tools/posctl.py preview --screen boot --output dist/boot-splash.png
 ```
 
 On Linux Framework/Crostini, follow Espressif's

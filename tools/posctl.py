@@ -275,13 +275,13 @@ def native_helper() -> Path:
     return target
 
 
-def preview(output: Path) -> None:
+def preview(output: Path, screen: str = "launcher") -> None:
     if output.exists():
         raise ValueError("Preview output exists; choose a fresh filename")
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="pos-preview-") as temp:
         ppm = Path(temp) / "launcher.ppm"
-        subprocess.run([str(native_helper()), str(ROOT / "sd-payload"), "preview", str(ppm)], check=True)
+        subprocess.run([str(native_helper()), str(ROOT / "sd-payload"), "boot-preview" if screen == "boot" else "preview", str(ppm)], check=True)
         data = ppm.read_bytes()
         prefix = b"P6\n240 135\n255\n"
         if not data.startswith(prefix) or len(data) != len(prefix) + 240 * 135 * 3:
@@ -377,6 +377,7 @@ def main() -> int:
     p.add_argument("--output", type=Path, required=True)
     p = commands.add_parser("preview", help="Render the actual portable launcher primitives to PNG")
     p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--screen", choices=["launcher", "boot"], default="launcher")
     p = commands.add_parser("recovery", help="Run POS's portable backup/restore services on a Linux SD mount")
     p.add_argument("action", choices=["scan", "backup", "backup-set", "resume-backup", "verify", "restore"])
     p.add_argument("--root", type=Path, required=True)
@@ -419,7 +420,7 @@ def main() -> int:
             if args.zip_output:
                 print(f"Complete download: {archive_bundle(bundle, args.zip_output.absolute())}")
         elif args.command == "preview":
-            preview(args.output)
+            preview(args.output,args.screen)
         elif args.command == "recovery":
             if args.action == "restore" and not args.confirm_restore:
                 raise ValueError("Review the archive and destination, then supply --confirm-restore; conflicts are preserved")

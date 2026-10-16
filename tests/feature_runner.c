@@ -125,6 +125,40 @@ static int ui_tests(void) {
   return 0;
 }
 
+static int boot_splash_tests(void) {
+  pos_view_t view;
+  uint32_t hold = 0, total = 0;
+  for (unsigned step = 0; step < POS_BOOT_COLOR_COUNT; ++step) {
+    assert(pos_boot_frame(step, &view, &hold));
+    assert(hold == 180 && view.solid_color && !view.boot_splash);
+    assert(pos_view_pixel(&view, 0, 0) == pos_boot_colors[step]);
+    total += hold;
+  }
+  assert(pos_boot_frame(POS_BOOT_COLOR_COUNT, &view, &hold));
+  assert(hold == 1000 && view.boot_splash && !view.solid_color);
+  total += hold;
+  unsigned ink[3] = {0};
+  for (int y = 0; y < 135; ++y)
+    for (int x = 0; x < 240; ++x) {
+      uint16_t pixel = pos_view_pixel(&view, x, y);
+      if (pixel == 0) {
+        assert(y >= 51 && y < 83 && x >= 72 && x < 168);
+        ++ink[(x - 72) / 32];
+      } else
+        assert(pixel == pos_boot_colors[y / 45]);
+    }
+  for (unsigned i = 0; i < 3; ++i)
+    assert(ink[i] > 100);
+  assert(total == 1540);
+  assert(!pos_boot_frame(POS_BOOT_COLOR_COUNT + 1, &view, &hold));
+  assert(!pos_boot_frame(UINT32_MAX, &view, &hold));
+  pos_view_clear(&view, "Home");
+  assert(!view.boot_splash && !view.solid_color);
+  assert(pos_view_pixel(&view, 0, 90) != pos_boot_colors[2]);
+  puts("{\"four_frames_once\":true,\"flag_stripes\":true,\"pos_letters\":true,"
+       "\"splash_ms\":1000}");
+  return 0;
+}
 static int text_qol_tests(void) {
   char text[32] = "old contents";
   pos_keyboard_t keyboard = {0};
@@ -393,6 +427,8 @@ int main(int argc, char **argv) {
     puts("{\"nonblocking\":true}");
     return 0;
   }
+  if (!strcmp(argv[2], "boot-splash"))
+    return boot_splash_tests();
   if (!strcmp(argv[2], "text-qol"))
     return text_qol_tests();
   if (!strncmp(argv[2], "setup-", 6))

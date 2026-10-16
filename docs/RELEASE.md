@@ -1,8 +1,10 @@
-POS 0.3.2-dev is an experimental Cardputer ADV operating-environment foundation.
+POS 0.3.3-dev is an experimental Cardputer ADV operating-environment foundation.
 
-- Corrects boot colors/order to the pansexual flag: pink #FF218C → yellow #FFD800
+- Keeps the pansexual-flag color sequence: pink #FF218C → yellow #FFD800
   → blue #21B1FF, once per boot at 180 ms per color.
-- Adds Ctrl+U clear and character-limit counters while keeping password masking.
+- Adds a full pink/yellow/blue striped flag with large centered POS lettering
+  for one second after the flashes, before normal validated startup continues.
+- Retains Ctrl+U clear and character-limit counters while keeping password masking.
 - Validates setup names in place and preserves previous settings on cancellation.
 - Shows folder page counts and empty folders, with fixed Previous/Next actions.
 - Clarifies SD preparation, file verification, firmware writing/readback and the

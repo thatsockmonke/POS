@@ -230,6 +230,11 @@ class FeatureTests(unittest.TestCase):
         self.run_feature("resume-backup");self.run_feature("verify");self.run_feature("match")
         self.assertTrue((self.card/"POS-Filesystem-Backup/interrupted").is_dir())
 
+    def test_boot_flashes_then_full_flag_with_pos_for_one_second(self):
+        report=json.loads(self.run_feature("boot-splash").stdout)
+        self.assertTrue(report["four_frames_once"]);self.assertTrue(report["flag_stripes"])
+        self.assertTrue(report["pos_letters"]);self.assertEqual(report["splash_ms"],1000)
+
     def test_ctrl_u_character_limits_and_password_masking(self):
         report=json.loads(self.run_feature("text-qol").stdout)
         self.assertTrue(all(report.values()))

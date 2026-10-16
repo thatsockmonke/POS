@@ -72,3 +72,9 @@ yellow `#FFD800`, blue `#21B1FF`, each shown once for 180 ms. The reference is
 [this published flag SVG](https://github.com/JoeHart/pride-flag-api/blob/20320fccb7441847f60a66cdfb7c5ac6f3c7ad06/data/flags/svg/pansexual_2010.svg).
 The LCD uses RGB565 values `0xF911`, `0xFEC0`, `0x259F`;
 actual panel color appearance still requires on-device observation.
+
+After those flashes, a full-width flag uses three equal horizontal stripes
+(pink/yellow/blue) with large black POS lettering centered on the yellow stripe.
+It stays visible for 1000 ms after the frame transfer completes, then normal
+validated startup continues. Rendering uses the existing reusable stripe buffer,
+without SD assets or a full-screen framebuffer.
