@@ -220,3 +220,70 @@ loss. Retry attempts are not new probes; unresolved probes are not called lost
 before their retry deadline. Copy CSVs through Files/Share or an SD reader for
 analysis on the Framework. Physical GPS accuracy, range and packet-loss figures
 must come from actual device tests, not software fixtures.
+
+## Battery display
+
+Every device screen has a small black box at the top right, including dialogs,
+apps and startup. Percentage appears to the left of the battery icon. Samples are
+taken at most every five seconds, smoothed with an IIR filter and a two-point
+percentage deadband. Four icon levels have hysteresis around their thresholds.
+Unavailable calibrated ADC data shows `--%`, never a fabricated reading.
+
+Percentage uses an approximate Li-ion voltage curve. Sustained filtered voltage
+at or above 4.18 V for 60 seconds produces a green full icon and 100%; that state
+releases below 4.12 V. This is an **estimated near-full indication**, not a
+measurement of charge termination. The verified ADV profile exposes battery ADC
+but no confirmed charger-status signal/fuel gauge. Charging/load effects and the
+actual battery need physical calibration. Settings → Battery information explains
+this on-device. Preview images use an example 75% value, not hardware evidence.
+Automatic dimming, sleep policies and a broader power manager are outside scope.
+
+## Expanded Settings
+
+Settings remembers the selected row when returning from a child screen. It offers
+profile/device naming, numeric brightness (10–100%), Date & time, Background,
+Wi-Fi, Expansion hardware, System/software updates, Battery information and
+Restore default preferences. Cancelling edits leaves saved preferences intact.
+Resetting preferences requires confirmation and preserves documents, Wi-Fi vault,
+update trust and LoRa policy. First-time setup still offers optional Wi-Fi.
+
+Date & time shows local time, UTC and the current POSIX rule. Choose regional
+presets (including DST, half-hour and quarter-hour offsets), keep the current
+rule, or enter a validated custom POSIX timezone. These are stored rules, not an
+updatable IANA timezone database; local legislation can change. Wi-Fi time sync
+uses SNTP. Manual time uses `YYYY-MM-DD HH:MM` in **UTC**, with real-date checking
+for 2020–2099. The clock may need resetting after complete power loss.
+
+System provides Software Update, readable crash reports and an explicit
+safe-mode-on-next-boot switch. See [UPDATES.md](UPDATES.md) for initial trust/feed
+configuration, and [RECOVERY.md](RECOVERY.md#crash-records-and-safe-mode) for recovery.
+
+## Editor selection, clipboard and history
+
+Text Editor's Escape menu includes the same actions as its shortcuts:
+
+| Action | Key |
+| --- | --- |
+| Select while moving | Shift + Fn/arrows |
+| Select all | Ctrl+A |
+| Copy / cut / paste | Ctrl+C / Ctrl+X / Ctrl+V |
+| Undo / redo | Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z |
+| Previous / next word | Ctrl + Fn/left or right |
+| Start / end of document | Ctrl + Fn/up or down |
+| Page up / down | Ctrl+U / Ctrl+D |
+| Start / end of logical line | Ctrl+L / Ctrl+E |
+| Find / go to line | Ctrl+F / Ctrl+G |
+| Save / controls menu | Ctrl+S / Escape |
+
+Selected text has a contrasting highlight. Typing replaces it; Backspace deletes
+it in one edit. Copy/cut require a nonempty selection. Undo and redo each retain
+up to 32 edits in the current open session; a new edit clears redo. Saving does
+not clear session history. Reopening/recovering preserves the last verified draft,
+while session undo/redo counts restart. Undo does not promise to recover discarded
+or permanently deleted files.
+
+History saves piece indexes; clipboard text lives in the document's SD workspace.
+Large copies and pastes use a reusable 4-KiB buffer with progress/cancellation and
+readback checks. They do not allocate the selected text in RAM. Closing/discarding
+a document clears its clipboard/history; this is a document-local clipboard.
+All working text and indexes remain ordinary readable files if POS stops working.

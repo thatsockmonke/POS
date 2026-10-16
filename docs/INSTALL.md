@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.3.8-dev is an **experimental foundation**, not the complete master roadmap.
+POS 0.4.0-dev is an **experimental foundation**, not the complete master roadmap.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
 flashing, peripherals, factory boot recovery and electrical power-loss behavior
 have not been tested here. Read [STATUS.md](STATUS.md) before choosing to install.
@@ -9,9 +9,9 @@ Only use the **Cardputer ADV** hardware profile, not the original Cardputer.
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.3.8-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.4.0-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.3.8-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.4.0-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -32,17 +32,17 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.3.8-dev.zip.sha256
-mkdir pos-0.3.8-dev
-unzip pos-0.3.8-dev.zip -d pos-0.3.8-dev
-cd pos-0.3.8-dev
+sha256sum -c pos-0.4.0-dev.zip.sha256
+mkdir pos-0.4.0-dev
+unzip pos-0.4.0-dev.zip -d pos-0.4.0-dev
+cd pos-0.4.0-dev
 sha256sum -c SHA256SUMS
 ```
 
 All listed files should report `OK`. Stop if they do not. Checksums detect damaged
 files; these development packages are not cryptographically signed.
 
-## 2. Prepare your Linux Framework computer
+## 2. Prepare your Linux computer
 
 You need Python 3, `venv`, an SD reader and a USB **data** cable. Prebuilt installation
 does **not** require ESP-IDF or compiling POS. From the extracted package directory:
@@ -295,8 +295,9 @@ Allow free SD space for the working snapshot, inserted text, new saved copy and
 retained previous copy. The current file/seek limit is **2 GiB minus one byte**;
 large files can take time to snapshot, verify, search and save. The physical
 keyboard/font currently supports ASCII entry; existing UTF-8 is preserved, with
-unsupported characters displayed as `?`. This is a basic editor without undo or
-selection. After an interrupted session, use Recover working draft. Copy the
+unsupported characters displayed as `?`. Undo/redo, highlighted selection and an SD-backed clipboard are available;
+see [editor controls](APPS.md#editor-selection-clipboard-and-history). After an
+interrupted session, use Recover working draft. Copy the
 whole `/POS/Users/Owner/EditorDrafts` folder when recovering data elsewhere; see
 [RECOVERY.md](RECOVERY.md#text-editor-working-drafts).
 
@@ -377,3 +378,18 @@ Read [APPS.md](APPS.md) for full controls, formats and recovery behavior.
   messages and outbox files live under Owner/Radio; range CSVs under Owner/RangeTests.
   The Range Test sender requires the receiver's node ID and sends probes at
   60-second intervals while its screen is open. Leaving stops its log/probe run.
+
+## Software Update and battery / recovery changes
+
+After USB installation of POS 0.4 or newer, open Settings → System / software
+update → Software Update. Signed online updates require an explicitly trusted
+publisher public key and an HTTPS manifest URL; neither is configured by default.
+Use [UPDATES.md](UPDATES.md) for publishing, trust setup, asset-only updates and
+rollback behavior. A private GitHub download is not an anonymous HTTPS feed.
+
+Every screen shows the battery estimate at the top right. It is voltage-based;
+a green full icon indicates sustained near-full voltage, not a verified charger
+termination signal. [APPS.md](APPS.md#battery-display) documents thresholds and
+controls. Settings includes direct brightness, regional/custom timezones, UTC
+clock setting, crash reports and safe-mode requests. [Recovery](RECOVERY.md#crash-records-and-safe-mode)
+explains the persistent failed-boot policy and 60-second healthy interval.

@@ -126,11 +126,11 @@ def make_bundle(build_root: Path, payload: Path, output: Path) -> Path:
         shutil.copyfile(ROOT / "docs/INSTALL.md", stage / "INSTALL.md")
         for name in ("RECOVERY.md", "HARDWARE.md", "HARDWARE_VALIDATION.md", "FORMAT.md", "VALIDATION.md"):
             shutil.copyfile(ROOT / "docs" / name, stage / name)
-        for name in ("STATUS.md", "DOWNLOADS.md", "APPS.md", "PROTOCOLS.md"):
+        for name in ("STATUS.md", "DOWNLOADS.md", "APPS.md", "PROTOCOLS.md", "UPDATES.md"):
             shutil.copyfile(ROOT / "docs" / name, stage / name)
         # USB commands work with pip-installed esptool; no SDK/build is required.
         (stage / "tools").mkdir()
-        for name in ("posctl.py", "pos_validation.py"):
+        for name in ("posctl.py", "pos_validation.py", "pos_updates.py"):
             shutil.copyfile(ROOT / "tools" / name, stage / "tools" / name)
         shutil.copyfile(ROOT / "THIRD_PARTY.md", stage / "THIRD_PARTY.md")
         sdk = Path(os.environ.get("IDF_PATH", "/workspace/pos-cloud/esp-idf-v5.5.5"))
@@ -409,6 +409,20 @@ def factory_restore(port: str, backup: Path, confirmed: bool) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    p = commands.add_parser("update-keygen", help="Create new user-owned P-256 signing keys; never overwrite keys")
+    p.add_argument("--private-key",type=Path,required=True)
+    p.add_argument("--public-key",type=Path,required=True)
+    p = commands.add_parser("update-package",help="Create a signed HTTPS update directory")
+    p.add_argument("--kind",choices=["firmware","assets"],required=True)
+    p.add_argument("--firmware",type=Path)
+    p.add_argument("--installed-manifest",type=Path)
+    p.add_argument("--payload",type=Path,required=True)
+    p.add_argument("--release",required=True)
+    p.add_argument("--minimum-version",required=True)
+    p.add_argument("--sequence",type=int,required=True)
+    p.add_argument("--base-url",required=True)
+    p.add_argument("--private-key",type=Path,required=True)
+    p.add_argument("--output",type=Path,required=True)
     p = commands.add_parser("build", help="Build firmware with the activated ESP-IDF")
     p.add_argument("--role", choices=["installer", "runtime", "all"], default="all")
     p.add_argument("--build-root", type=Path, default=ROOT / "build")
@@ -451,7 +465,13 @@ def main() -> int:
     p.add_argument("--zip-output", type=Path, help="Also export a complete downloadable ZIP and SHA-256 sidecar")
     args = parser.parse_args()
     try:
-        if args.command == "build":
+        if args.command in ("update-keygen","update-package"):
+            from pos_updates import keygen,make_update
+            if args.command=="update-keygen":
+                print("Public-key SHA-256 (DER SPKI): "+keygen(args.private_key,args.public_key))
+            else:
+                print("Signed update directory: "+str(make_update(args,sys.modules[__name__])))
+        elif args.command == "build":
             build(args.role, args.build_root)
         elif args.command == "package":
             package = make_package(args.firmware, args.payload, args.output)

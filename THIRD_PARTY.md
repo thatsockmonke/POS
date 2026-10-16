@@ -46,3 +46,7 @@ SDK NimBLE/TinyCrypt license/notice files under `licenses/`, alongside the SDK
 root license and this provenance document. No Bluetooth Classic headphone stack
 is added. The audio fixture is an originally generated sine tone, with reproduction
 instructions in `tests/fixtures/README.md`.
+
+Update verification uses the ESP-IDF-provided mbedTLS P-256/SHA-256 implementation.
+Host signing/key-generation tools invoke the system OpenSSL command; private keys
+are user-managed and no signing key is bundled in firmware or the source tree.

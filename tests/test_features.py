@@ -34,7 +34,7 @@ class FeatureTests(unittest.TestCase):
         cls.compilation=tempfile.TemporaryDirectory(prefix="pos-features-native-")
         cls.runner=Path(cls.compilation.name)/"features"
         sdk=Path(os.environ.get("IDF_PATH","/workspace/pos-cloud/esp-idf-v5.5.5"));cjson=sdk/"components/json/cJSON"
-        sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/browser.c",ROOT/"main/background.c",ROOT/"main/editor.c",ROOT/"main/wifi.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
+        sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/settings.c",ROOT/"main/browser.c",ROOT/"main/background.c",ROOT/"main/editor.c",ROOT/"main/wifi.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
         sources += [ROOT/"main/files.c",ROOT/"main/music.c",ROOT/"main/sharing.c",ROOT/"main/expansion.c"]
         for component in ("pos_core","pos_recovery"):
             sources.extend((ROOT/"components"/component).glob("*.c"))
@@ -235,6 +235,15 @@ class FeatureTests(unittest.TestCase):
     def test_editor_ui_types_wasd_as_text_saves_and_closes_with_home(self):
         self.run_feature("editor-ui-save")
         self.assertEqual((self.card/"POS/Users/Owner/Documents/Untitled.txt").read_bytes(),b"wasd")
+
+    def test_settings_brightness_validation_save_and_cancel_preserve_other_preferences(self):
+        self.run_feature("settings-ui-brightness")
+        for name in ("settings-ui-cancel","settings-ui-timezone","settings-ui-safe","settings-ui-profile"):
+            card=self.base/name;card.mkdir();self.run_feature(name,card=card)
+
+    def test_editor_selection_clipboard_undo_redo_and_word_navigation_controls(self):
+        self.run_feature("editor-ui-advanced")
+        self.assertEqual((self.card/"POS/Users/Owner/Documents/Untitled.txt").read_bytes(),b"zwasd")
 
     def test_editor_unsaved_close_keeps_plain_draft_or_discards_explicitly(self):
         for mode in ("editor-ui-draft","editor-ui-discard"):

@@ -22,14 +22,20 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "pos_battery.h"
 #include "pos_console.h"
+#include "pos_health.h"
+#include "pos_timezone.h"
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 static pos_device_info_t info;
+static pos_battery_t battery;
+static uint64_t battery_refresh;
 static atomic_uint key_count, raw_keys[2], fifo_overflows, queue_drops;
 static QueueHandle_t events;
 static SemaphoreHandle_t drawn;
@@ -262,6 +268,10 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout_ms) {
                                           pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
   if (received && event->pressed && event->key == POS_KEY_HOME)
     pos_home_request();
+  pos_health_tick();
+  if (previous_valid &&
+      (uint64_t)esp_timer_get_time() / 1000 - battery_refresh >= 5000)
+    pos_device_show(&previous);
   return received;
 }
 
@@ -288,7 +298,19 @@ void pos_device_boot_flash(void) {
   }
 }
 
-void pos_device_show(const pos_view_t *v) {
+void pos_device_show(const pos_view_t *input) {
+  uint64_t now = esp_timer_get_time() / 1000;
+  if (!battery_refresh || now - battery_refresh >= 5000) {
+    pos_battery_sample(&battery, pos_device_battery_mv(), now);
+    battery_refresh = now ? now : 1;
+  }
+  pos_view_t composed = *input;
+  composed.battery_overlay = true;
+  composed.battery_available = battery.available;
+  composed.battery_percent = battery.percent;
+  composed.battery_bars = battery.bars;
+  composed.battery_full = battery.full;
+  const pos_view_t *v = &composed;
   if (previous_valid && !memcmp(&previous, v, sizeof(*v)))
     return;
   previous = *v;
@@ -358,13 +380,15 @@ pos_device_info_t pos_device_info(void) {
   return snapshot;
 }
 bool pos_device_safe_boot(void) {
-  bool safe = force_recovery == RECOVERY_MAGIC || boot_attempts >= 3;
+  bool safe = force_recovery == RECOVERY_MAGIC || boot_attempts >= 3 ||
+              pos_health_safe();
   force_recovery = 0;
   return safe;
 }
 void pos_device_boot_ready(uint32_t firmware_bytes) {
   info.firmware_bytes = firmware_bytes;
   boot_attempts = 0;
+  pos_health_ready();
   info.boot_ms = (uint32_t)(esp_timer_get_time() / 1000);
 }
 
@@ -481,4 +505,12 @@ void pos_device_set_sleep_hook(void (*hook)(void)) { sleep_hook = hook; }
 void pos_device_keyboard_begin(void) {
   atomic_store_explicit(&raw_keys[0], 0, memory_order_relaxed);
   atomic_store_explicit(&raw_keys[1], 0, memory_order_relaxed);
+}
+
+int pos_device_set_time_utc(const char *text) {
+  int64_t epoch;
+  if (!pos_time_parse_utc(text, &epoch))
+    return -1;
+  struct timeval value = {.tv_sec = epoch};
+  return settimeofday(&value, NULL);
 }

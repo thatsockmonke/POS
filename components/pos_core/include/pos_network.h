@@ -29,3 +29,5 @@ int pos_receive_file(const char *root, const char *relative, uint64_t expected,
                      const char *sha256, pos_stream_read_t reader,
                      void *reader_ctx, pos_io_progress_t progress,
                      void *progress_ctx, pos_error_t *error);
+
+int pos_receive_file_limit(const char *,const char *,uint64_t expected,uint64_t limit,const char *,pos_stream_read_t,void *,pos_io_progress_t,void *,pos_error_t *);

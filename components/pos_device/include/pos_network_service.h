@@ -29,3 +29,5 @@ int pos_network_https(const char *url, const char *method, const char *body,
 int pos_network_share_start(const char *root, const char *export_file,
                             char key[17]);
 void pos_network_share_stop(void);
+
+int pos_network_https_limit(const char *,const char *,const char *,const char *,const char *,const char *,const char *,pos_io_progress_t,void *,pos_error_t *,uint32_t limit);

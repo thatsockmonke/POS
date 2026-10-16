@@ -58,3 +58,5 @@ int pos_hash_file(const char *path, uint32_t size, char hex[65]);
 int pos_hash_file_progress(const char *path, uint32_t size, char hex[65],
                           int (*progress)(void *, uint64_t, uint64_t), void *ctx);
 int pos_hash_data(const void *data, size_t size, char hex[65]);
+
+int pos_parse_manifest(const char *,size_t,pos_package_t **,pos_error_t *);

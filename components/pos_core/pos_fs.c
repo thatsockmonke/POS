@@ -50,13 +50,13 @@ int pos_fs_layout(const char *root) {
   const char *dirs[] = {"POS/Users/Owner/Documents",
                         "POS/Users/Owner/Saves",
                         "POS/Maps",
-                        "POS/UserApps",
                         "POS/Temp",
                         "POS/Updates",
                         "Downloads",
                         "Music",
                         "Music/Playlists",
                         "POS/Users/Owner/Radio",
+                        "POS/Users/Owner/Diagnostics/Crashes",
                         "POS/Users/Owner/RangeTests"};
   for (size_t i = 0; i < sizeof(dirs) / sizeof(*dirs); ++i) {
     char path[POS_FS_PATH];
@@ -84,7 +84,9 @@ static bool under(const char *path, const char *reserved) {
 }
 
 bool pos_fs_user_path(const char *p) {
-  const char *reserved[] = {"POS/System",
+  const char *reserved[] = {"pos-update.pos",
+                            "pos-update.pos.part",
+                            "POS/System",
                             "POS/Temp",
                             "POS/Cache",
                             "POS/Updates",

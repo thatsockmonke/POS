@@ -13,6 +13,7 @@
 #include "pos_ble.h"
 #include "pos_device.h"
 #include "pos_fs.h"
+#include "pos_health.h"
 #include "pos_launcher.h"
 #include "pos_network.h"
 #include "pos_peripherals.h"
@@ -572,10 +573,11 @@ static void recovery(services_t *s) {
                          "Browse previous installation",
                          "Hardware diagnostics",
                          "Sleep / shut down",
+                         "Crash reports",
                          "Back"};
   for (;;) {
-    int choice = pos_ui_menu("POS Recovery", items, 7);
-    if (choice < 0 || choice == 6)
+    int choice = pos_ui_menu("POS Recovery", items, 8);
+    if (choice < 0 || choice == 7)
       return;
     if (choice == 0) {
       const char *yes[] = {"Restart into factory installer", "Cancel"};
@@ -592,6 +594,8 @@ static void recovery(services_t *s) {
       diagnostics(s);
     if (choice == 5)
       pos_device_sleep();
+    if (choice == 6)
+      pos_ui_browse(s->root, "POS/Users/Owner/Diagnostics/Crashes");
   }
 }
 
@@ -600,19 +604,7 @@ static void settings_foreground(void *state) {
 #ifdef POS_INSTALLER
   setup(services, false);
 #else
-  while (!pos_home_pending()) {
-    const char *items[] = {"Personal preferences", "Wi-Fi",
-                           "Expansion hardware", "Back"};
-    int choice = pos_ui_menu("Settings", items, 4);
-    if (choice < 0 || choice == 3)
-      break;
-    if (choice == 0)
-      setup(services, false);
-    if (choice == 1)
-      pos_ui_wifi(services->root);
-    if (choice == 2)
-      pos_ui_expansion(services->root);
-  }
+  pos_ui_settings(services->root, &services->settings);
 #endif
 }
 static void diagnostics_foreground(void *state) {
@@ -766,17 +758,30 @@ static void stop_services(void) {
 #endif
 void pos_desktop(const char *root, bool recovery_only) {
   (void)pos_ui_take_home();
-  services_t services = {.root = root};
+  typedef struct {
+    services_t services;
+    char archive[POS_FS_PATH], journal[POS_FS_PATH], system_root[POS_FS_PATH];
+    pos_view_t view;
+  } workspace_t;
+  workspace_t *workspace = calloc(1, sizeof(*workspace));
+  if (!workspace) {
+    pos_ui_notice("Launcher unavailable",
+                  "Not enough heap for the UI. Existing files are preserved.");
+    return;
+  }
+  services_t *services = &workspace->services;
+  services->root = root;
 #ifndef POS_INSTALLER
   if (!recovery_only) {
     pos_expansion_init(root);
     pos_device_set_sleep_hook(stop_services);
   }
 #endif
-  pos_settings_defaults(&services.settings);
-  int settings = pos_settings_load(root, &services.settings);
+  pos_settings_defaults(&services->settings);
+  int settings = pos_settings_load(root, &services->settings);
   if (recovery_only) {
-    recovery(&services);
+    recovery(services);
+    free(workspace);
     return;
   }
   if (pos_fs_layout(root)) {
@@ -786,12 +791,13 @@ void pos_desktop(const char *root, bool recovery_only) {
     recovery_only = true;
   }
   if (recovery_only) {
-    recovery(&services);
+    recovery(services);
+    free(workspace);
     return;
   }
   /* Offer backup restoration before first-time setup can create conflicting
    * preferences. */
-  char archive[POS_FS_PATH], journal[POS_FS_PATH];
+  char *archive = workspace->archive, *journal = workspace->journal;
   struct stat st;
   pos_error_t find_error = {0};
   int found = pos_backup_find(root, archive, &find_error);
@@ -799,25 +805,25 @@ void pos_desktop(const char *root, bool recovery_only) {
   if (!found && stat(journal, &st)) {
     const char *options[] = {"Restore backup now", "Later (keep backup)"};
     int answer = pos_ui_menu("Filesystem backup detected", options, 2);
-    bool restored = answer == 0 && restore(&services);
+    bool restored = answer == 0 && restore(services);
     if (answer == 1 || restored)
       pos_fs_write_new(journal, "1", 1);
-    settings = pos_settings_load(root, &services.settings);
+    settings = pos_settings_load(root, &services->settings);
   }
   if (settings == -2)
     pos_ui_notice("Newer settings preserved",
                   "Settings use an unsupported future format. Recovery can "
                   "copy them; current defaults are temporary.");
-  else if (settings || !services.settings.setup_complete)
-    setup(&services, true);
-  setenv("TZ", services.settings.timezone, 1);
+  else if (settings || !services->settings.setup_complete)
+    setup(services, true);
+  setenv("TZ", services->settings.timezone, 1);
   tzset();
-  pos_device_brightness(services.settings.brightness);
+  pos_device_brightness(services->settings.brightness);
   (void)pos_ui_take_home();
-  pos_core_t core = {.services = &services};
+  pos_core_t core = {.services = services};
   int selected = 0;
   uint64_t refreshed = 0;
-  char system_root[POS_FS_PATH];
+  char *system_root = workspace->system_root;
   pos_fs_join(system_root, root, "POS");
   for (;;) {
     pos_event_t event;
@@ -864,19 +870,19 @@ void pos_desktop(const char *root, bool recovery_only) {
     if (now - refreshed < 250 && refreshed)
       continue;
     refreshed = now;
-    pos_view_t view;
+    pos_view_t *view = &workspace->view;
     if (core.app)
-      pos_core_tick(&core, now, &view);
+      pos_core_tick(&core, now, view);
     else {
-      pos_launcher_view(system_root, services.settings.device_name,
-                        &services.settings.background, selected, &view);
+      pos_launcher_view(system_root, services->settings.device_name,
+                        &services->settings.background, selected, view);
 #ifndef POS_INSTALLER
       if (selected == 12 || selected == 13) {
         if (!radio_app_available(NULL))
-          pos_view_line(&view, 13, "Disabled: check Settings");
+          pos_view_line(view, 13, "Disabled: check Settings");
       }
 #endif
     }
-    pos_device_show(&view);
+    pos_device_show(view);
   }
 }

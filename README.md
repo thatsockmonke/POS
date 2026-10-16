@@ -4,18 +4,20 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.3.8-dev adds Files, Music, BLE sharing, GPS/LoRa and Radio Range Test.** Both firmware images compile
-for ESP32-S3. Native tests exercise the actual portable installer, UI, app,
-settings and recovery code. No physical Panputer has been flashed or tested here.
+**0.4.0-dev adds signed online/asset updates, an always-visible battery estimate,
+persistent crash records/safe mode, editor history/selection and expanded Settings.**
+Both ESP32-S3 firmware roles and native tests are checked; physical Panputer
+validation is still outstanding.
 
 ## Download and install
 
 [GitHub Releases](https://github.com/thatsockmonke/POS/releases) · [Download the complete package](docs/DOWNLOADS.md) · [Full installation guide](docs/INSTALL.md) · [Feature status / remaining roadmap](docs/STATUS.md)
 
-The master roadmap is **not all implemented**: maps/navigation, online updates,
-installable packages, power/crash improvements and wireless deployment remain future work.
-Games and a POS terminal have been removed from project scope. This release
-contains the core, launcher, setup, editor, Wi-Fi, storage, installer/recovery and diagnostics.
+The complete master roadmap is not implemented. On-device maps/navigation,
+Meshtastic compatibility, a Recorder app, IR/IMU and wireless deployment remain.
+Games, a POS terminal, installable apps/package management and automatic power
+management have been removed from scope. The battery indicator replaces that
+power-management milestone. See the current [remaining list](docs/STATUS.md#remaining-software-roadmap-current-priorities).
 
 For the prebuilt bundle, you need Python/esptool on your Linux computer, a FAT32
 microSD and a USB data cable. Back up/prove factory recovery; copy the extracted
@@ -45,7 +47,8 @@ Implemented:
   Connect for a session or save up to four networks in a passphrase-encrypted NVS vault.
   Passwords remain masked and are never written to SD.
 - Text Editor: New/Open/Recover, SD-backed editing beyond available RAM, protected
-  streamed saves, Find, Go to line and an unsaved-changes prompt. Ctrl+S saves;
+  streamed saves, 32-level undo/redo, selection, SD clipboard, word/page/line
+  navigation, Find, Go to line and an unsaved-changes prompt. Ctrl+S saves;
   Fn+arrows move the cursor; WASD types ordinary letters.
 - Shared Wi-Fi services: scan/manual/saved connections, status, SNTP time sync,
   certificate-validated HTTPS downloads and GET/POST API requests. Responses stream
@@ -69,6 +72,17 @@ Implemented:
   and transmit permission. Radio/Range require a detected, enabled cap. Maps has a
   GPS-presence gate; the Maps app itself is still future work. Location sharing
   requires explicit consent. Transmit consent resets after reboot.
+- Always-visible black battery box: percentage left of a changing icon, smoothing,
+  hysteresis, unknown state and a sustained-voltage near-full indication. This is
+  an estimate, not a hardware charger-status measurement.
+- Settings with direct brightness/date/time controls, regional/custom timezones,
+  preferences-only reset, crash reports and safe-mode requests.
+- Signed HTTPS Software Update with explicit public-key trust, compatibility and
+  sequence checks, streamed assets/firmware, preserved previous System and OTA
+  rollback recovery. [Configure a feed/key](docs/UPDATES.md); none is assumed by default.
+- Persistent readable SD crash reports, a retained RTC panic snapshot and NVS boot
+  failure policy. Safe mode requires explicit normal-boot selection; online OTA
+  waits for a healthy 60-second UI interval before confirmation.
 - Redundant, checksummed settings; formal system/user boundaries and standard folders.
 - On-device installer confirmation, verification/progress/cancellation, factory
   recovery and separate OTA runtime slots. Files and flash are read back before boot selection.
@@ -88,16 +102,17 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.3.8-dev/launcher.png)
-![Color picker](downloads/0.3.8-dev/color-picker.png)
+![Launcher](downloads/0.4.0-dev/launcher.png)
+![Color picker](downloads/0.4.0-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.3.8-dev/boot-animation.png)
+![POS boot animation](downloads/0.4.0-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.3.8-dev/boot-splash.png)
+[Final splash frame](downloads/0.4.0-dev/boot-splash.png)
 
-This is unsigned development firmware. Physical display orientation, all key
+The USB bootstrap is unsigned development firmware; online updates require a
+trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
 positions, SD performance, battery calibration, USB recovery and power-cut safety
 still require [hardware validation](docs/HARDWARE_VALIDATION.md).
 
@@ -109,9 +124,9 @@ On the prepared cloud machine:
 ```sh
 cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
-python tools/posctl.py build --build-root build-v038
+python tools/posctl.py build --build-root build-v040
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v038 --output dist/pos-0.3.8-dev --zip-output dist/pos-0.3.8-dev.zip
+python tools/posctl.py bundle --build-root build-v040 --output dist/pos-0.4.0-dev --zip-output dist/pos-0.4.0-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -135,7 +150,7 @@ also enables the full TLS certificate bundle; existing generated configs must
 enable it or be replaced using a fresh build root. Pass that same build root to
 `bundle` so installer and runtime come from the matching build. Version 0.3.8
 requires fresh NimBLE/Secure Connections defaults too; the commands above use a
-separate build-v038 root rather than reusing an old generated sdkconfig.
+separate build-v040 root rather than reusing an old generated sdkconfig.
 
 `bundle`, `package`, preview and backup commands refuse existing output names.
 A bundle contains the merged `pos-installer-usb.bin`, `pos-install.zip`, an
@@ -158,7 +173,7 @@ standalone runtime at the factory address. Read [INSTALL.md](docs/INSTALL.md).
 | USB fallback | WASD, Enter, Escape, and byte 0x1d for Home; IDF monitor itself reserves Ctrl-] |
 
 See the [new apps and expansion hardware guide](docs/APPS.md),
-[transfer/radio formats](docs/PROTOCOLS.md) and the [editor and Wi-Fi guide](docs/INSTALL.md#text-editor) for draft recovery,
+[signed update guide](docs/UPDATES.md), [transfer/radio formats](docs/PROTOCOLS.md) and the [editor and Wi-Fi guide](docs/INSTALL.md#text-editor) for draft recovery,
 encrypted network profiles, HTTPS and local transfer controls.
 
 Name validation runs when Enter accepts a field: display names use 1–48 printable
@@ -180,7 +195,7 @@ power switch for a true power-off. Peripheral sleep/wake behavior is unverified.
 - `/POS/Users/Owner`: documents, saves and diagnostics. Owner is a stable profile
   directory; changing the display name does not rename your files.
 - `/POS/Users/settings.0.json` and `.1.json`: generation/checksum-based settings slots.
-- `/Downloads`, `/Music`, `/POS/Maps`, `/POS/UserApps`: ordinary user data.
+- `/Downloads`, `/Music`, `/POS/Maps`: ordinary user data. Legacy user folders are preserved.
 - `/POS/Users/Owner/Trash`, `/Radio`, `/RangeTests`: user-owned recovery, messaging
   and CSV data (the latter two paths are beneath the same Owner directory).
 - `/POS/Temp`, `/POS/Cache`, `/POS/Updates` and `/.POS-Recovery-Temp`: disposable system work.
@@ -210,5 +225,5 @@ for the actual-device workflow.
 See [format and transaction details](docs/FORMAT.md),
 [recovery semantics](docs/RECOVERY.md), [hardware profile](docs/HARDWARE.md) and
 [third-party notices](THIRD_PARTY.md). The card is never formatted or automatically
-wiped. Maps/navigation, microphone/IMU/IR services, installable apps,
-signed updates and wireless deployment remain later milestones.
+wiped. On-device maps/navigation, Meshtastic compatibility, the Recorder app,
+IR/IMU services and wireless deployment remain later milestones.

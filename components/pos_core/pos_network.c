@@ -169,13 +169,14 @@ static int verify_progress(void *opaque, uint64_t done, uint64_t total) {
              ? p->progress(p->ctx, "Verifying downloaded file", done, total)
              : 0;
 }
-int pos_receive_file(const char *root, const char *relative, uint64_t expected,
-                     const char *sha, pos_stream_read_t reader,
-                     void *reader_ctx, pos_io_progress_t progress, void *ctx,
-                     pos_error_t *error) {
+int pos_receive_file_limit(const char *root, const char *relative,
+                           uint64_t expected, uint64_t limit, const char *sha,
+                           pos_stream_read_t reader, void *reader_ctx,
+                           pos_io_progress_t progress, void *ctx,
+                           pos_error_t *error) {
   if (!pos_fs_archive_path(relative) || !pos_fs_user_path(relative) ||
       !reader || (!strncasecmp(relative, "POS/Users/settings.", 19)) ||
-      (expected != UINT64_MAX && expected > UINT32_MAX) ||
+      (expected != UINT64_MAX && expected > limit) ||
       (sha && *sha &&
        (strlen(sha) != 64 || strspn(sha, "0123456789abcdefABCDEF") != 64)))
     return failed(error, "Invalid file destination, size or SHA-256.");
@@ -210,7 +211,7 @@ int pos_receive_file(const char *root, const char *relative, uint64_t expected,
   int n, bad = 0;
   while ((n = reader(reader_ctx, buffer, 4096)) > 0) {
     total += n;
-    if (n > 4096 || total > UINT32_MAX ||
+    if (n > 4096 || total > UINT32_MAX || total > limit ||
         (expected != UINT64_MAX && total > expected) ||
         fwrite(buffer, 1, n, out) != (size_t)n ||
         (progress && progress(ctx, "Transferring file", total,
@@ -243,4 +244,12 @@ int pos_receive_file(const char *root, const char *relative, uint64_t expected,
     return failed(error,
                   "Could not publish verified file. Staging file retained.");
   return 0;
+}
+
+int pos_receive_file(const char *root, const char *relative, uint64_t expected,
+                     const char *sha, pos_stream_read_t reader,
+                     void *reader_ctx, pos_io_progress_t progress, void *ctx,
+                     pos_error_t *e) {
+  return pos_receive_file_limit(root, relative, expected, UINT32_MAX, sha,
+                                reader, reader_ctx, progress, ctx, e);
 }

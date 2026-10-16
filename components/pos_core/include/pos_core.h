@@ -63,6 +63,9 @@ typedef struct {
   bool color_picker;
   uint16_t picker_hue, picker_saturation, picker_value;
   uint32_t picker_rgb;
+  bool battery_overlay, battery_available, battery_full;
+  uint8_t battery_percent, battery_bars;
+  uint32_t editor_selected[12];
   bool text_editor;
   uint8_t editor_cursor_row, editor_cursor_col;
 } pos_view_t;

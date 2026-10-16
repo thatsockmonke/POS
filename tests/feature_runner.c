@@ -15,6 +15,7 @@
 #include "pos_peripherals.h"
 #include "pos_recovery.h"
 #include "pos_settings.h"
+#include "pos_timezone.h"
 #include "ui.h"
 #include <assert.h>
 #include <dirent.h>
@@ -24,7 +25,7 @@
 
 static pos_event_t ui_events[512];
 static unsigned ui_next, ui_count, ui_frames;
-static bool secret_leaked, notice_tail_seen;
+static bool secret_leaked, notice_tail_seen, selection_seen;
 static pos_view_t ui_last;
 static bool display_error, device_error, empty_folder_seen, last_page_seen,
     keep_sd_seen;
@@ -128,7 +129,12 @@ int pos_ble_accept(bool accept, pos_error_t *e) {
     ++ble_accepts;
   return 0;
 }
-int pos_ble_accept_progress(bool accept,pos_io_progress_t progress,void *ctx,pos_error_t *e){(void)progress;(void)ctx;return pos_ble_accept(accept,e);}
+int pos_ble_accept_progress(bool accept, pos_io_progress_t progress, void *ctx,
+                            pos_error_t *e) {
+  (void)progress;
+  (void)ctx;
+  return pos_ble_accept(accept, e);
+}
 int pos_ble_scan(pos_error_t *e) {
   (void)e;
   fake_ble.scanning = false;
@@ -153,6 +159,19 @@ int pos_ble_send(const char *relative, pos_io_progress_t progress, void *ctx,
   assert(relative && *relative);
   return 0;
 }
+static unsigned brightness_applied;
+static bool safe_requested;
+void pos_device_brightness(unsigned percent) { brightness_applied = percent; }
+int pos_device_battery_mv(void) { return 3800; }
+int pos_device_set_time_utc(const char *text) {
+  int64_t epoch;
+  return pos_time_parse_utc(text, &epoch) ? 0 : -1;
+}
+int pos_health_request_safe(bool enabled) {
+  safe_requested = enabled;
+  return 0;
+}
+void pos_ui_updates(const char *root) { (void)root; }
 static void push_key(int key, unsigned mods) {
   assert(ui_count < sizeof(ui_events) / sizeof(ui_events[0]));
   ui_events[ui_count++] = (pos_event_t){key, mods, true};
@@ -190,6 +209,9 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout) {
 void pos_device_show(const pos_view_t *view) {
   ++ui_frames;
   ui_last = *view;
+  for (unsigned i = 0; i < 12; ++i)
+    if (view->editor_selected[i])
+      selection_seen = true;
   if (getenv("POS_TRACE_UI")) {
     fprintf(stderr, "TITLE %s selected=%d\n", view->lines[0],
             view->selected_row);
@@ -308,7 +330,24 @@ static int editor_ui_tests(const char *root, const char *mode) {
   push_key(POS_KEY_ENTER, 0); /* New */
   push_key(POS_KEY_ENTER, 0); /* Untitled.txt */
   push_text("wasd");
-  if (!strcmp(mode, "editor-ui-save")) {
+  if (!strcmp(mode, "editor-ui-advanced")) {
+    push_key('a', POS_MOD_CTRL);
+    push_key('c', POS_MOD_CTRL);
+    idle_event();
+    push_key('z', 0);
+    push_key('z', POS_MOD_CTRL);
+    push_key('y', POS_MOD_CTRL);
+    push_key('v', POS_MOD_CTRL);
+    idle_event();
+    push_key(POS_KEY_LEFT, POS_MOD_CTRL);
+    push_key(POS_KEY_RIGHT, POS_MOD_SHIFT);
+    push_key('c', POS_MOD_CTRL);
+    idle_event();
+    push_key(POS_KEY_RIGHT, POS_MOD_CTRL);
+    push_key('s', POS_MOD_CTRL);
+    idle_event();
+    push_key(POS_KEY_HOME, 0);
+  } else if (!strcmp(mode, "editor-ui-save")) {
     push_key('s', POS_MOD_CTRL);
     idle_event();
     push_key(POS_KEY_HOME, 0);
@@ -325,6 +364,8 @@ static int editor_ui_tests(const char *root, const char *mode) {
   }
   pos_ui_editor(root);
   assert(ui_next == ui_count);
+  if (!strcmp(mode, "editor-ui-advanced"))
+    assert(selection_seen);
   puts("editor UI passed");
   return 0;
 }
@@ -596,6 +637,57 @@ static void choose(unsigned index) {
   for (unsigned i = 0; i < index; ++i)
     push_key('s', 0);
   push_key(POS_KEY_ENTER, 0);
+}
+static int settings_ui_tests(const char *root, const char *mode) {
+  pos_settings_t s;
+  pos_settings_defaults(&s);
+  s.setup_complete = true;
+  strcpy(s.display_name, "Keep Stevie");
+  assert(!pos_settings_save(root, &s));
+  ui_next = ui_count = 0;
+  if (!strcmp(mode, "settings-ui-brightness")) {
+    choose(1);
+    replace_field("5");
+    push_key(POS_KEY_ENTER, 0);
+    replace_field("55");
+    push_key(POS_KEY_ESCAPE, 0);
+  } else if (!strcmp(mode, "settings-ui-profile")) {
+    choose(0);
+    choose(0);
+    replace_field("Changed Stevie");
+    push_key(POS_KEY_ESCAPE, 0);
+    push_key(POS_KEY_ESCAPE, 0);
+  } else if (!strcmp(mode, "settings-ui-cancel")) {
+    choose(1);
+    push_key('u', POS_MOD_CTRL);
+    push_text("90");
+    push_key(POS_KEY_ESCAPE, 0);
+    push_key(POS_KEY_ESCAPE, 0);
+  } else if (!strcmp(mode, "settings-ui-timezone")) {
+    choose(2);
+    choose(1);
+    choose(15);
+    push_key(POS_KEY_ESCAPE, 0);
+    push_key(POS_KEY_ESCAPE, 0);
+  } else {
+    choose(6);
+    choose(2);
+    choose(1);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ESCAPE, 0);
+  }
+  pos_ui_settings(root, &s);
+  assert(ui_next == ui_count);
+  assert(!strcmp(s.display_name, !strcmp(mode, "settings-ui-profile")
+                                     ? "Changed Stevie"
+                                     : "Keep Stevie"));
+  assert(s.brightness == (!strcmp(mode, "settings-ui-brightness") ? 55 : 70));
+  if (!strcmp(mode, "settings-ui-timezone"))
+    assert(!strcmp(s.timezone, "NPT-5:45"));
+  if (!strcmp(mode, "settings-ui-safe"))
+    assert(safe_requested);
+  assert(brightness_applied == s.brightness);
+  return 0;
 }
 static int browser_tests(const char *root, const char *mode) {
   ui_next = ui_count = 0;
@@ -1020,7 +1112,7 @@ static int apps_ui(const char *root, const char *mode) {
     push_key(POS_KEY_ENTER, 0);
     keys_down(1);
     push_key(POS_KEY_ENTER, 0);
-    push_key(POS_KEY_ENTER,0); /* Accept default paste filename. */
+    push_key(POS_KEY_ENTER, 0); /* Accept default paste filename. */
     idle_event();
     push_key(POS_KEY_ENTER, 0);
     push_key(POS_KEY_HOME, 0);
@@ -1052,7 +1144,7 @@ int main(int argc, char **argv) {
   if (argc < 3)
     return 2;
   if (strstr(argv[2], "-ui-") && strncmp(argv[2], "editor-ui-", 10) &&
-      strncmp(argv[2], "wifi-ui-", 8))
+      strncmp(argv[2], "wifi-ui-", 8) && strncmp(argv[2], "settings-ui-", 12))
     return apps_ui(argv[1], argv[2]);
   if (!strcmp(argv[2], "install") || !strcmp(argv[2], "boot") ||
       !strcmp(argv[2], "validate"))
@@ -1071,6 +1163,8 @@ int main(int argc, char **argv) {
     puts("{\"nonblocking\":true}");
     return 0;
   }
+  if (!strncmp(argv[2], "settings-ui-", 12))
+    return settings_ui_tests(argv[1], argv[2]);
   if (!strncmp(argv[2], "editor-ui-", 10))
     return editor_ui_tests(argv[1], argv[2]);
   if (!strncmp(argv[2], "wifi-ui-", 8))

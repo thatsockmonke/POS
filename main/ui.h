@@ -40,3 +40,7 @@ bool pos_ui_text(const char *title, const char *label, char *text,
 int pos_ui_progress(void *ctx, const char *phase, const char *name,
                     uint64_t done, uint64_t total);
 void pos_desktop(const char *root, bool recovery_only);
+
+bool pos_ui_timezone(char timezone[64]);
+void pos_ui_settings(const char *root, pos_settings_t *settings);
+void pos_ui_updates(const char *root);

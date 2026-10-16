@@ -1,5 +1,6 @@
 #include "font8x8_basic.h"
 #include "pos_core.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -99,6 +100,30 @@ static bool icon_ink(const pos_view_t *v, int tile, int x, int y) {
 uint16_t pos_view_pixel(const pos_view_t *v, int x, int y) {
   if (!v || x < 0 || x >= 240 || y < 0 || y >= 135)
     return 0;
+  if (v->battery_overlay && x >= 184 && y < 9) {
+    if (y == 8)
+      return 0;
+    if (x >= 223 && x <= 237 && y >= 1 && y <= 6) {
+      if (x == 223 || x == 237 || y == 1 || y == 6)
+        return 0xffff;
+      return v->battery_available && x < 225 + v->battery_bars * 3 &&
+                     x >= 225 && y >= 3 && y <= 4
+                 ? (v->battery_full ? 0x07e0 : 0xffff)
+                 : 0;
+    }
+    if (x == 238 && y >= 3 && y <= 4)
+      return 0xffff;
+    char label[5];
+    if (v->battery_available)
+      snprintf(label, sizeof(label), "%3u%%", v->battery_percent);
+    else
+      memcpy(label, " --%", 5);
+    if (x < 216 && ((font8x8_basic[(unsigned char)label[(x - 184) / 8]][y] >>
+                     ((x - 184) % 8)) &
+                    1))
+      return 0xffff;
+    return 0;
+  }
   if (v->boot_splash) {
     uint16_t background = pos_boot_colors[2];
     if (y < 45 && x < v->boot_pink_width)
@@ -162,7 +187,13 @@ uint16_t pos_view_pixel(const pos_view_t *v, int x, int y) {
     if (row >= 14)
       bg = 0;
   }
-  if (v->text_editor && row == v->editor_cursor_row && column == v->editor_cursor_col) {
+  if (v->text_editor && row >= 2 && row < 14 &&
+      (v->editor_selected[row - 2] & (1u << column))) {
+    bg = 0x034c;
+    fg = 0xffff;
+  }
+  if (v->text_editor && row == v->editor_cursor_row &&
+      column == v->editor_cursor_col) {
     bg = 0xffff;
     fg = 0;
   }

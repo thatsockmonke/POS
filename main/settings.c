@@ -1,0 +1,193 @@
+#include "pos_device.h"
+#include "pos_health.h"
+#include "pos_network_service.h"
+#include "ui.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+static bool save(const char *root, pos_settings_t *active,
+                 pos_settings_t *next) {
+  if (!pos_settings_valid(next) || pos_settings_save(root, next)) {
+    pos_ui_notice(
+        "Settings not saved",
+        "Existing preferences are preserved. Check SD space and try again.");
+    return false;
+  }
+  *active = *next;
+  pos_device_brightness(next->brightness);
+  setenv("TZ", next->timezone, 1);
+  tzset();
+  return true;
+}
+static void profile(const char *root, pos_settings_t *settings) {
+  const char *items[] = {"Display name", "Device name", "Back"};
+  int selected = 0;
+  while (!pos_home_pending()) {
+    int choice = pos_ui_menu_from("Profile", items, 3, selected);
+    if (choice < 0 || choice == 2)
+      return;
+    selected = choice;
+    pos_settings_t next = *settings;
+    char *value = choice ? next.device_name : next.display_name;
+    while (pos_ui_text(
+        "Profile", items[choice], value,
+        choice ? sizeof(next.device_name) : sizeof(next.display_name), false)) {
+      if (choice ? pos_settings_device_name_valid(value)
+                 : pos_settings_display_name_valid(value)) {
+        save(root, settings, &next);
+        break;
+      }
+      pos_ui_notice("Name not valid",
+                    choice ? "Use 1-24 letters, digits or hyphens."
+                           : "Use 1-48 printable characters.");
+    }
+  }
+}
+static void display(const char *root, pos_settings_t *settings) {
+  char value[4];
+  snprintf(value, sizeof(value), "%u", settings->brightness);
+  while (pos_ui_text("Display brightness", "Percent (10-100)", value,
+                     sizeof(value), false)) {
+    char *end;
+    long percent = strtol(value, &end, 10);
+    if (!*value || *end || percent < 10 || percent > 100) {
+      pos_ui_notice("Invalid brightness",
+                    "Enter a whole number from 10 to 100.");
+      continue;
+    }
+    pos_settings_t next = *settings;
+    next.brightness = percent;
+    save(root, settings, &next);
+    break;
+  }
+}
+static void datetime(const char *root, pos_settings_t *settings) {
+  int selected = 0;
+  while (!pos_home_pending()) {
+    const char *items[] = {"Current date / time", "Change timezone",
+                           "Sync time over Wi-Fi", "Set UTC date / time",
+                           "Back"};
+    int choice = pos_ui_menu_from("Date & time", items, 5, selected);
+    if (choice < 0 || choice == 4)
+      return;
+    selected = choice;
+    if (choice == 0) {
+      time_t now = time(NULL);
+      struct tm local, utc;
+      localtime_r(&now, &local);
+      gmtime_r(&now, &utc);
+      char a[48], b[48], body[360];
+      strftime(a, sizeof(a), "%Y-%m-%d %H:%M:%S %Z", &local);
+      strftime(b, sizeof(b), "%Y-%m-%d %H:%M:%S UTC", &utc);
+      snprintf(body, sizeof(body), "Local: %s\n%s\nRule: %.63s\n%s", a, b,
+               settings->timezone,
+               now < 1577836800 ? "Clock not set. Sync or enter UTC."
+                                : "Clock resets without external time. GPS "
+                                  "time is shown in Location when available.");
+      pos_ui_notice("Date & time", body);
+    }
+    if (choice == 1) {
+      pos_settings_t next = *settings;
+      if (pos_ui_timezone(next.timezone))
+        save(root, settings, &next);
+    }
+    if (choice == 2)
+      pos_ui_notice(
+          "Time synchronization",
+          pos_network_sync_time()
+              ? "Connect Wi-Fi first; time sync could not start."
+              : "Time sync requested. Check Current date / time shortly.");
+    if (choice == 3) {
+      char text[17] = "2026-01-01 00:00";
+      if (pos_ui_text("Set UTC time", "YYYY-MM-DD HH:MM (UTC)", text,
+                      sizeof(text), false))
+        pos_ui_notice("UTC clock",
+                      pos_device_set_time_utc(text)
+                          ? "Invalid date/time. Use 2020-2099, a real date, "
+                            "and 24-hour UTC time."
+                          : "Clock set for this session. Your timezone "
+                            "converts UTC to local time.");
+    }
+  }
+}
+static void battery_details(void) {
+  char body[320];
+  int mv = pos_device_battery_mv();
+  snprintf(
+      body, sizeof(body),
+      "Battery voltage: %d mV\nThe top-right percentage is a smoothed voltage "
+      "estimate. Icon thresholds use hysteresis. A green full icon / 100%% "
+      "means sustained near-full voltage, not a charger-termination "
+      "measurement. This board profile has no verified charger-status input. "
+      "Readings need calibration on your device.",
+      mv);
+  pos_ui_notice("Battery indicator", body);
+}
+void pos_ui_settings(const char *root, pos_settings_t *settings) {
+  int selected = 0;
+  while (!pos_home_pending()) {
+    const char *items[] = {"Profile / device name",
+                           "Display brightness",
+                           "Date & time",
+                           "Background",
+                           "Wi-Fi",
+                           "Expansion hardware",
+                           "System / software update",
+                           "Battery information",
+                           "Restore default preferences",
+                           "Back"};
+    int choice = pos_ui_menu_from("Settings", items, 10, selected);
+    if (choice < 0 || choice == 9)
+      return;
+    selected = choice;
+    if (choice == 0)
+      profile(root, settings);
+    if (choice == 1)
+      display(root, settings);
+    if (choice == 2)
+      datetime(root, settings);
+    if (choice == 3)
+      pos_ui_background(root, settings);
+    if (choice == 4)
+      pos_ui_wifi(root);
+    if (choice == 5)
+      pos_ui_expansion(root);
+    if (choice == 6) {
+      const char *system[] = {"Software Update", "Crash reports",
+                              "Safe mode on next boot", "Back"};
+      int action = pos_ui_menu("System", system, 4);
+      if (action == 0)
+        pos_ui_updates(root);
+      if (action == 1)
+        pos_ui_browse(root, "POS/Users/Owner/Diagnostics/Crashes");
+      if (action == 2) {
+        const char *options[] = {"Cancel", "Enable safe mode next boot"};
+        if (pos_ui_menu("Safe mode", options, 2) == 1) {
+          if (pos_health_request_safe(true))
+            pos_ui_notice("Safe mode not saved",
+                          "Boot preference could not be saved to NVS. Try "
+                          "again without erasing stored data.");
+          else
+            pos_ui_notice("Safe mode requested",
+                          "The next restart opens recovery before optional "
+                          "services. No restart was forced.");
+        }
+      }
+    }
+    if (choice == 7)
+      battery_details();
+    if (choice == 8) {
+      const char *options[] = {"Cancel", "Reset preferences only"};
+      if (pos_ui_menu("Keep documents and credentials", options, 2) == 1) {
+        pos_settings_t next;
+        pos_settings_defaults(&next);
+        next.setup_complete = true;
+        save(root, settings, &next);
+      }
+    }
+    pos_device_brightness(settings->brightness);
+    setenv("TZ", settings->timezone, 1);
+    tzset();
+  }
+}

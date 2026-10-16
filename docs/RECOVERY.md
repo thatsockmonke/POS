@@ -272,3 +272,42 @@ recovery. POS does not delete an unrecoverable working folder automatically.
 Saved Wi-Fi profiles are separately encrypted in internal NVS and are not part of
 an SD backup. Keep the vault passphrase; the SD cannot recover it. A factory-flash
 restore can replace the NVS region, so reconnect/re-enter networks if necessary.
+
+## Crash records and safe mode
+
+The pinned ESP-IDF panic entry is wrapped only to retain a small checksum-protected
+RTC snapshot: CPU core, exception, PC, stack pointer, A0, cause/fault address and
+firmware version/build ID. It performs no allocation, SD writes, NVS writes or
+locking in panic context. The original SDK panic handler still prints registers
+and a backtrace and resets normally. This is a compact snapshot, not a complete
+core dump. Capture USB logs for the full SDK backtrace.
+
+After the next readable SD mount, POS writes and reads back a new ordinary JSON
+under `POS/Users/Owner/Diagnostics/Crashes/crash-N.json`. On a card without POS,
+reports go to `CrashReports` so they cannot create an incomplete POS installation.
+Existing logs are never
+replaced. The RTC snapshot is cleared only after successful verified export.
+`boot_version` identifies the exporting boot; `panic_version`/`panic_build` identify
+the captured fault when available. Reset reasons (including brownouts/watchdogs)
+can be logged without a panic snapshot. UTC 0 means the clock was unavailable.
+RTC memory may be lost on complete power loss; previously exported SD records
+survive, while an unexported RTC snapshot cannot be guaranteed to survive it.
+
+Internal NVS tracks a pending supervised boot and consecutive failures, across
+power cycles when its writes complete. Three failures open **POS Safe Mode** before
+Wi-Fi, BLE, radio or other optional foreground services are started. A boot is
+healthy after validation and 60 seconds servicing UI events; signed online OTA
+is confirmed only after this healthy interval and another validation. NVS errors
+are not “fixed” by erasing NVS. The earlier RTC/held-shortcut recovery remains a
+fallback.
+
+Safe Mode offers Recovery tools, an explicit Try normal boot, the factory
+installer and Restart. Returning from Recovery does not silently leave Safe Mode.
+Try normal boot clears the failure policy and starts a fresh healthy interval.
+Settings → System / software update → Safe mode on next boot can request this
+path deliberately. Crash reports are accessible through Files, System Settings or
+Recovery. Preserve them alongside the exact build and USB logs for diagnosis.
+
+An update journal is resolved before normal System validation. See
+[UPDATES.md](UPDATES.md#format-and-interruption-recovery); retain the old/failed
+System directories and never discard the only known-good backup.

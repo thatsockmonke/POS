@@ -151,7 +151,7 @@ static int https_once(const char *url, const char *method, const char *body,
                       const char *type, const char *root,
                       const char *destination, const char *sha,
                       pos_io_progress_t progress, void *ctx, pos_error_t *e,
-                      char location[512]) {
+                      char location[512], uint32_t limit) {
   if (!pos_https_url_valid(url) || !method ||
       (strcmp(method, "GET") && strcmp(method, "POST")) ||
       (body && strlen(body) > 4096))
@@ -208,21 +208,21 @@ static int https_once(const char *url, const char *method, const char *body,
     goto done;
   }
   result =
-      pos_receive_file(root, destination,
+      pos_receive_file_limit(root, destination,
                        length < 0 || esp_http_client_is_chunked_response(client)
                            ? UINT64_MAX
                            : (uint64_t)length,
-                       sha, http_read, client, progress, ctx, e);
+                       limit, sha, http_read, client, progress, ctx, e);
 done:
   esp_http_client_close(client);
   esp_http_client_cleanup(client);
   return result;
 }
 
-int pos_network_https(const char *url, const char *method, const char *body,
+int pos_network_https_limit(const char *url, const char *method, const char *body,
                       const char *type, const char *root, const char *dest,
                       const char *sha, pos_io_progress_t progress, void *ctx,
-                      pos_error_t *e) {
+                      pos_error_t *e, uint32_t limit) {
   if (!pos_https_url_valid(url))
     return error(e, "Use an HTTPS URL without embedded credentials.");
   char current[512], location[512];
@@ -230,7 +230,7 @@ int pos_network_https(const char *url, const char *method, const char *body,
   for (unsigned hop = 0; hop < 4; ++hop) {
     location[0] = 0;
     int result = https_once(current, method, body, type, root, dest, sha,
-                            progress, ctx, e, location);
+                            progress, ctx, e, location, limit);
     if (result != 1)
       return result;
     if (progress && progress(ctx, "Following HTTPS redirect", hop + 1, 3))
@@ -239,6 +239,8 @@ int pos_network_https(const char *url, const char *method, const char *body,
   }
   return error(e, "Too many HTTPS redirects. Use the final HTTPS URL.");
 }
+
+int pos_network_https(const char *url,const char *method,const char *body,const char *type,const char *root,const char *dest,const char *sha,pos_io_progress_t progress,void *ctx,pos_error_t *e) {return pos_network_https_limit(url,method,body,type,root,dest,sha,progress,ctx,e,UINT32_MAX);}
 
 static httpd_handle_t server;
 static atomic_bool share_stop_requested;

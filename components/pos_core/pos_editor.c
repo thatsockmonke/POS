@@ -46,11 +46,20 @@ static int copy(FILE *in, FILE *out, uint32_t *size, uint32_t *crc,
   free(buffer);
   return bad || ferror(in) || flush(out) ? -1 : 0;
 }
+static FILE *owned_file(const char *name, const char *mode) {
+  struct stat st;
+  if (!pos_fs_lstat(name, &st)) {
+    if (!S_ISREG(st.st_mode))
+      return NULL;
+  } else if (errno != ENOENT)
+    return NULL;
+  return fopen(name, mode);
+}
 static FILE *index_file(const pos_editor_t *e, unsigned slot,
                         const char *mode) {
   char name[32], full[POS_FS_PATH];
   snprintf(name, sizeof(name), "pieces.%u.csv", slot);
-  return path(e, name, full) ? NULL : fopen(full, mode);
+  return path(e, name, full) ? NULL : owned_file(full, mode);
 }
 /* Each row references immutable base.txt or append-only added.txt. */
 static int piece(FILE *f, char *kind, uint32_t *offset, uint32_t *length) {
@@ -241,13 +250,20 @@ done:
 void pos_editor_discard(pos_editor_t *e) {
   if (!*e->directory)
     return;
-  const char *owned[] = {"base.txt",     "added.txt",    "pieces.0.csv",
-                         "pieces.1.csv", "state.0.json", "state.1.json",
-                         "state.part"};
+  const char *owned[] = {"base.txt",     "added.txt",     "pieces.0.csv",
+                         "pieces.1.csv", "state.0.json",  "state.1.json",
+                         "state.part",   "clipboard.txt", "clipboard.part"};
   char full[POS_FS_PATH];
   for (unsigned i = 0; i < sizeof(owned) / sizeof(*owned); ++i)
     if (!path(e, owned[i], full))
       unlink(full);
+  for (unsigned i = 0; i < 32; ++i)
+    for (unsigned redo = 0; redo < 2; ++redo) {
+      char name[32];
+      snprintf(name, sizeof(name), "%s.%u.csv", redo ? "redo" : "undo", i);
+      if (!path(e, name, full))
+        unlink(full);
+    }
   rmdir(e->directory);
   *e->directory = 0;
 }
@@ -489,11 +505,115 @@ static int emit(writer_t *w, char kind, uint32_t start, uint32_t count) {
   w->count = count;
   return 0;
 }
-int pos_editor_replace(pos_editor_t *e, uint32_t remove, const char *text,
-                       size_t length, pos_error_t *error) {
+enum { HISTORY = 32 };
+static int history_path(const pos_editor_t *e, bool redo, unsigned slot,
+                        char full[POS_FS_PATH]) {
+  char name[40];
+  snprintf(name, sizeof(name), "%s.%u.csv", redo ? "redo" : "undo",
+           slot % HISTORY);
+  return path(e, name, full);
+}
+static int history_snapshot(const pos_editor_t *e, bool redo, unsigned slot) {
+  char full[POS_FS_PATH];
+  if (history_path(e, redo, slot, full))
+    return -1;
+  FILE *in = index_file(e, e->slot, "rb"), *out = owned_file(full, "wb");
+  unsigned char *buffer = malloc(BUFFER);
+  uint32_t crc = 0, size = 0;
+  int bad = !in || !out || !buffer;
+  if (!bad) {
+    size_t n;
+    while ((n = fread(buffer, 1, BUFFER, in))) {
+      crc = pos_crc32(crc, buffer, n);
+      size += n;
+    }
+    bad = ferror(in) || fseek(in, 0, SEEK_SET);
+    if (!bad &&
+        fprintf(out, "POS-EDITOR-HISTORY,1,%u,%u,%u,%u\n", (unsigned)e->length,
+                (unsigned)e->cursor, (unsigned)size, (unsigned)crc) < 0)
+      bad = 1;
+    while (!bad && (n = fread(buffer, 1, BUFFER, in)))
+      if (fwrite(buffer, 1, n, out) != n)
+        bad = 1;
+    if (ferror(in) || flush(out))
+      bad = 1;
+  }
+  if (in)
+    fclose(in);
+  if (out && fclose(out))
+    bad = 1;
+  free(buffer);
+  return bad ? -1 : 0;
+}
+int pos_editor_undo(pos_editor_t *e, bool redo, pos_error_t *error) {
+  unsigned *count = redo ? &e->redo_count : &e->undo_count,
+           *head = redo ? &e->redo_head : &e->undo_head;
+  unsigned *other_count = redo ? &e->undo_count : &e->redo_count,
+           *other_head = redo ? &e->undo_head : &e->redo_head;
+  if (!*count)
+    return fail(error, redo ? "Nothing to redo." : "Nothing to undo.");
+  char full[POS_FS_PATH], header[160], tail;
+  unsigned length, cursor, size, expected;
+  unsigned target = (*head + HISTORY - 1) % HISTORY;
+  if (history_path(e, redo, target, full))
+    return -1;
+  FILE *in = fopen(full, "rb");
+  if (!in)
+    return fail(error, "History unavailable; current draft retained.");
+  if (!fgets(header, sizeof(header), in) ||
+      sscanf(header, "POS-EDITOR-HISTORY,1,%u,%u,%u,%u%c", &length, &cursor,
+             &size, &expected, &tail) != 5 ||
+      tail != '\n' || length > INT32_MAX || cursor > length) {
+    fclose(in);
+    return fail(error, "Invalid history; current draft retained.");
+  }
+  unsigned char *buffer = malloc(BUFFER);
+  unsigned slot = 1 - e->slot;
+  FILE *out = buffer ? index_file(e, slot, "wb") : NULL;
+  uint64_t bytes = 0;
+  uint32_t crc = 0;
+  int bad = !buffer || !out;
+  size_t n;
+  while (!bad && (n = fread(buffer, 1, BUFFER, in))) {
+    bytes += n;
+    crc = pos_crc32(crc, buffer, n);
+    if (bytes > size || fwrite(buffer, 1, n, out) != n)
+      bad = 1;
+  }
+  if (ferror(in) || bytes != size || crc != expected)
+    bad = 1;
+  fclose(in);
+  free(buffer);
+  if (out) {
+    if (flush(out))
+      bad = 1;
+    if (fclose(out))
+      bad = 1;
+  }
+  if (!bad)
+    bad = history_snapshot(e, !redo, *other_head);
+  if (!bad)
+    bad = validate_text(e) || checkpoint(e, slot, length, cursor);
+  if (bad)
+    return fail(error, "Undo/redo failed; current checkpoint retained.");
+  *head = target;
+  --*count;
+  *other_head = (*other_head + 1) % HISTORY;
+  if (*other_count < HISTORY)
+    ++*other_count;
+  e->dirty = true;
+  return 0;
+}
+static int replace_input(pos_editor_t *e, uint32_t remove, const char *text,
+                         size_t length, FILE *input, pos_io_progress_t progress,
+                         void *ctx, pos_error_t *error) {
   if (e->cursor > e->length || remove > e->length - e->cursor ||
       length > INT32_MAX - (e->length - remove))
     return fail(error, "Document exceeds the filesystem seek limit.");
+  if (!remove && !length)
+    return 0;
+  if (history_snapshot(e, false, e->undo_head))
+    return fail(error, "Cannot save undo history; edit not committed.");
   char added[POS_FS_PATH];
   path(e, "added.txt", added);
   uint32_t append;
@@ -504,10 +624,33 @@ int pos_editor_replace(pos_editor_t *e, uint32_t remove, const char *text,
   if (append != e->added_size && prefix_crc(added, append, &new_crc))
     return -1;
   if (length) {
-    FILE *f = fopen(added, "ab");
+    FILE *f = owned_file(added, "ab");
     if (!f)
       return fail(error, "Cannot write editor scratch file.");
-    int bad = fwrite(text, 1, length, f) != length;
+    int bad = 0;
+    if (input) {
+      unsigned char *buffer = malloc(BUFFER);
+      uint32_t done = 0;
+      if (!buffer)
+        bad = 1;
+      while (!bad && done < length) {
+        size_t n = length - done;
+        if (n > BUFFER)
+          n = BUFFER;
+        if (fread(buffer, 1, n, input) != n || fwrite(buffer, 1, n, f) != n) {
+          bad = 1;
+          break;
+        }
+        new_crc = pos_crc32(new_crc, buffer, n);
+        done += n;
+        if (progress && progress(ctx, "Pasting selection", done, length))
+          bad = 1;
+      }
+      free(buffer);
+    } else {
+      bad = fwrite(text, 1, length, f) != length;
+      new_crc = pos_crc32(new_crc, text, length);
+    }
     if (flush(f))
       bad = 1;
     if (fclose(f))
@@ -559,7 +702,7 @@ int pos_editor_replace(pos_editor_t *e, uint32_t remove, const char *text,
   if (fclose(next))
     bad = 1;
   e->added_size = append + length;
-  e->added_crc = pos_crc32(new_crc, text, length);
+  e->added_crc = new_crc;
   if (!bad)
     bad = checkpoint(e, slot, e->length - remove + length, e->cursor + length);
   if (bad) {
@@ -568,8 +711,75 @@ int pos_editor_replace(pos_editor_t *e, uint32_t remove, const char *text,
   }
   if (bad)
     return fail(error, "Edit not committed. Previous draft remains available.");
+  e->undo_head = (e->undo_head + 1) % HISTORY;
+  if (e->undo_count < HISTORY)
+    ++e->undo_count;
+  e->redo_count = 0;
   e->dirty = true;
   return 0;
+}
+int pos_editor_replace(pos_editor_t *e, uint32_t remove, const char *text,
+                       size_t length, pos_error_t *error) {
+  if ((!text && length) || (length && memchr(text, 0, length)))
+    return fail(error, "Text contains invalid NUL bytes.");
+  return replace_input(e, remove, text, length, NULL, NULL, NULL, error);
+}
+int pos_editor_copy_selection(pos_editor_t *e, uint32_t start, uint32_t end,
+                              pos_io_progress_t progress, void *ctx,
+                              pos_error_t *error) {
+  if (start >= end || end > e->length)
+    return fail(error, "Select text first (Shift + arrows or Ctrl+A).");
+  char full[POS_FS_PATH], temporary[POS_FS_PATH];
+  if (path(e, "clipboard.txt", full) || path(e, "clipboard.part", temporary))
+    return -1;
+  FILE *out = owned_file(temporary, "wb");
+  unsigned char *buffer = malloc(BUFFER);
+  int bad = !out || !buffer;
+  uint32_t done = 0, crc = 0;
+  while (!bad && done < end - start) {
+    size_t n, need = end - start - done;
+    if (need > BUFFER)
+      need = BUFFER;
+    if (pos_editor_read(e, start + done, buffer, need, &n) || n != need ||
+        fwrite(buffer, 1, n, out) != n) {
+      bad = 1;
+      break;
+    }
+    crc = pos_crc32(crc, buffer, n);
+    done += n;
+    if (progress && progress(ctx, "Copying selection", done, end - start))
+      bad = 1;
+  }
+  free(buffer);
+  if (out) {
+    if (flush(out))
+      bad = 1;
+    if (fclose(out))
+      bad = 1;
+  }
+  uint32_t check;
+  if (!bad && (pos_fs_crc_file(temporary, done, &check) || check != crc))
+    bad = 1;
+  if (!bad && unlink(full) && errno != ENOENT)
+    bad = 1;
+  if (!bad && rename(temporary, full))
+    bad = 1;
+  return bad ? fail(error, "Clipboard incomplete; document untouched.") : 0;
+}
+int pos_editor_paste(pos_editor_t *e, uint32_t remove,
+                     pos_io_progress_t progress, void *ctx,
+                     pos_error_t *error) {
+  char full[POS_FS_PATH];
+  uint32_t bytes;
+  if (path(e, "clipboard.txt", full) || pos_fs_file_size(full, &bytes) ||
+      bytes > INT32_MAX)
+    return fail(error, "Clipboard empty or unavailable.");
+  FILE *in = fopen(full, "rb");
+  if (!in)
+    return fail(error, "Clipboard unavailable.");
+  int result = replace_input(e, remove, NULL, bytes, in, progress, ctx, error);
+  fclose(in);
+  return result;
 }
 int pos_editor_save(pos_editor_t *e, const char *relative, bool replace,
                     pos_io_progress_t progress, void *ctx, pos_error_t *error) {

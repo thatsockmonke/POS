@@ -38,6 +38,36 @@ class EditorNetworkTests(unittest.TestCase):
         folder=self.run_tool("open","Documents/notes.txt",self.ops(operations)).decode().strip();return folder
     def read(self,folder,length):
         return b"".join(self.run_tool("read",folder,i,min(8192,length-i)) for i in range(0,length,8192))
+    def test_symlinked_undo_workspace_file_cannot_overwrite_a_user_document(self):
+        folder=self.open(b"original")
+        victim=self.root/"Documents/victim.txt";victim.write_bytes(b"preserve this")
+        (self.root/folder/"undo.0.csv").symlink_to(victim)
+        self.run_tool("edit",folder,self.ops([dict(at=0,remove=0,text="edit")]),expected=1)
+        self.assertEqual(victim.read_bytes(),b"preserve this")
+        self.assertEqual((self.root/"Documents/notes.txt").read_bytes(),b"original")
+
+    def test_undo_redo_and_new_edit_after_undo_follow_an_independent_model(self):
+        ops=[dict(at=3,remove=2,text="XYZ"),dict(at=0,remove=0,text="prefix "),dict(action="undo"),dict(action="redo"),dict(action="undo"),dict(action="undo"),dict(action="redo"),dict(at=0,remove=0,text="new ")]
+        folder=self.open(b"abcdefghij",ops)
+        self.assertEqual(self.read(folder,15),b"new abcXYZfghij")
+        self.assertEqual((self.root/"Documents/notes.txt").read_bytes(),b"abcdefghij")
+        self.run_tool("discard",folder)
+        self.assertFalse((self.root/folder).exists())
+    def test_undo_ring_retains_32_edits_and_redo_restores_them(self):
+        edits=[dict(at=i,remove=0,text=chr(65+i%26)) for i in range(40)]
+        folder=self.open(b"",edits+[dict(action="undo")]*32+[dict(action="redo")]*5)
+        expected=bytes(65+i%26 for i in range(13))
+        self.assertEqual(self.read(folder,len(expected)),expected)
+    def test_large_selection_copy_cut_paste_and_undo_use_sd_not_document_ram(self):
+        data=b"line of original words\n"*100000
+        start,end=123,1500000
+        copied=data[start:end]
+        ops=[dict(action="copy",start=start,end=end),dict(at=start,remove=end-start,text=""),dict(action="undo"),dict(action="redo"),dict(action="paste",at=0,remove=0)]
+        folder=self.open(data,ops)
+        model=copied+data[:start]+data[end:]
+        self.assertEqual(self.read(folder,len(model)),model)
+        self.assertEqual((self.root/folder/"clipboard.txt").read_bytes(),copied)
+
     def test_random_edits_match_an_independent_byte_string_model_and_coalesce(self):
         rng=random.Random(107);original=b"start\n"*250;model=original;operations=[]
         for _ in range(160):

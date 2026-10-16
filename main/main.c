@@ -15,8 +15,10 @@
 #include "mbedtls/sha256.h"
 #include "pos_device.h"
 #include "pos_fs.h"
+#include "pos_health.h"
 #include "pos_install.h"
 #include "pos_recovery.h"
+#include "pos_update_service.h"
 #include "sdmmc_cmd.h"
 #include "ui.h"
 #include <stdio.h>
@@ -157,9 +159,9 @@ static int verify_flash(const esp_partition_t *partition,
   return result;
 }
 
-#ifdef POS_INSTALLER
 typedef struct {
   const esp_partition_t *target;
+  bool allow_runtime;
 } installer_context_t;
 
 static int free_space(void *context, const char *root, uint64_t *available) {
@@ -172,7 +174,8 @@ static int check_firmware(void *opaque, const char *path,
                           const pos_package_t *package) {
   installer_context_t *context = opaque;
   const esp_partition_t *running = esp_ota_get_running_partition();
-  if (!running || running->subtype != ESP_PARTITION_SUBTYPE_APP_FACTORY)
+  if (!running || (!context->allow_runtime &&
+                   running->subtype != ESP_PARTITION_SUBTYPE_APP_FACTORY))
     return -1;
   context->target = esp_ota_get_next_update_partition(NULL);
   if (!context->target || package->firmware.size > context->target->size)
@@ -259,6 +262,33 @@ static int select_firmware(void *opaque) {
   return esp_ota_set_boot_partition(context->target) == ESP_OK ? 0 : -1;
 }
 
+#ifndef POS_INSTALLER
+int pos_device_install_update(const char *root, const pos_update_t *u,
+                              pos_error_t *error) {
+  installer_context_t context = {.allow_runtime = true};
+  pos_update_platform_t hooks = {
+      .fetch = pos_update_fetch,
+      .platform = {.ctx = &context,
+                   .free_bytes = free_space,
+                   .write_firmware = write_firmware,
+                   .select_firmware = select_firmware,
+                   .progress = pos_ui_progress}};
+  if (pos_update_apply(root, u, &hooks, error))
+    return -1;
+  if (u->firmware) {
+    pos_ui_notice("Firmware update ready",
+                  "System and inactive firmware are verified. Restarting to "
+                  "test the new runtime. Keep the microSD inserted. It must "
+                  "run reliably for 60 seconds before OTA confirmation.");
+    pos_health_clear();
+    esp_restart();
+    return 0;
+  }
+  return pos_update_service_confirm(root, error);
+}
+#endif
+
+#ifdef POS_INSTALLER
 static void progress(void *context, const char *phase, const char *detail) {
   (void)context;
   ESP_LOGI(TAG, "%s: %s", phase, detail);
@@ -447,9 +477,50 @@ static void select_recovery(void) {
                   "and restart when ready");
 }
 
+static int confirm_updated_boot(void) {
+  pos_package_t *p = NULL;
+  pos_error_t e = {0};
+  if (pos_load_manifest(SD_ROOT "/POS/System/installed.pos", &p, &e))
+    return -1;
+  int bad = strcmp(p->version, esp_app_get_description()->version) ||
+            pos_validate_system(SD_ROOT, p, &e) ||
+            verify_flash(esp_ota_get_running_partition(), p, false);
+  if (!bad) {
+    esp_ota_img_states_t state;
+    esp_err_t result =
+        esp_ota_get_state_partition(esp_ota_get_running_partition(), &state);
+    if (result != ESP_OK)
+      bad = 1;
+    else if (state == ESP_OTA_IMG_PENDING_VERIFY &&
+             esp_ota_mark_app_valid_cancel_rollback() != ESP_OK)
+      bad = 1;
+    else if (state != ESP_OTA_IMG_PENDING_VERIFY && state != ESP_OTA_IMG_VALID)
+      bad = 1;
+  }
+  if (!bad)
+    bad = pos_confirm_system(SD_ROOT, p, &e) ||
+          pos_update_service_confirm(SD_ROOT, &e);
+  pos_package_free(p);
+  return bad ? -1 : 0;
+}
+
 static void runtime(void) {
   pos_package_t *package = NULL;
   pos_error_t error = {0};
+  int update_state =
+      pos_update_recover(SD_ROOT, esp_app_get_description()->version, &error);
+  if (update_state == 2) {
+    esp_ota_mark_app_invalid_rollback_and_reboot();
+    select_recovery();
+    return;
+  }
+  if (update_state < 0) {
+    pos_ui_notice("Update recovery", error.message);
+    select_recovery();
+    pos_desktop(SD_ROOT, true);
+    return;
+  }
+
   int invalid =
       pos_load_manifest(SD_ROOT "/POS/System/installed.pos", &package, &error);
   if (!invalid &&
@@ -480,32 +551,54 @@ static void runtime(void) {
   esp_ota_img_states_t state;
   const esp_partition_t *running = esp_ota_get_running_partition();
   esp_err_t err = esp_ota_get_state_partition(running, &state);
-  if (err == ESP_OK && state == ESP_OTA_IMG_PENDING_VERIFY) {
+  if (err == ESP_OK && state == ESP_OTA_IMG_PENDING_VERIFY &&
+      update_state != 1) {
     err = esp_ota_mark_app_valid_cancel_rollback();
     if (err == ESP_OK)
       err = esp_ota_get_state_partition(running, &state);
   }
-  if (err != ESP_OK || state != ESP_OTA_IMG_VALID) {
+  if (err != ESP_OK ||
+      (state != ESP_OTA_IMG_VALID &&
+       !(update_state == 1 && state == ESP_OTA_IMG_PENDING_VERIFY))) {
     ESP_LOGE(TAG, "Cannot confirm firmware boot; installer payload retained");
     pos_package_free(package);
     return;
   }
   /* Only after the complete SD validation and IDF boot confirmation may cleanup
    * run. */
-  if (pos_confirm_system(SD_ROOT, package, &error))
+  if (update_state != 1 && pos_confirm_system(SD_ROOT, package, &error))
     pos_ui_notice("Boot marker failed", error.message);
-  else {
+  else if (update_state != 1) {
     struct stat backup;
     if (stat(SD_ROOT "/" POS_BACKUP_NAME, &backup) &&
         stat(SD_ROOT "/" POS_BACKUP_SET, &backup) &&
         pos_cleanup_package(SD_ROOT, package, &error))
       ESP_LOGW(TAG, "%s", error.message);
   }
+  if (update_state == 1)
+    pos_health_set_confirm_hook(confirm_updated_boot);
   bool safe_boot = pos_device_safe_boot();
   pos_device_boot_ready(package->firmware.size);
   pos_package_free(package);
-  if (safe_boot)
-    pos_desktop(SD_ROOT, true);
+  while (safe_boot) {
+    const char *items[] = {"Open recovery tools", "Try normal boot",
+                           "Factory installer", "Restart"};
+    int choice = pos_ui_menu("POS Safe Mode", items, 4);
+    if (choice == 0)
+      pos_desktop(SD_ROOT, true);
+    if (choice == 1) {
+      if (pos_health_resume())
+        pos_ui_notice("Safe mode retained",
+                      "Could not save boot policy in NVS. Existing user data "
+                      "has not changed.");
+      else
+        break;
+    }
+    if (choice == 2)
+      select_recovery();
+    if (choice == 3)
+      esp_restart();
+  }
   pos_desktop(SD_ROOT, false);
 }
 #endif
@@ -516,6 +609,13 @@ void app_main(void) {
   ESP_LOGI(TAG, "POS / booting... / %s / %s",
            esp_app_get_description()->project_name,
            esp_app_get_description()->version);
+  pos_health_begin(
+#ifdef POS_INSTALLER
+      false
+#else
+      true
+#endif
+  );
   if (pos_device_init()) {
     ESP_LOGE(TAG, "Cannot initialize input/display services");
     idle();
@@ -550,8 +650,10 @@ void app_main(void) {
       pos_device_sleep();
   }
 #ifdef POS_INSTALLER
+  pos_health_export(SD_ROOT);
   installer();
 #else
+  pos_health_export(SD_ROOT);
   runtime();
 #endif
   idle();

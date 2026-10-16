@@ -1,3 +1,4 @@
+#include "pos_timezone.h"
 #include "ui.h"
 #include <string.h>
 
@@ -26,17 +27,9 @@ bool pos_ui_setup(const char *root, pos_settings_t *settings, bool first) {
         "Use 1-24 letters, numbers or hyphens. Spaces are not allowed. "
         "Ctrl+U clears this field; your display name is kept.");
   }
-  const char *zones[] = {"UTC", "Los Angeles / Pacific", "New York / Eastern",
-                         "Keep current timezone"};
-  int choice = pos_ui_menu("Timezone", zones, 4);
-  if (choice < 0)
+  if (!pos_ui_timezone(next.timezone))
     return false;
-  if (choice == 0)
-    strcpy(next.timezone, "UTC0");
-  if (choice == 1)
-    strcpy(next.timezone, "PST8PDT,M3.2.0,M11.1.0");
-  if (choice == 2)
-    strcpy(next.timezone, "EST5EDT,M3.2.0,M11.1.0");
+  int choice;
   const char *levels[] = {"Dim (25%)", "Normal (70%)", "Bright (100%)"};
   choice = pos_ui_menu("Display brightness", levels, 3);
   if (choice < 0)
@@ -51,4 +44,32 @@ bool pos_ui_setup(const char *root, pos_settings_t *settings, bool first) {
   }
   *settings = next;
   return true;
+}
+
+bool pos_ui_timezone(char timezone[64]) {
+  const char *items[40];
+  for (size_t i = 0; i < pos_timezone_count; ++i)
+    items[i] = pos_timezones[i].name;
+  items[pos_timezone_count] = "Custom POSIX timezone";
+  int choice = pos_ui_menu("Timezone", items, pos_timezone_count + 1);
+  if (choice < 0)
+    return false;
+  if ((size_t)choice < pos_timezone_count) {
+    if (pos_timezones[choice].rule)
+      strcpy(timezone, pos_timezones[choice].rule);
+    return true;
+  }
+  char text[64];
+  strcpy(text, timezone);
+  while (pos_ui_text("Custom timezone", "POSIX rule, e.g. UTC0", text,
+                     sizeof(text), false)) {
+    if (pos_timezone_valid(text)) {
+      strcpy(timezone, text);
+      return true;
+    }
+    pos_ui_notice("Invalid timezone",
+                  "Use a POSIX timezone rule, not an IANA name. Example: "
+                  "PST8PDT,M3.2.0,M11.1.0 or IST-5:30. Escape cancels.");
+  }
+  return false;
 }

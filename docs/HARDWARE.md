@@ -81,7 +81,8 @@ bounded. Available runtime heap still requires an actual device measurement.
 Optional Wi-Fi does not start until requested, uses RAM credential storage and
 may consume significant heap. Saved profiles use a passphrase-encrypted NVS
 vault; HTTPS, time sync and file transfers are implemented. Wireless deployment
-and online software updates remain future work. New firmware still fits the
+remains future work; signed online software updates are implemented with explicit
+feed/key setup. New firmware still fits the
 existing slots, with limited runtime flash headroom; future growth must be
 measured against the actual device's verified flash configuration.
 
@@ -112,3 +113,12 @@ flag holds for 1000 ms after presentation, then validated startup continues.
 Animation frames target 40 ms including transfer time; physical panel timing
 still needs measurement. Rendering reuses the stripe buffer without SD assets
 or a full-screen framebuffer.
+
+Battery status is a smoothed voltage estimate, with icon hysteresis and a
+sustained-voltage full estimate. No GPIO is invented for charger status. The panic
+wrapper uses the pinned SDK's Xtensa panic frame, retains only a bounded RTC
+snapshot and invokes the original handler; flash/SD export happens after reboot.
+The partition offsets are unchanged. New code uses compiler stack guards; launcher
+UI/path workspaces are heap-owned to keep nested update/TLS calls off a large
+resident task frame. Actual stack/heap and electrical fault behavior need device
+measurement.

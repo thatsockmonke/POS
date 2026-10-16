@@ -38,6 +38,11 @@ static int preview(const char *root, const char *output, unsigned screen,
     pos_launcher_view(root, "PANPUTER", &background, POS_LAUNCHER_APP_COUNT - 1,
                       &v);
   }
+  /* Example UI state, not a measurement from a connected device. */
+  v.battery_overlay = true;
+  v.battery_available = true;
+  v.battery_percent = 75;
+  v.battery_bars = 3;
   FILE *f = fopen(output, "wbx");
   if (!f)
     return 1;

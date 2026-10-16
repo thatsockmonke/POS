@@ -30,3 +30,5 @@ int pos_device_wifi_prepare(void);
 void pos_device_wifi_stop(void);
 
 void pos_device_keyboard_begin(void);
+
+int pos_device_set_time_utc(const char *text);

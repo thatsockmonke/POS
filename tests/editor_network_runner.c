@@ -44,6 +44,39 @@ static int operations(pos_editor_t *e, const char *path, pos_error_t *error) {
   cJSON *ops = read_json(path), *op;
   int result = 0;
   cJSON_ArrayForEach(op, ops) {
+    cJSON *action = cJSON_GetObjectItemCaseSensitive(op, "action");
+    if (cJSON_IsString(action)) {
+      if (!strcmp(action->valuestring, "undo") ||
+          !strcmp(action->valuestring, "redo")) {
+        if (pos_editor_undo(e, !strcmp(action->valuestring, "redo"), error)) {
+          result = -1;
+          break;
+        }
+        continue;
+      }
+      if (!strcmp(action->valuestring, "copy")) {
+        cJSON *start = cJSON_GetObjectItemCaseSensitive(op, "start"),
+              *end = cJSON_GetObjectItemCaseSensitive(op, "end");
+        assert(cJSON_IsNumber(start) && cJSON_IsNumber(end));
+        if (pos_editor_copy_selection(e, start->valuedouble, end->valuedouble,
+                                      NULL, NULL, error)) {
+          result = -1;
+          break;
+        }
+        continue;
+      }
+      if (!strcmp(action->valuestring, "paste")) {
+        cJSON *at = cJSON_GetObjectItemCaseSensitive(op, "at"),
+              *remove = cJSON_GetObjectItemCaseSensitive(op, "remove");
+        assert(cJSON_IsNumber(at) && cJSON_IsNumber(remove));
+        e->cursor = at->valuedouble;
+        if (pos_editor_paste(e, remove->valuedouble, NULL, NULL, error)) {
+          result = -1;
+          break;
+        }
+        continue;
+      }
+    }
     cJSON *at = cJSON_GetObjectItemCaseSensitive(op, "at"),
           *remove = cJSON_GetObjectItemCaseSensitive(op, "remove"),
           *text = cJSON_GetObjectItemCaseSensitive(op, "text");

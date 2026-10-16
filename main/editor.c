@@ -1,6 +1,7 @@
 #include "pos_device.h"
 #include "pos_editor.h"
 #include "ui.h"
+#include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
 #include <limits.h>
@@ -10,7 +11,8 @@
 typedef struct {
   uint32_t top, positions[12][31];
   unsigned row, col;
-  bool visible;
+  bool visible, selecting;
+  uint32_t anchor;
 } screen_t;
 static int progress(void *ctx, const char *phase, uint64_t done,
                     uint64_t total) {
@@ -113,6 +115,10 @@ static int render(pos_editor_t *e, screen_t *screen) {
       }
       if (i >= n)
         break;
+      uint32_t low = screen->anchor < e->cursor ? screen->anchor : e->cursor;
+      uint32_t high = screen->anchor > e->cursor ? screen->anchor : e->cursor;
+      if (screen->selecting && offset >= low && offset < high)
+        view.editor_selected[row] |= 1u << col;
       char c;
       unsigned used = glyph(bytes + i, n - i, &c);
       i += used;
@@ -135,8 +141,10 @@ static int render(pos_editor_t *e, screen_t *screen) {
     view.text_editor = true;
     view.editor_cursor_row = screen->row + 2;
     view.editor_cursor_col = screen->col;
-    pos_view_line(&view, 14, "Ctrl+S:save Ctrl+F:find");
-    pos_view_line(&view, 15, "Fn+arrows:move Esc:menu");
+    pos_view_line(&view, 14,
+                  screen->selecting ? "Selecting  Ctrl+C/X:copy/cut"
+                                    : "Ctrl+S:save Ctrl+Z:undo");
+    pos_view_line(&view, 15, "Shift+arrows:select Esc:menu");
     pos_device_show(&view);
     return 0;
   }
@@ -264,6 +272,76 @@ static void find_text(pos_editor_t *e, screen_t *screen, bool line) {
     pos_ui_notice("Editor", result == 1 ? "Not found."
                                         : "Search cancelled or unavailable.");
 }
+static void selection(const pos_editor_t *e, const screen_t *s, uint32_t *start,
+                      uint32_t *count) {
+  *start = e->cursor;
+  *count = 0;
+  if (s->selecting) {
+    *start = s->anchor < e->cursor ? s->anchor : e->cursor;
+    *count = (s->anchor > e->cursor ? s->anchor : e->cursor) - *start;
+  }
+}
+static void clipboard(pos_editor_t *e, screen_t *s, int action) {
+  uint32_t start, count;
+  selection(e, s, &start, &count);
+  pos_error_t error = {0};
+  int result = 0;
+  if (action == 'c' || action == 'x')
+    result = pos_editor_copy_selection(e, start, start + count, progress, NULL,
+                                       &error);
+  if (!result && (action == 'x' || action == 'v')) {
+    uint32_t cursor = e->cursor;
+    e->cursor = start;
+    result = action == 'x' ? pos_editor_replace(e, count, "", 0, &error)
+                           : pos_editor_paste(e, count, progress, NULL, &error);
+    if (result)
+      e->cursor = cursor;
+    else {
+      s->selecting = false;
+      s->top = previous_row(e, e->cursor);
+    }
+  }
+  if (result)
+    pos_ui_notice("Clipboard", error.message);
+}
+static bool word_byte(const pos_editor_t *e, uint32_t at) {
+  unsigned char c;
+  size_t n;
+  return !pos_editor_read(e, at, &c, 1, &n) && n &&
+         (isalnum(c) || c == '_' || c >= 128);
+}
+static void move_cursor(pos_editor_t *e, screen_t *s, int key, bool ctrl) {
+  if (key == POS_KEY_LEFT) {
+    uint32_t at = previous(e, e->cursor);
+    if (ctrl) {
+      while (at && !word_byte(e, at))
+        at = previous(e, at);
+      while (at && word_byte(e, previous(e, at)))
+        at = previous(e, at);
+    }
+    e->cursor = at;
+  } else if (key == POS_KEY_RIGHT) {
+    uint32_t at = next(e, e->cursor);
+    if (ctrl) {
+      while (at < e->length && word_byte(e, at))
+        at = next(e, at);
+      while (at < e->length && !word_byte(e, at))
+        at = next(e, at);
+    }
+    e->cursor = at;
+  } else if (ctrl) {
+    e->cursor = key == POS_KEY_UP ? 0 : e->length;
+    s->top = previous_row(e, e->cursor);
+  } else
+    vertical(e, s, key == POS_KEY_UP ? -1 : 1);
+}
+static void page_move(pos_editor_t *e, screen_t *s, int direction) {
+  for (unsigned i = 0; i < 11; ++i) {
+    vertical(e, s, direction);
+    if (render(e, s))
+      break;
+  }
+}
 static bool edit(pos_editor_t *e) {
   screen_t *screen = calloc(1, sizeof(*screen));
   if (!screen)
@@ -284,12 +362,25 @@ static bool edit(pos_editor_t *e) {
       continue;
     }
     if (event.key == POS_KEY_ESCAPE) {
-      const char *items[] = {"Continue editing",  "Save",
-                             "Save As",           "Share saved file",
-                             "Find text",         "Go to line",
-                             "Start of document", "End of document",
-                             "Close document"};
-      int choice = pos_ui_menu("Text editor", items, 9);
+      const char *items[] = {"Continue editing",
+                             "Save",
+                             "Save As",
+                             "Share saved file",
+                             "Find text",
+                             "Go to line",
+                             "Start of document",
+                             "End of document",
+                             "Close document",
+                             "Undo",
+                             "Redo",
+                             "Select all",
+                             "Copy selection",
+                             "Cut selection",
+                             "Paste",
+                             "Page up",
+                             "Page down",
+                             "Controls help"};
+      int choice = pos_ui_menu("Text editor", items, 18);
       if (choice == 1)
         save_as(e, false);
       if (choice == 2)
@@ -308,6 +399,31 @@ static bool edit(pos_editor_t *e) {
         e->cursor = e->length;
         screen->top = previous_row(e, e->cursor);
       }
+      if (choice == 9 || choice == 10) {
+        pos_error_t error = {0};
+        if (pos_editor_undo(e, choice == 10, &error))
+          pos_ui_notice("History", error.message);
+        screen->selecting = false;
+        screen->top = previous_row(e, e->cursor);
+      }
+      if (choice == 11) {
+        screen->selecting = true;
+        screen->anchor = 0;
+        e->cursor = e->length;
+        screen->top = previous_row(e, e->cursor);
+      }
+      if (choice >= 12 && choice <= 14)
+        clipboard(e, screen, choice == 12 ? 'c' : choice == 13 ? 'x' : 'v');
+      if (choice == 15 || choice == 16)
+        page_move(e, screen, choice == 15 ? -1 : 1);
+      if (choice == 17)
+        pos_ui_notice("Editor controls",
+                      "Shift + arrows: select. Ctrl+A: select all. Ctrl+C/X/V: "
+                      "copy/cut/paste. Ctrl+Z: undo; Ctrl+Y or Ctrl+Shift+Z: "
+                      "redo (32 edits each). Ctrl+arrows: words/document ends. "
+                      "Ctrl+U/D: page up/down. Ctrl+L/E: line start/end. "
+                      "Ctrl+F/G: find/go to line. Ctrl+S: save. Clipboard and "
+                      "history are SD-backed and last for this open document.");
       if (choice == 8 || pos_home_pending()) {
         bool requested = pos_home_pending();
         leave = close_document(e);
@@ -316,45 +432,91 @@ static bool edit(pos_editor_t *e) {
       }
       continue;
     }
+    if (event.key >= POS_KEY_UP && event.key <= POS_KEY_RIGHT) {
+      if (event.modifiers & POS_MOD_SHIFT) {
+        if (!screen->selecting)
+          screen->anchor = e->cursor;
+        screen->selecting = true;
+      } else
+        screen->selecting = false;
+      move_cursor(e, screen, event.key, event.modifiers & POS_MOD_CTRL);
+      continue;
+    }
     if (event.modifiers & POS_MOD_CTRL) {
-      if (event.key == 's' || event.key == 'S')
+      int key = tolower((unsigned char)event.key);
+      if (key == 's')
         save_as(e, false);
-      if (event.key == 'f' || event.key == 'F')
-        find_text(e, screen, false);
-      if (event.key == 'g' || event.key == 'G')
-        find_text(e, screen, true);
+      if (key == 'f' || key == 'g')
+        find_text(e, screen, key == 'g');
+      if (key == 'a') {
+        screen->anchor = 0;
+        screen->selecting = true;
+        e->cursor = e->length;
+        screen->top = previous_row(e, e->cursor);
+      }
+      if (key == 'z' || key == 'y') {
+        pos_error_t error = {0};
+        if (pos_editor_undo(e, key == 'y' || (event.modifiers & POS_MOD_SHIFT),
+                            &error))
+          pos_ui_notice("History", error.message);
+        screen->selecting = false;
+        screen->top = previous_row(e, e->cursor);
+      }
+      if (key == 'c' || key == 'x' || key == 'v')
+        clipboard(e, screen, key);
+      if (key == 'u' || key == 'd') {
+        screen->selecting = false;
+        page_move(e, screen, key == 'u' ? -1 : 1);
+      }
+      if (key == 'l' || key == 'e') {
+        screen->selecting = false;
+        while (key == 'l' ? e->cursor > 0 : e->cursor < e->length) {
+          uint32_t at = key == 'l' ? previous(e, e->cursor) : e->cursor;
+          char c;
+          size_t n;
+          if (pos_editor_read(e, at, &c, 1, &n) || !n || c == '\n' || c == '\r')
+            break;
+          e->cursor = key == 'l' ? at : next(e, e->cursor);
+        }
+        screen->top = previous_row(e, e->cursor);
+      }
       if (pos_home_pending()) {
         leave = close_document(e);
         home = leave;
       }
       continue;
     }
-    if (event.key == POS_KEY_LEFT) {
-      e->cursor = previous(e, e->cursor);
-      continue;
-    }
-    if (event.key == POS_KEY_RIGHT) {
-      e->cursor = next(e, e->cursor);
-      continue;
-    }
-    if (event.key == POS_KEY_UP || event.key == POS_KEY_DOWN) {
-      vertical(e, screen, event.key == POS_KEY_UP ? -1 : 1);
-      continue;
-    }
     pos_error_t error = {0};
+    uint32_t start, count;
+    selection(e, screen, &start, &count);
+    uint32_t old_cursor = e->cursor;
+    bool editing = false;
     int result = 0;
-    if (event.key == POS_KEY_BACKSPACE && e->cursor) {
-      uint32_t end = e->cursor;
-      e->cursor = previous(e, e->cursor);
-      result = pos_editor_replace(e, end - e->cursor, "", 0, &error);
-    } else if (event.key == POS_KEY_ENTER)
-      result = pos_editor_replace(e, 0, "\n", 1, &error);
-    else if (event.key == '\t')
-      result = pos_editor_replace(e, 0, "    ", 4, &error);
-    else if (event.key >= 32 && event.key <= 126 &&
-             !(event.modifiers & POS_MOD_ALT)) {
+    if (event.key == POS_KEY_BACKSPACE && (count || e->cursor)) {
+      if (!count) {
+        start = previous(e, e->cursor);
+        count = e->cursor - start;
+      }
+      e->cursor = start;
+      editing = true;
+      result = pos_editor_replace(e, count, "", 0, &error);
+    } else if (event.key == POS_KEY_ENTER || event.key == '\t' ||
+               (event.key >= 32 && event.key <= 126 &&
+                !(event.modifiers & POS_MOD_ALT))) {
+      e->cursor = start;
+      editing = true;
       char c = event.key;
-      result = pos_editor_replace(e, 0, &c, 1, &error);
+      const char *text = event.key == POS_KEY_ENTER ? "\n"
+                         : event.key == '\t'        ? "    "
+                                                    : &c;
+      result =
+          pos_editor_replace(e, count, text, event.key == '\t' ? 4 : 1, &error);
+    }
+    if (editing) {
+      if (result)
+        e->cursor = old_cursor;
+      else
+        screen->selecting = false;
     }
     if (result)
       pos_ui_notice("Edit not committed", error.message);

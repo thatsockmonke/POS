@@ -125,20 +125,17 @@ static bool file_record(const cJSON *object, pos_file_t *file, bool firmware)
     return true;
 }
 
-int pos_load_manifest(const char *path, pos_package_t **out, pos_error_t *error)
+int pos_parse_manifest(const char *text, size_t size, pos_package_t **out, pos_error_t *error)
 {
     *out = NULL;
-    FILE *f = fopen(path, "rb");
-    if (!f) return fail(error, "Missing or unreadable POS manifest: %s", path);
+    if (!text || !size || size > POS_MANIFEST_MAX || memchr(text, 0, size))
+        return fail(error, "Invalid manifest length");
     pos_package_t *p = calloc(1, sizeof(*p));
-    if (p) p->manifest = malloc(POS_MANIFEST_MAX + 1);
-    if (!p || !p->manifest) { fclose(f); pos_package_free(p); return fail(error, "Not enough heap for manifest"); }
-    p->manifest_size = fread(p->manifest, 1, POS_MANIFEST_MAX + 1, f);
-    int bad = ferror(f);
-    if (fclose(f)) bad = 1;
-    if (bad || !p->manifest_size || p->manifest_size > POS_MANIFEST_MAX ||
-        memchr(p->manifest, 0, p->manifest_size)) goto invalid;
-    p->manifest[p->manifest_size] = 0;
+    if (p) p->manifest = malloc(size + 1);
+    if (!p || !p->manifest) { pos_package_free(p); return fail(error, "Not enough heap for manifest"); }
+    memcpy(p->manifest, text, size);
+    p->manifest[size] = 0;
+    p->manifest_size = size;
     if (strstr(p->manifest, "\\u0000")) goto invalid;
     /* Reject deeply nested input before cJSON can consume the embedded task stack. */
     bool quoted = false, escaped = false;
@@ -181,6 +178,21 @@ invalid:
     pos_package_free(p);
     return fail(error, "Invalid POS package: format, model, version, paths, sizes or hashes");
 }
+int pos_load_manifest(const char *path, pos_package_t **out, pos_error_t *error)
+{
+    *out = NULL;
+    FILE *f = fopen(path, "rb");
+    if (!f) return fail(error, "Missing or unreadable POS manifest: %s", path);
+    char *text = malloc(POS_MANIFEST_MAX + 1);
+    if (!text) { fclose(f); return fail(error, "Not enough heap for manifest"); }
+    size_t size = fread(text, 1, POS_MANIFEST_MAX + 1, f);
+    int bad = ferror(f);
+    if (fclose(f)) bad = 1;
+    int result = bad ? fail(error, "Cannot read POS manifest") : pos_parse_manifest(text, size, out, error);
+    free(text);
+    return result;
+}
+
 
 void pos_package_free(pos_package_t *package)
 {
