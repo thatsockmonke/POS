@@ -36,7 +36,8 @@ static int preview(const char *root, const char *output, bool boot) {
     pos_fs_join(path, root, "System/Assets/apps.icons");
     FILE *icons = fopen(path, "rb");
     if (icons) {
-      fread(v.icons, 1, 24, icons);
+      if (fread(v.icons, 1, sizeof(v.icons), icons) != sizeof(v.icons))
+        memset(v.icons, 0, sizeof(v.icons));
       fclose(icons);
     }
     pos_view_line(&v, 12, "Counter   Settings  Diagnostic");
