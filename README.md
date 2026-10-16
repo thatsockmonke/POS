@@ -4,12 +4,11 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.5.5-dev corrects the upside-down ADV display, makes setup screens black,
-and matches the stock ADV keyboard's Fn behavior. USB flashing is verified
-before the new firmware is allowed to boot.**
-The official signed update feed and verified ROM backup fallback are included.
-Both firmware roles and native tests are checked; the corrected orientation and
-key behavior still need confirmation on Panputer.
+**0.5.6-dev makes the USB installer distinguish original recovery backups from
+snapshots of an older POS installation. Invalid Y/N answers are retried, and
+the on-device installer shows its own firmware version.**
+The display, black setup screens and stock ADV keyboard corrections from
+0.5.5-dev are included. They still need confirmation after a completed USB flash.
 
 ## Download and install
 
@@ -121,14 +120,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.5.5-dev/launcher.png)
-![Color picker](downloads/0.5.5-dev/color-picker.png)
+![Launcher](downloads/0.5.6-dev/launcher.png)
+![Color picker](downloads/0.5.6-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.5.5-dev/boot-animation.png)
+![POS boot animation](downloads/0.5.6-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.5.5-dev/boot-splash.png)
+[Final splash frame](downloads/0.5.6-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -145,7 +144,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.5-dev --zip-output dist/pos-0.5.5-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.6-dev --zip-output dist/pos-0.5.6-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png

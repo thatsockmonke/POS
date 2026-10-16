@@ -8,7 +8,7 @@ manual flash addresses or an understanding of partitions.
 
 ## Start here
 
-1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.5-dev).
+1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.6-dev).
 2. Download **`pos-setup`**. This is the executable wizard, not the Source code ZIP.
    Its optional `pos-setup.sha256` checksum is beside it. The complete POS ZIP
    also includes a copy of the wizard.
@@ -168,9 +168,42 @@ USB and share it with Linux again before retrying. If ROM reads also fail,
 try another data cable/port or a regular Linux computer: the tool cannot repair
 ChromeOS USB forwarding. Keep all completed backups.
 
+### New SD files prepared, but the old upside-down installer still boots
+
+Preparing the SD card does not reflash the software on the ESP32. The wizard
+first restores a saved recovery backup, asks you to confirm the original
+manufacturer software boots, and **only then** asks you to type **FLASH** to
+write the downloaded POS USB installer. If the wizard stops before that step,
+the new installer has not been flashed.
+
+In the reported 0.5.5-dev attempt, a new snapshot of an older POS installer was
+created and restored. The wizard then received `t` at its Y/N boot question and
+stopped. That explains why the old installer and its old input behavior remained.
+This is not evidence that the 0.5.5-dev driver changes were tested on the device.
+
+Use the **earliest original pre-POS factory backup**, not a fresh snapshot of
+POS. The updated wizard identifies POS snapshots by their application descriptor
+and refuses to treat them as factory recovery proof. Snapshots remain available
+in the separate restore menu. Previously observed original recovery backups are
+labelled clearly; the operator must still confirm the factory software is visible.
+Invalid Y/N input is now re-prompted instead of silently declining.
+
+For the reported device, the known original filename ends in
+**1792184685107168701.bin**. Keep it and its `.json`. When that original software
+has been restored and is visible, answer **Y** and continue to the **FLASH**
+prompt. Look for **NEW POS VERSION installer USB flash and readback completed**.
+New firmware also shows its version in the on-device installer title and prints
+`POS_BUILD` on USB at startup.
+
+A card already prepared with 0.5.5-dev can be kept: use the new pos-setup with
+`--release v0.5.5-dev`, choose **Flash Cardputer only**, and select that original
+backup. The repaired host prompts are embedded in the new executable. This
+installs the already-prepared 0.5.5-dev software; formatting/re-copying is unnecessary.
+
 ### Upgrading the prepared installer after the upside-down-screen fix
 
-The display/keyboard fix is in **both 0.5.5-dev firmware roles**. Refresh the
+The display/keyboard fix was introduced in **both 0.5.5-dev firmware roles**
+and is included in 0.5.6-dev. Refresh the
 SD package as well as the USB installer; using `--release v0.5.3-dev` would keep
 installing the old firmware.
 
@@ -181,7 +214,7 @@ If the card has only the old installer files and you have **not installed POS**:
    **pos-install-old** (or another unused name). Keep the old files; formatting
    is unnecessary. Preserve any `pos-install.copying` folder under another name too.
 3. Download this release's **pos-setup**, replace the old executable and run it
-   with `--release v0.5.5-dev`. Choose **2. Prepare the microSD only** and select
+   with `--release v0.5.6-dev`. Choose **2. Prepare the microSD only** and select
    the card's shared top-level folder. It copies and verifies the matching package.
 4. Eject the card, put it into the powered-off ADV, connect the ADV and share its
    USB connection with Linux. Run the same command and choose **3. Flash Cardputer
@@ -197,7 +230,7 @@ With the paths used in the reported Crostini session, run:
 
 ```sh
 chmod +x "/mnt/shared/MyFiles/Downloads/pos-setup"
-"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.5.5-dev --sd-folder "/mnt/shared/removable/POS Drive"
+"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.5.6-dev --sd-folder "/mnt/shared/removable/POS Drive"
 ```
 
 If the card already contains an installed **/POS** tree, keep it and your files.
@@ -209,8 +242,8 @@ Optional commands for troubleshooting:
 
 ```sh
 ~/pos-setup --download-only                 # Download/verify without device changes
-~/pos-setup --release v0.5.5-dev             # Use a specific published version
-~/pos-setup --bundle /path/pos-0.5.5-dev.zip # Use a ZIP and matching .sha256 offline
+~/pos-setup --release v0.5.6-dev             # Use a specific published version
+~/pos-setup --bundle /path/pos-0.5.6-dev.zip # Use a ZIP and matching .sha256 offline
 ~/pos-setup --sd-folder '/mnt/chromeos/removable/YOUR CARD'
 ```
 

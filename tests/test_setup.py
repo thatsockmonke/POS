@@ -45,6 +45,39 @@ class SetupTests(unittest.TestCase):
         (self.package/"firmware.bin").write_bytes(bytes(range(256))*500)
         (self.package/"payload/System").mkdir(parents=True);(self.package/"payload/System/README.txt").write_text("POS")
 
+    def test_yes_no_typo_reprompts_instead_of_declining_factory_boot(self):
+        with patch("builtins.input",side_effect=["t","y"]),patch.object(wizard,"say") as say:
+            self.assertTrue(wizard.ask("Factory software visible?"))
+        self.assertIn("not accepted",say.call_args.args[0])
+        with patch("builtins.input",side_effect=["maybe","no"]):self.assertFalse(wizard.ask("Continue?",default=True))
+        with patch("builtins.input",return_value=""):self.assertFalse(wizard.ask("Continue?"))
+
+    def test_backup_labels_identify_pos_snapshot_and_cannot_mislabel_it_as_factory(self):
+        backup=self.root/"snapshot.bin"
+        backup.write_bytes(bytes(0x10000)+image("0.5.3-dev","pos_installer"))
+        self.assertEqual(wizard.backup_pos_version(backup),"0.5.3-dev")
+        self.assertIn("POS 0.5.3-dev snapshot",wizard.recovery_backup_label(backup))
+        backup.write_bytes(bytes(0x10000)+image("1.0.0","stock_demo"))
+        self.assertIsNone(wizard.backup_pos_version(backup))
+        self.assertIn("identity needs confirmation",wizard.recovery_backup_label(backup))
+        metadata=dict(sha256=storage.sha256(backup),device_id="aa:bb:cc:dd:ee:ff")
+        Path(str(backup)+".json").write_text(json.dumps(metadata))
+        Path(str(backup)+".pos-setup-recovery.json").write_text(json.dumps(dict(factory_boot_observed=True,backup_sha256=metadata["sha256"],device_id=metadata["device_id"])))
+        self.assertIn("factory boot previously confirmed",wizard.recovery_backup_label(backup))
+        backup.write_bytes(bytes(0x10000)+image("0.5.3-dev","pos_installer"))
+        self.assertIn("not factory firmware",wizard.recovery_backup_label(backup))
+
+    def test_selected_pos_snapshot_is_preserved_and_cannot_be_restored_as_factory(self):
+        backup=self.root/"old-pos.bin";backup.write_bytes(bytes(0x10000)+image("0.5.3-dev","pos_installer"))
+        Path(str(backup)+".json").write_text(json.dumps(dict(device_id="aa:bb:cc:dd:ee:ff")))
+        with patch.object(wizard,"serial_port",return_value="mock-port"),patch.object(wizard,"ask",return_value=True), \
+             patch.object(wizard,"saved_backups",return_value=[backup]),patch.object(wizard,"choose",return_value=0), \
+             patch.object(posctl,"hardware_probe",return_value=dict(device_id="aa:bb:cc:dd:ee:ff",plain_development_flash=True)), \
+             patch.object(posctl,"factory_restore") as restored:
+            with self.assertRaisesRegex(storage.SetupError,"contains POS 0.5.3-dev"):
+                wizard.backup_and_recovery(self.state)
+        restored.assert_not_called();self.assertTrue(backup.exists())
+
     def bundle(self, extra=None, edit_manifest=None):
         firmware=image("0.5.1-dev");payload=b"POS system asset"
         record=lambda p,b:dict(path=p,size=len(b),sha256=hashlib.sha256(b).hexdigest())

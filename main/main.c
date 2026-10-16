@@ -338,6 +338,9 @@ static void boot_existing(void) {
 }
 
 static void installer(void) {
+  char title[POS_COLS + 1];
+  snprintf(title, sizeof(title), "POS %.16s Installer",
+           esp_app_get_description()->version);
   const char *choices[] = {"Boot existing POS",
                            "Install POS / resume",
                            "Repair from original package",
@@ -346,7 +349,7 @@ static void installer(void) {
                            "Sleep / shut down"};
   for (;;) {
     (void)pos_ui_take_home();
-    int choice = pos_ui_menu("POS Installer / Recovery", choices, 6);
+    int choice = pos_ui_menu(title, choices, 6);
     if (choice < 0)
       continue;
     if (choice == 0) {
@@ -606,6 +609,8 @@ static void runtime(void) {
 void app_main(void) {
   setvbuf(stdin, NULL, _IONBF, 0);
   setvbuf(stdout, NULL, _IONBF, 0);
+  printf("POS_BUILD %s %s\n", esp_app_get_description()->project_name,
+         esp_app_get_description()->version);
   ESP_LOGI(TAG, "POS / booting... / %s / %s",
            esp_app_get_description()->project_name,
            esp_app_get_description()->version);

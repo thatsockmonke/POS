@@ -1,4 +1,4 @@
-POS 0.5.5-dev - Pan Operating System
+POS 0.5.6-dev - Pan Operating System
 
 Boot: pink -> yellow -> blue flashes. Yellow slides into the middle, then
 pink slides into the top starting halfway through yellow. Large POS fades

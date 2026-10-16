@@ -25,7 +25,7 @@ import zipfile
 import pos_setup_storage as storage
 from pos_setup_storage import SetupError
 
-VERSION = "0.5.5-dev"
+VERSION = "0.5.6-dev"
 REPOSITORY = "thatsockmonke/POS"
 MAX_DOWNLOAD = 256 * 1024 * 1024
 MAX_UNPACK = 256 * 1024 * 1024
@@ -38,8 +38,15 @@ def say(message=""):
 
 def ask(question: str, *, default=False) -> bool:
     suffix = " [Y/n] " if default else " [y/N] "
-    answer = input(question + suffix).strip().lower()
-    return answer in ("y", "yes") or (not answer and default)
+    while True:
+        answer = input(question + suffix).strip().lower()
+        if answer in ("y", "yes"):
+            return True
+        if answer in ("n", "no"):
+            return False
+        if not answer:
+            return default
+        say("Please type Y or N, then press Enter. Your previous answer was not accepted.")
 
 
 def choose(title: str, items: list[str]) -> int:
@@ -424,6 +431,41 @@ def saved_backups(folder: Path, device_id: str) -> list[Path]:
     return [p for _,p in sorted(result)]
 
 
+def backup_pos_version(backup: Path) -> str | None:
+    """Recognize POS in its factory slot; never claim unknown firmware is stock."""
+    with backup.open("rb") as stream:
+        stream.seek(0x10000)
+        header = stream.read(288)
+    if (len(header) != 288 or header[0] != 0xe9 or header[12:14] != b"\x09\x00" or
+            header[32:36] != b"\x32\x54\xcd\xab"):
+        return None
+    project = header[80:112].split(b"\0", 1)[0]
+    if project not in (b"pos_installer", b"pos_runtime"):
+        return None
+    version = header[48:80].split(b"\0", 1)[0].decode("ascii", errors="replace")
+    return version if re.fullmatch(r"[0-9][A-Za-z0-9._-]{0,30}", version) else "unknown version"
+
+
+def recovery_backup_label(backup: Path) -> str:
+    version = backup_pos_version(backup)
+    if version:
+        return backup.name + " — POS " + version + " snapshot (not factory firmware)"
+    proof = Path(str(backup) + ".pos-setup-recovery.json")
+    try:
+        if not proof.is_symlink() and proof.stat().st_size <= 32768:
+            observation = json.loads(proof.read_text())
+            metadata = json.loads(Path(str(backup) + ".json").read_text())
+            if (isinstance(observation, dict) and isinstance(metadata, dict) and
+                    metadata.get("sha256") and metadata.get("device_id") and
+                    observation.get("factory_boot_observed") is True and
+                    observation.get("backup_sha256") == metadata.get("sha256") and
+                    observation.get("device_id") == metadata.get("device_id")):
+                return backup.name + " — original recovery backup; factory boot previously confirmed"
+    except (OSError, ValueError, TypeError):
+        pass
+    return backup.name + " — saved software; original/factory identity needs confirmation"
+
+
 def backup_and_recovery(state: Path) -> tuple[str, Path]:
     import posctl
     port = serial_port()
@@ -436,7 +478,9 @@ def backup_and_recovery(state: Path) -> tuple[str, Path]:
         raise SetupError("Device identity/security state is unsupported. No firmware will be written; use the correct vendor recovery instructions.")
     folder = private_directory(state / "backups")
     previous = saved_backups(folder, probe["device_id"])
-    choice = choose("Verified backups for this Cardputer (earliest first)", [p.name for p in previous]+["Make a new backup of the software currently on it"]) if previous else 0
+    if previous:
+        say("For factory recovery, select the earliest ORIGINAL pre-POS backup. Making a new snapshot copies whatever is on the device now; it does not install the downloaded POS firmware.")
+    choice = choose("Choose the ORIGINAL recovery backup (earliest first)", [recovery_backup_label(p) for p in previous]+["Make a NEW snapshot of current software (may already be POS)"]) if previous else 0
     if choice < len(previous):
         backup = previous[choice]
         say("Using your existing verified backup: " + str(backup))
@@ -456,13 +500,18 @@ def backup_and_recovery(state: Path) -> tuple[str, Path]:
     metadata = json.loads(Path(str(backup)+".json").read_text())
     if metadata.get("device_id") != probe["device_id"]:
         raise SetupError("The connected Cardputer changed during backup. Backup retained; reconnect the correct device and rerun.")
-    say("Next, restore this verified original backup and check that the original software boots. This proves the USB recovery route before installing experimental POS.")
+    version = backup_pos_version(backup)
+    if version:
+        raise SetupError("This backup contains POS " + version + ", not the original factory software. "
+                         "It is safely kept as a POS snapshot, but cannot prove factory recovery. "
+                         "Rerun Flash Cardputer only and select the earliest pre-POS backup instead. No restore or POS installer flash was attempted.")
+    say("Next, restore the selected saved software and confirm the ORIGINAL manufacturer software boots. The NEW POS USB installer is flashed AFTER this recovery check; downloaded SD files do not change the current firmware.")
     if not ask("Restore the verified original backup now?", default=True):
         raise SetupError("POS flashing paused. Your backup is kept; complete recovery verification before installing.")
     with live_usb():
         posctl.factory_restore(port, backup, True)
-    say("\nOriginal firmware restored and readback verified. Power-cycle the ADV if needed.")
-    if not ask("Can you SEE the original/factory software running on the Cardputer's screen?"):
+    say("\nSaved software restored and readback verified. The NEW POS installer has NOT been flashed yet. Power-cycle the ADV if needed.")
+    if not ask("Can you SEE the original M5Stack factory software (not the POS Installer menu)?"):
         raise SetupError("Factory boot was not confirmed. POS has not been flashed; keep the backup and resolve recovery first.")
     report = {"format": 1, "device_id": probe["device_id"], "backup_sha256": posctl.sha256(backup),
               "factory_boot_observed": True, "basis": "operator observation", "utc": int(time.time())}
@@ -540,11 +589,13 @@ def flash(bundle: Path, state: Path, port: str, backup: Path) -> None:
     if input("Type FLASH to install the POS USB installer: ").strip() != "FLASH":
         raise SetupError("Flash cancelled. The prepared card and original backup are kept.")
     image = bundle / "pos-installer-usb.bin"
+    version = json.loads((bundle / "card/pos-install/manifest.pos").read_text())["version"]
+    say("NOW flashing the new POS " + version + " USB installer. This is separate from preparing the microSD or restoring your backup.")
     args = argparse.Namespace(confirm_flash=True, image=image, sha256=posctl.sha256(image), factory_backup=backup, port=port)
     say("Writing the POS installer over USB and verifying flash readback...")
     with live_usb():
         pos_deploy.flash(args, posctl)
-    say("\nUSB flash and readback completed. The on-device POS installation is NEXT:")
+    say("\nNEW POS " + version + " installer USB flash and readback completed. The on-device POS installation is NEXT:")
     say("  1. Power Panputer off and on, leaving its microSD inserted.")
     say("  2. On its screen choose 'Install POS / resume' with Up/Down and Enter.")
     say("     ADV arrows: hold Fn with ; (Up) or . (Down).")
@@ -581,7 +632,7 @@ def main(argv=None) -> int:
     parser.add_argument("--version", action="version", version="POS Setup " + VERSION)
     parser.add_argument("--doctor", action="store_true", help="Read-only check of Linux/Crostini card/USB access")
     parser.add_argument("--download-only", action="store_true", help="Download and verify the latest published POS, including development releases")
-    parser.add_argument("--release", help="Choose a specific release, e.g. v0.5.5-dev")
+    parser.add_argument("--release", help="Choose a specific release, e.g. v0.5.6-dev")
     parser.add_argument("--bundle", type=Path, help="Use an already downloaded POS ZIP plus matching .sha256 file")
     parser.add_argument("--sd-folder", type=Path, help="Offer this mounted/shared card folder (copy only; never formats)")
     parser.add_argument("--work-dir", type=Path, default=Path.home()/".local/share/pos-setup", help="Private download/backup folder; default ~/.local/share/pos-setup")
@@ -606,7 +657,7 @@ def main(argv=None) -> int:
                 raise SetupError("Downloaded release tag and firmware version differ; installation stopped.")
             say("Verified POS " + manifest["version"] + ": " + str(bundle))
             return 0
-        action = choose("What would you like to do?", ["Install POS: prepare microSD + flash Cardputer", "Prepare the microSD only", "Flash Cardputer only (microSD already prepared)", "Restore a saved original/factory backup", "Show connection help / read-only doctor"])
+        action = choose("What would you like to do?", ["Install POS: prepare microSD + flash Cardputer", "Prepare the microSD only", "Flash Cardputer only (microSD already prepared)", "Restore a saved backup (original firmware or POS snapshot)", "Show connection help / read-only doctor"])
         if action == 4:
             doctor(state)
             return 0
@@ -619,12 +670,12 @@ def main(argv=None) -> int:
                 identity = posctl.hardware_probe(port)
             folder = private_directory(state/"backups")
             available = saved_backups(folder, identity.get("device_id", ""))
-            index = choose("Restore a verified backup for this Cardputer", [p.name for p in available]+["Choose a .bin file from another folder"])
+            index = choose("Restore saved software for this Cardputer", [recovery_backup_label(p) for p in available]+["Choose a .bin file from another folder"])
             backup = available[index] if index<len(available) else Path(input("Path to the saved .bin (keep its .json beside it): ").strip()).expanduser()
-            if ask("Restore this original backup to the matching Cardputer? This replaces its internal flash."):
+            if ask("Restore the selected saved software to the matching Cardputer? This replaces its internal flash; it does not install the downloaded POS release."):
                 with live_usb():
                     posctl.factory_restore(port, backup, True)
-                say("Original backup restored and readback verified. Power-cycle and observe its boot.")
+                say("Selected backup restored and readback verified. The downloaded POS installer was not flashed. Power-cycle and observe the saved software boot.")
             return 0
         archive, version = download_release(GitHub(interactive=True), state, args.release) if not args.bundle else (args.bundle.expanduser(), None)
         bundle, manifest = extract_verified(archive, state)
