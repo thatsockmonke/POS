@@ -73,8 +73,12 @@ yellow `#FFD800`, blue `#21B1FF`, each shown once for 180 ms. The reference is
 The LCD uses RGB565 values `0xF911`, `0xFEC0`, `0x259F`;
 actual panel color appearance still requires on-device observation.
 
-After those flashes, a full-width flag uses three equal horizontal stripes
-(pink/yellow/blue) with large black POS lettering centered on the yellow stripe.
-It stays visible for 1000 ms after the frame transfer completes, then normal
-validated startup continues. Rendering uses the existing reusable stripe buffer,
-without SD assets or a full-screen framebuffer.
+After the blue flash, yellow slides in from the left into the middle third.
+When yellow is halfway across, pink starts sliding into the top third; blue
+remains underneath. Each slide takes a nominal 400 ms with a 200 ms stagger.
+Black POS lettering then fades in over 400 ms. Its visible 198x91-pixel bounds
+are centered, reaching halfway into the pink and blue stripes. The completed
+flag holds for 1000 ms after presentation, then validated startup continues.
+Animation frames target 40 ms including transfer time; physical panel timing
+still needs measurement. Rendering reuses the stripe buffer without SD assets
+or a full-screen framebuffer.

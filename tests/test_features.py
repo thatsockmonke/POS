@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -230,10 +231,57 @@ class FeatureTests(unittest.TestCase):
         self.run_feature("resume-backup");self.run_feature("verify");self.run_feature("match")
         self.assertTrue((self.card/"POS-Filesystem-Backup/interrupted").is_dir())
 
-    def test_boot_flashes_then_full_flag_with_pos_for_one_second(self):
+    def test_boot_slides_yellow_then_pink_and_fades_large_centered_pos(self):
         report=json.loads(self.run_feature("boot-splash").stdout)
-        self.assertTrue(report["four_frames_once"]);self.assertTrue(report["flag_stripes"])
-        self.assertTrue(report["pos_letters"]);self.assertEqual(report["splash_ms"],1000)
+        for key in ("yellow_first","pink_staggered","smooth_fade","large_centered_letters"):
+            self.assertTrue(report[key])
+        self.assertEqual(report["splash_ms"],1000)
+
+    def test_animated_preview_matches_device_frames_and_timings(self):
+        output=self.base/"boot-animation.png"
+        subprocess.run([sys.executable,str(ROOT/"tools/posctl.py"),"preview",
+                        "--screen","boot","--animate","--output",str(output)],check=True)
+        png=output.read_bytes();self.assertEqual(png[:8],b"\x89PNG\r\n\x1a\n")
+        offset=8;sequence=0;holds=[];frames=[];payload=None
+        while offset<len(png):
+            size=struct.unpack_from(">I",png,offset)[0]
+            kind=png[offset+4:offset+8];data=png[offset+8:offset+8+size]
+            self.assertEqual(zlib.crc32(kind+data),struct.unpack_from(">I",png,offset+8+size)[0])
+            offset+=size+12
+            if kind==b"acTL":self.assertEqual(struct.unpack(">II",data),(29,0))
+            if kind==b"fcTL":
+                if payload is not None:frames.append(zlib.decompress(payload))
+                seq,width,height,x,y,delay,denom,dispose,blend=struct.unpack(">IIIIIHHBB",data)
+                self.assertEqual((seq,width,height,x,y,denom,dispose,blend),(sequence,240,135,0,0,1000,0,0))
+                sequence+=1;holds.append(delay);payload=b""
+            if kind==b"IDAT":payload+=data
+            if kind==b"fdAT":
+                self.assertEqual(struct.unpack_from(">I",data)[0],sequence)
+                sequence+=1;payload+=data[4:]
+            if kind==b"IEND":
+                frames.append(zlib.decompress(payload));break
+        self.assertEqual(offset,len(png));self.assertEqual(len(frames),29)
+        self.assertEqual(holds,[180]*3+[40]*25+[1000])
+        for frame in frames:
+            self.assertEqual(len(frame),135*721)
+            self.assertTrue(all(frame[y*721]==0 for y in range(135)))
+        def pixel(frame,x,y):return tuple(frames[frame][y*721+1+x*3:y*721+4+x*3])
+        pink,yellow,blue=[pixel(i,239,134) for i in range(3)]
+        self.assertEqual(pixel(7,119,60),yellow);self.assertEqual(pixel(7,120,60),blue)
+        self.assertEqual(pixel(7,0,0),blue)
+        self.assertEqual(pixel(8,23,0),pink);self.assertEqual(pixel(8,24,0),blue)
+        self.assertEqual(pixel(17,30,22),pink)
+        self.assertNotIn(pixel(18,30,22),(pink,(0,0,0)))
+        self.assertEqual(pixel(28,30,22),(0,0,0));self.assertEqual(frames[27],frames[28])
+        static=self.base/"boot-splash.png"
+        subprocess.run([sys.executable,str(ROOT/"tools/posctl.py"),"preview",
+                        "--screen","boot","--output",str(static)],check=True)
+        data=static.read_bytes();offset=8;payload=b""
+        while offset<len(data):
+            size=struct.unpack_from(">I",data,offset)[0]
+            if data[offset+4:offset+8]==b"IDAT":payload+=data[offset+8:offset+8+size]
+            offset+=size+12
+        self.assertEqual(zlib.decompress(payload),frames[-1])
 
     def test_ctrl_u_character_limits_and_password_masking(self):
         report=json.loads(self.run_feature("text-qol").stdout)

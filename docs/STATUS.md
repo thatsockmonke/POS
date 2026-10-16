@@ -1,4 +1,4 @@
-# POS feature status — 0.3.3-dev
+# POS feature status — 0.3.4-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -6,7 +6,7 @@ are evidence of software behavior; actual ADV behavior is still unverified.
 
 | Area | Current implementation | Remaining work |
 | --- | --- | --- |
-| Boot appearance | Pink → yellow → blue flashes (180 ms each), full striped flag with POS (1 second), then normal boot | Observe orientation/color on actual ADV |
+| Boot appearance | Pink → yellow → blue flashes (180 ms each), yellow slides into the middle over blue, pink follows halfway through; large POS fades across all stripes, holds 1 second, then normal boot | Observe orientation/color on actual ADV |
 | Display/input | ST7789 output, TCA8418 decode, WASD/context routing, global Home, held recovery shortcut, nonblocking USB fallback | Verify all 56 positions, wiring, timing and stalled-app recovery physically |
 | Core/UI/apps | Central event loop, streamed icons, six-app launcher, one foreground app, lifecycle and cleanup, paginated menus/notices/browser with page counts and empty state | More apps, user-installable package format, sandboxing where practical |
 | Setup/settings | Display/device name, timezone presets, brightness, skip/session Wi-Fi, checksummed redundant preferences, in-place name validation, Ctrl+U and field limits | Persistent secure Wi-Fi profiles, time synchronization, broader preferences |

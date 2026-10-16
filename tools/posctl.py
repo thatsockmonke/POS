@@ -275,24 +275,56 @@ def native_helper() -> Path:
     return target
 
 
-def preview(output: Path, screen: str = "launcher") -> None:
+def preview(output: Path, screen: str = "launcher", animate: bool = False) -> None:
+    if animate and screen != "boot":
+        raise ValueError("Animated preview is only available for the boot screen")
     if output.exists():
         raise ValueError("Preview output exists; choose a fresh filename")
     output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="pos-preview-") as temp:
-        ppm = Path(temp) / "launcher.ppm"
-        subprocess.run([str(native_helper()), str(ROOT / "sd-payload"), "boot-preview" if screen == "boot" else "preview", str(ppm)], check=True)
-        data = ppm.read_bytes()
+    import zlib
+
+    def chunk(kind: bytes, contents: bytes) -> bytes:
+        return (struct.pack(">I", len(contents)) + kind + contents +
+                struct.pack(">I", zlib.crc32(kind + contents)))
+
+    def pixels(path: Path) -> bytes:
+        data = path.read_bytes()
         prefix = b"P6\n240 135\n255\n"
         if not data.startswith(prefix) or len(data) != len(prefix) + 240 * 135 * 3:
             raise ValueError("Native renderer returned an invalid image")
-        import zlib
-        def chunk(kind: bytes, contents: bytes) -> bytes:
-            return struct.pack(">I", len(contents)) + kind + contents + struct.pack(">I", zlib.crc32(kind + contents))
         rgb = data[len(prefix):]
         scanlines = b"".join(b"\0" + rgb[y*720:(y+1)*720] for y in range(135))
-        png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 240, 135, 8, 2, 0, 0, 0)) +
-               chunk(b"IDAT", zlib.compress(scanlines)) + chunk(b"IEND", b""))
+        return zlib.compress(scanlines)
+
+    with tempfile.TemporaryDirectory(prefix="pos-preview-") as temp:
+        directory = Path(temp)
+        helper = str(native_helper())
+        payload = str(ROOT / "sd-payload")
+        png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 240, 135, 8, 2, 0, 0, 0))
+        if animate:
+            result = subprocess.run([helper, payload, "boot-frames", temp],
+                                    check=True, capture_output=True, text=True)
+            holds = [int(value) for value in result.stdout.splitlines()]
+            if not holds or any(not 0 < value <= 65535 for value in holds):
+                raise ValueError("Native renderer returned invalid frame timings")
+            png += chunk(b"acTL", struct.pack(">II", len(holds), 0))
+            sequence = 0
+            for frame, hold in enumerate(holds):
+                png += chunk(b"fcTL", struct.pack(">IIIIIHHBB", sequence, 240, 135,
+                                                    0, 0, hold, 1000, 0, 0))
+                sequence += 1
+                data = pixels(directory / f"{frame}.ppm")
+                if frame == 0:
+                    png += chunk(b"IDAT", data)
+                else:
+                    png += chunk(b"fdAT", struct.pack(">I", sequence) + data)
+                    sequence += 1
+        else:
+            ppm = directory / "preview.ppm"
+            subprocess.run([helper, payload, "boot-preview" if screen == "boot" else "preview",
+                            str(ppm)], check=True)
+            png += chunk(b"IDAT", pixels(ppm))
+        png += chunk(b"IEND", b"")
         with output.open("xb") as stream:
             stream.write(png)
 
@@ -378,6 +410,7 @@ def main() -> int:
     p = commands.add_parser("preview", help="Render the actual portable launcher primitives to PNG")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--screen", choices=["launcher", "boot"], default="launcher")
+    p.add_argument("--animate", action="store_true", help="Export the boot sequence as an animated PNG")
     p = commands.add_parser("recovery", help="Run POS's portable backup/restore services on a Linux SD mount")
     p.add_argument("action", choices=["scan", "backup", "backup-set", "resume-backup", "verify", "restore"])
     p.add_argument("--root", type=Path, required=True)
@@ -420,7 +453,7 @@ def main() -> int:
             if args.zip_output:
                 print(f"Complete download: {archive_bundle(bundle, args.zip_output.absolute())}")
         elif args.command == "preview":
-            preview(args.output,args.screen)
+            preview(args.output,args.screen,args.animate)
         elif args.command == "recovery":
             if args.action == "restore" and not args.confirm_restore:
                 raise ValueError("Review the archive and destination, then supply --confirm-restore; conflicts are preserved")

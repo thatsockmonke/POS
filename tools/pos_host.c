@@ -19,14 +19,13 @@ static int progress(void *ctx, const char *phase, const char *name,
   }
   return 0;
 }
-static int preview(const char *root, const char *output, bool boot) {
-  FILE *f = fopen(output, "wbx");
-  if (!f)
-    return 1;
+static int preview(const char *root, const char *output, bool boot,
+                   unsigned frame) {
   pos_view_t v;
   if (boot) {
     uint32_t hold;
-    pos_boot_frame(POS_BOOT_COLOR_COUNT, &v, &hold);
+    if (!pos_boot_frame(frame, &v, &hold))
+      return 2;
   } else {
     pos_view_clear(&v, "PANPUTER");
     pos_view_line(&v, 2, "Hello, Stevie");
@@ -44,6 +43,9 @@ static int preview(const char *root, const char *output, bool boot) {
     pos_view_line(&v, 14, "Page 1/2   Counter");
     pos_view_line(&v, 15, "WASD: move  Enter: open");
   }
+  FILE *f = fopen(output, "wbx");
+  if (!f)
+    return 1;
   fprintf(f, "P6\n240 135\n255\n");
   int result = 0;
   for (int y = 0; y < 135; ++y)
@@ -63,8 +65,26 @@ int main(int argc, char **argv) {
   if (argc < 3)
     return 2;
   const char *root = argv[1], *command = argv[2];
+  if (!strcmp(command, "boot-frames")) {
+    if (argc != 4)
+      return 2;
+    pos_view_t view;
+    uint32_t hold;
+    for (unsigned frame = 0; pos_boot_frame(frame, &view, &hold); ++frame) {
+      char output[POS_FS_PATH];
+      int size = snprintf(output, sizeof(output), "%s/%u.ppm", argv[3], frame);
+      if (size < 0 || (size_t)size >= sizeof(output))
+        return 2;
+      int result = preview(root, output, true, frame);
+      if (result)
+        return result;
+      printf("%u\n", (unsigned)hold);
+    }
+    return 0;
+  }
   if (!strcmp(command, "preview") || !strcmp(command, "boot-preview"))
-    return argc == 4 ? preview(root, argv[3], !strcmp(command, "boot-preview"))
+    return argc == 4 ? preview(root, argv[3], !strcmp(command, "boot-preview"),
+                               POS_BOOT_HOLD_FRAME)
                      : 2;
   struct statvfs fs;
   if (statvfs(root, &fs))

@@ -1,7 +1,8 @@
-POS 0.3.3-dev - Pan Operating System
+POS 0.3.4-dev - Pan Operating System
 
-Boot: pink -> yellow -> blue flashes, then the full striped flag with POS
-for one second, followed by normal startup.
+Boot: pink -> yellow -> blue flashes. Yellow slides into the middle, then
+pink slides into the top starting halfway through yellow. Large POS fades
+in across all three stripes, holds one second, then normal startup continues.
 Ctrl+U clears text fields; setup validates names before continuing.
 Files shows folder pages and empty folders. Keep SD inserted when restarting.
 

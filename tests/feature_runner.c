@@ -131,32 +131,84 @@ static int boot_splash_tests(void) {
   for (unsigned step = 0; step < POS_BOOT_COLOR_COUNT; ++step) {
     assert(pos_boot_frame(step, &view, &hold));
     assert(hold == 180 && view.solid_color && !view.boot_splash);
-    assert(pos_view_pixel(&view, 0, 0) == pos_boot_colors[step]);
+    for (int y = 0; y < 135; ++y)
+      for (int x = 0; x < 240; ++x)
+        assert(pos_view_pixel(&view, x, y) == pos_boot_colors[step]);
     total += hold;
   }
-  assert(pos_boot_frame(POS_BOOT_COLOR_COUNT, &view, &hold));
-  assert(hold == 1000 && view.boot_splash && !view.solid_color);
+  unsigned slides = POS_BOOT_SLIDE_FRAMES + POS_BOOT_STAGGER_FRAMES;
+  for (unsigned frame = 1; frame <= slides; ++frame) {
+    assert(pos_boot_frame(POS_BOOT_COLOR_COUNT + frame - 1, &view, &hold));
+    assert(hold == 40 && view.boot_splash && !view.solid_color);
+    assert(!view.boot_text_alpha);
+    unsigned yellow = frame < 10 ? frame * 24 : 240;
+    unsigned pink = frame <= 5 ? 0 : frame < 15 ? (frame - 5) * 24 : 240;
+    for (int y = 0; y < 135; ++y)
+      for (int x = 0; x < 240; ++x) {
+        unsigned color = y < 45 && x < (int)pink                ? 0
+                         : y >= 45 && y < 90 && x < (int)yellow ? 1
+                                                                : 2;
+        assert(pos_view_pixel(&view, x, y) == pos_boot_colors[color]);
+      }
+    total += hold;
+  }
+  uint16_t previous[3] = {pos_boot_colors[0], pos_boot_colors[1],
+                          pos_boot_colors[2]};
+  for (unsigned frame = 0; frame < POS_BOOT_FADE_FRAMES; ++frame) {
+    assert(pos_boot_frame(POS_BOOT_COLOR_COUNT + slides + frame, &view, &hold));
+    assert(hold == 40 && view.boot_pink_width == 240 &&
+           view.boot_yellow_width == 240);
+    for (unsigned stripe = 0; stripe < 3; ++stripe) {
+      uint16_t pixel = pos_view_pixel(&view, 30, 22 + stripe * 39);
+      assert((pixel >> 11) <= (previous[stripe] >> 11));
+      assert(((pixel >> 5) & 63) <= ((previous[stripe] >> 5) & 63));
+      assert((pixel & 31) <= (previous[stripe] & 31));
+      if (frame == 0)
+        assert(pixel != 0 && pixel != pos_boot_colors[stripe]);
+      previous[stripe] = pixel;
+      assert(pos_view_pixel(&view, 239, stripe * 45) ==
+             pos_boot_colors[stripe]);
+    }
+    total += hold;
+  }
+  assert(!previous[0] && !previous[1] && !previous[2]);
+  assert(pos_boot_frame(POS_BOOT_HOLD_FRAME, &view, &hold));
+  assert(hold == 1000 && view.boot_text_alpha == 255);
   total += hold;
-  unsigned ink[3] = {0};
+  unsigned ink[3] = {0}, ink_stripes[3] = {0};
+  int left = 240, right = 0, top = 135, bottom = 0;
   for (int y = 0; y < 135; ++y)
     for (int x = 0; x < 240; ++x) {
       uint16_t pixel = pos_view_pixel(&view, x, y);
       if (pixel == 0) {
-        assert(y >= 51 && y < 83 && x >= 72 && x < 168);
-        ++ink[(x - 72) / 32];
+        assert(y >= 22 && y < 113 && x >= 21 && x < 219);
+        ++ink[(x - 21) / 72];
+        ++ink_stripes[y / 45];
+        if (x < left)
+          left = x;
+        if (x > right)
+          right = x;
+        if (y < top)
+          top = y;
+        if (y > bottom)
+          bottom = y;
       } else
         assert(pixel == pos_boot_colors[y / 45]);
     }
   for (unsigned i = 0; i < 3; ++i)
-    assert(ink[i] > 100);
-  assert(total == 1540);
-  assert(!pos_boot_frame(POS_BOOT_COLOR_COUNT + 1, &view, &hold));
+    assert(ink[i] > 500 && ink_stripes[i] > 500);
+  assert(left == 21 && right == 218 && top == 22 && bottom == 112);
+  assert(total == 2540);
+  assert(!pos_boot_frame(POS_BOOT_HOLD_FRAME + 1, &view, &hold));
   assert(!pos_boot_frame(UINT32_MAX, &view, &hold));
+  assert(!pos_boot_frame(0, NULL, &hold));
+  assert(!pos_boot_frame(0, &view, NULL));
   pos_view_clear(&view, "Home");
-  assert(!view.boot_splash && !view.solid_color);
+  assert(!view.boot_splash && !view.solid_color && !view.boot_text_alpha);
+  assert(!view.boot_pink_width && !view.boot_yellow_width);
   assert(pos_view_pixel(&view, 0, 90) != pos_boot_colors[2]);
-  puts("{\"four_frames_once\":true,\"flag_stripes\":true,\"pos_letters\":true,"
-       "\"splash_ms\":1000}");
+  puts("{\"yellow_first\":true,\"pink_staggered\":true,\"smooth_fade\":true,"
+       "\"large_centered_letters\":true,\"splash_ms\":1000}");
   return 0;
 }
 static int text_qol_tests(void) {

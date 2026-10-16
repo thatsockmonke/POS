@@ -6,11 +6,12 @@ You do not need to compile the OS to use a prebuilt package.
 
 ## Current development package
 
-**POS 0.3.3-dev — experimental, hardware validation not yet performed.**
+**POS 0.3.4-dev — experimental, hardware validation not yet performed.**
 
-- [POS 0.3.3-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.3.3-dev)
-- [Download pos-0.3.3-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.3.3-dev/pos-0.3.3-dev.zip)
-- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.3.3-dev/pos-0.3.3-dev.zip.sha256)
+- [POS 0.3.4-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.3.4-dev)
+- [Download pos-0.3.4-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.3.4-dev/pos-0.3.4-dev.zip)
+- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.3.4-dev/pos-0.3.4-dev.zip.sha256)
+- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.3.4-dev/boot-animation.png)
 - [Browse versioned downloads](https://github.com/thatsockmonke/POS/tree/main/downloads)
 - [Full installation guide](INSTALL.md)
 - [Implemented / partial / planned features](STATUS.md)
@@ -34,7 +35,7 @@ GitHub may wrap the artifact in another ZIP; extract that wrapper, then use the
 named `pos-VERSION.zip` and `.sha256` file inside.
 
 Pushing a matching `vVERSION` tag runs the checks and creates an **experimental
-prerelease** with the ZIP/checksum and splash preview attached. The tag must match `PROJECT_VER` in
+prerelease** with the ZIP/checksum and static/animated splash previews attached. The tag must match `PROJECT_VER` in
 CMakeLists.txt. The main branch build uploads artifacts; it does not automatically
 claim hardware validation or mark development firmware stable.
 
@@ -49,7 +50,7 @@ From the source checkout with ESP-IDF v5.5.5 activated:
 ```sh
 python tools/posctl.py build
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --output dist/pos-0.3.3-dev --zip-output dist/pos-0.3.3-dev.zip
+python tools/posctl.py bundle --output dist/pos-0.3.4-dev --zip-output dist/pos-0.3.4-dev.zip
 ```
 
 Choose a fresh output name if one already exists. `bundle` verifies images and

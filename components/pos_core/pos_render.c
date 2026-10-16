@@ -6,7 +6,7 @@
 const uint16_t pos_boot_colors[POS_BOOT_COLOR_COUNT] = {0xf911, 0xfec0, 0x259f};
 
 bool pos_boot_frame(unsigned step, pos_view_t *view, uint32_t *hold_ms) {
-  if (step > POS_BOOT_COLOR_COUNT || !view || !hold_ms)
+  if (step > POS_BOOT_HOLD_FRAME || !view || !hold_ms)
     return false;
   pos_view_clear(view, "POS");
   if (step < POS_BOOT_COLOR_COUNT) {
@@ -15,7 +15,20 @@ bool pos_boot_frame(unsigned step, pos_view_t *view, uint32_t *hold_ms) {
     *hold_ms = POS_BOOT_COLOR_MS;
   } else {
     view->boot_splash = true;
-    *hold_ms = POS_BOOT_SPLASH_MS;
+    unsigned frame = step - POS_BOOT_COLOR_COUNT + 1;
+    unsigned slides = POS_BOOT_SLIDE_FRAMES + POS_BOOT_STAGGER_FRAMES;
+    view->boot_yellow_width = frame < POS_BOOT_SLIDE_FRAMES
+                                  ? 240 * frame / POS_BOOT_SLIDE_FRAMES
+                                  : 240;
+    unsigned pink =
+        frame > POS_BOOT_STAGGER_FRAMES ? frame - POS_BOOT_STAGGER_FRAMES : 0;
+    view->boot_pink_width =
+        pink < POS_BOOT_SLIDE_FRAMES ? 240 * pink / POS_BOOT_SLIDE_FRAMES : 240;
+    unsigned fade = frame > slides ? frame - slides : 0;
+    view->boot_text_alpha =
+        fade < POS_BOOT_FADE_FRAMES ? 255 * fade / POS_BOOT_FADE_FRAMES : 255;
+    *hold_ms =
+        step == POS_BOOT_HOLD_FRAME ? POS_BOOT_SPLASH_MS : POS_BOOT_FRAME_MS;
   }
   return true;
 }
@@ -24,16 +37,28 @@ uint16_t pos_view_pixel(const pos_view_t *v, int x, int y) {
   if (!v || x < 0 || x >= 240 || y < 0 || y >= 135)
     return 0;
   if (v->boot_splash) {
-    /* Three equal 45-pixel horizontal stripes; 4x font centered on yellow. */
-    int tx = x - (240 - 3 * 8 * 4) / 2, ty = y - (135 - 8 * 4) / 2;
-    if (tx >= 0 && tx < 3 * 8 * 4 && ty >= 0 && ty < 8 * 4) {
+    uint16_t background = pos_boot_colors[2];
+    if (y < 45 && x < v->boot_pink_width)
+      background = pos_boot_colors[0];
+    else if (y >= 45 && y < 90 && x < v->boot_yellow_width)
+      background = pos_boot_colors[1];
+    /* Center the visible 198x91 ink, including the font's trailing blank
+     * columns/row. Letters reach halfway into both outer stripes. */
+    int tx = x - 21, ty = y - 22;
+    if (v->boot_text_alpha && tx >= 0 && tx < 3 * 8 * 9 && ty >= 0 &&
+        ty < 7 * 13) {
       static const char title[] = "POS";
-      if ((font8x8_basic[(unsigned char)title[tx / 32]][ty / 4] >>
-           ((tx / 4) % 8)) &
-          1)
-        return 0; /* Black letters stay legible against the yellow stripe. */
+      if ((font8x8_basic[(unsigned char)title[tx / 72]][ty / 13] >>
+           ((tx / 9) % 8)) &
+          1) {
+        unsigned remaining = 255 - v->boot_text_alpha;
+        unsigned red = (((background >> 11) & 31) * remaining + 127) / 255;
+        unsigned green = (((background >> 5) & 63) * remaining + 127) / 255;
+        unsigned blue = ((background & 31) * remaining + 127) / 255;
+        return (red << 11) | (green << 5) | blue;
+      }
     }
-    return pos_boot_colors[y / 45];
+    return background;
   }
   if (v->solid_color)
     return v->color_rgb565;

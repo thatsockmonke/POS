@@ -37,7 +37,13 @@ int pos_navigation(
 enum {
   POS_BOOT_COLOR_COUNT = 3,
   POS_BOOT_COLOR_MS = 180,
-  POS_BOOT_SPLASH_MS = 1000
+  POS_BOOT_SPLASH_MS = 1000,
+  POS_BOOT_FRAME_MS = 40,
+  POS_BOOT_SLIDE_FRAMES = 10,
+  POS_BOOT_STAGGER_FRAMES = 5,
+  POS_BOOT_FADE_FRAMES = 10,
+  POS_BOOT_HOLD_FRAME = POS_BOOT_COLOR_COUNT + POS_BOOT_SLIDE_FRAMES +
+                        POS_BOOT_STAGGER_FRAMES + POS_BOOT_FADE_FRAMES
 };
 extern const uint16_t pos_boot_colors[POS_BOOT_COLOR_COUNT];
 typedef struct {
@@ -49,12 +55,15 @@ typedef struct {
   bool solid_color;
   uint16_t color_rgb565;
   bool boot_splash;
+  uint16_t boot_pink_width;
+  uint16_t boot_yellow_width;
+  uint8_t boot_text_alpha;
 } pos_view_t;
 void pos_view_clear(pos_view_t *view, const char *title);
 void pos_view_line(pos_view_t *view, int row, const char *format, ...);
 uint16_t pos_view_pixel(const pos_view_t *view, int x, int y);
-/* Three color flashes, then the full flag/POS splash; false after the last
- * frame. */
+/* Three color flashes, staggered flag slides, text fade, then a one-second
+ * hold. False after the last frame. Frames require no SD assets. */
 bool pos_boot_frame(unsigned step, pos_view_t *view, uint32_t *hold_ms);
 
 typedef struct {

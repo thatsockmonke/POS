@@ -269,10 +269,17 @@ void pos_device_boot_flash(void) {
   pos_view_t view;
   uint32_t hold_ms;
   for (unsigned i = 0; pos_boot_frame(i, &view, &hold_ms); ++i) {
+    int64_t start = esp_timer_get_time();
     pos_device_show(&view);
     if (!info.display_ok)
       break;
-    vTaskDelay(pdMS_TO_TICKS(hold_ms));
+    /* Count transfer time toward animation frame pacing; still hold the
+     * flashes and final splash for their full duration after presentation. */
+    int64_t remaining = (int64_t)hold_ms * 1000;
+    if (view.boot_splash && i != POS_BOOT_HOLD_FRAME)
+      remaining -= esp_timer_get_time() - start;
+    TickType_t ticks = remaining > 0 ? pdMS_TO_TICKS((remaining + 999) / 1000) : 0;
+    vTaskDelay(ticks ? ticks : 1);
   }
 }
 

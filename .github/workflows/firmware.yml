@@ -56,13 +56,14 @@ jobs:
           . "$GITHUB_WORKSPACE/esp-idf/export.sh"
           python tools/posctl.py bundle --output dist/bundle --zip-output "dist/pos-${POS_VERSION}.zip"
           python tools/posctl.py preview --screen boot --output dist/boot-splash.png
+          python tools/posctl.py preview --screen boot --animate --output dist/boot-animation.png
       - uses: actions/upload-artifact@v4
         with:
           name: pos-firmware-${{ steps.version.outputs.version }}
           path: |
             POS/dist/*.zip
             POS/dist/*.zip.sha256
-            POS/dist/boot-splash.png
+            POS/dist/boot-*.png
           compression-level: 0
           if-no-files-found: error
   prerelease:
@@ -90,8 +91,8 @@ jobs:
               echo "Release $POS_TAG already exists; keeping its published assets."
               exit 0
             fi
-            gh release upload "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/boot-splash.png --clobber
+            gh release upload "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/*.png --clobber
             gh release edit "$POS_TAG" --draft=false --prerelease --latest=false --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md
           else
-            gh release create "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/boot-splash.png --verify-tag --prerelease --latest=false --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md
+            gh release create "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/*.png --verify-tag --prerelease --latest=false --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md
           fi
