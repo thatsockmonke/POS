@@ -55,7 +55,9 @@ int pos_fs_layout(const char *root) {
                         "POS/Updates",
                         "Downloads",
                         "Music",
-                        "Games"};
+                        "Music/Playlists",
+                        "POS/Users/Owner/Radio",
+                        "POS/Users/Owner/RangeTests"};
   for (size_t i = 0; i < sizeof(dirs) / sizeof(*dirs); ++i) {
     char path[POS_FS_PATH];
     if (pos_fs_join(path, root, dirs[i]) || pos_fs_mkdirs(path))

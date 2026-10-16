@@ -10,10 +10,12 @@
 #include "esp_vfs_fat.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "pos_ble.h"
 #include "pos_device.h"
 #include "pos_fs.h"
 #include "pos_launcher.h"
 #include "pos_network.h"
+#include "pos_peripherals.h"
 #include "pos_recovery.h"
 #include "pos_settings.h"
 #include "ui.h"
@@ -563,140 +565,17 @@ static void diagnostics(services_t *s) {
   }
 }
 
-static void terminal(services_t *s) {
-  for (;;) {
-    char command[96] = "";
-    if (!pos_ui_text("Recovery terminal", "ls, cat PATH, cp SRC DST, free",
-                     command, sizeof(command), false))
-      return;
-    char *arg = strchr(command, ' ');
-    if (arg)
-      *arg++ = 0;
-    if (!strcmp(command, "ls")) {
-      pos_ui_browse(s->root, arg ? arg : "");
-      continue;
-    }
-    if (!strcmp(command, "pwd")) {
-      pos_ui_notice("Working directory", "/");
-      continue;
-    }
-    if (!strcmp(command, "free")) {
-      char text[120];
-      snprintf(text, sizeof(text), "SD free: %llu bytes\nHeap: %u bytes",
-               (unsigned long long)free_space(s->root),
-               (unsigned)esp_get_free_heap_size());
-      pos_ui_notice("free", text);
-      continue;
-    }
-    if (!strcmp(command, "cat") && arg && pos_fs_archive_path(arg)) {
-      char path[POS_FS_PATH], text[361];
-      pos_fs_join(path, s->root, arg);
-      FILE *f = fopen(path, "rb");
-      if (!f) {
-        pos_ui_notice("cat", "File unavailable");
-        continue;
-      }
-      size_t n = fread(text, 1, 360, f);
-      fclose(f);
-      text[n] = 0;
-      for (size_t i = 0; i < n; ++i)
-        if ((unsigned char)text[i] < 32 && text[i] != '\n')
-          text[i] = '.';
-      pos_ui_notice(arg, text);
-      continue;
-    }
-    if (!strcmp(command, "cp") && arg) {
-      char *to = strchr(arg, ' ');
-      if (to)
-        *to++ = 0;
-      if (!to || !pos_fs_archive_path(arg) || !pos_fs_archive_path(to) ||
-          !pos_fs_user_path(to)) {
-        pos_ui_notice("cp", "Use relative SD paths. Writes to system/reserved "
-                            "locations are refused.");
-        continue;
-      }
-      char src[POS_FS_PATH], dest[POS_FS_PATH], temp[POS_FS_PATH],
-          scratch[POS_FS_PATH];
-      pos_fs_join(src, s->root, arg);
-      pos_fs_join(dest, s->root, to);
-      pos_fs_join(scratch, s->root, ".POS-Recovery-Temp");
-      if (pos_fs_mkdirs(scratch))
-        continue;
-      pos_fs_join(temp, s->root, ".POS-Recovery-Temp/recovery-copy.part");
-      struct stat st;
-      if (!stat(dest, &st)) {
-        pos_ui_notice("cp", "Destination exists; it was preserved.");
-        continue;
-      }
-      FILE *in = fopen(src, "rb");
-      if (!in)
-        continue;
-      if (unlink(temp) && errno != ENOENT) {
-        fclose(in);
-        continue;
-      }
-      FILE *out = fopen(temp, "wx");
-      unsigned char *buffer = malloc(8192);
-      int bad = !out || !buffer;
-      uint64_t total = 0;
-      uint32_t crc = 0;
-      size_t n;
-      while (!bad && (n = fread(buffer, 1, 8192, in))) {
-        if (fwrite(buffer, 1, n, out) != n)
-          bad = 1;
-        crc = pos_crc32(crc, buffer, n);
-        total += n;
-        if (total > UINT32_MAX ||
-            pos_ui_progress(NULL, "File recovery", arg, total, 0))
-          bad = 1;
-      }
-      if (ferror(in))
-        bad = 1;
-      fclose(in);
-      if (out) {
-        if (fflush(out) || fsync(fileno(out)))
-          bad = 1;
-        if (fclose(out))
-          bad = 1;
-      }
-      free(buffer);
-      uint32_t actual;
-      if (!bad &&
-          (pos_fs_crc_file(temp, (uint32_t)total, &actual) || actual != crc))
-        bad = 1;
-      char parent[POS_FS_PATH];
-      strcpy(parent, dest);
-      char *slash = strrchr(parent, '/');
-      if (slash)
-        *slash = 0;
-      if (!bad && (pos_fs_mkdirs(parent) || rename(temp, dest)))
-        bad = 1;
-      pos_ui_notice("cp", bad ? "Copy incomplete; source preserved."
-                              : "Copied and verified. Source preserved.");
-      continue;
-    }
-    if (!strcmp(command, "reboot"))
-      esp_restart();
-    if (!strcmp(command, "shutdown"))
-      pos_device_sleep();
-    pos_ui_notice("Commands",
-                  "ls [PATH], pwd, cat PATH, cp SRC DST, free, reboot, "
-                  "shutdown. Paths are relative to the SD root.");
-  }
-}
-
 static void recovery(services_t *s) {
   const char *items[] = {"Repair / reinstall (factory)",
                          "Back up user filesystem",
                          "Restore verified backup",
                          "Browse previous installation",
-                         "File recovery terminal",
                          "Hardware diagnostics",
                          "Sleep / shut down",
                          "Back"};
   for (;;) {
-    int choice = pos_ui_menu("POS Recovery", items, 8);
-    if (choice < 0 || choice == 7)
+    int choice = pos_ui_menu("POS Recovery", items, 7);
+    if (choice < 0 || choice == 6)
       return;
     if (choice == 0) {
       const char *yes[] = {"Restart into factory installer", "Cancel"};
@@ -710,22 +589,41 @@ static void recovery(services_t *s) {
     if (choice == 3)
       pos_ui_browse(s->root, "POS.previous");
     if (choice == 4)
-      terminal(s);
-    if (choice == 5)
       diagnostics(s);
-    if (choice == 6)
+    if (choice == 5)
       pos_device_sleep();
   }
 }
 
 static void settings_foreground(void *state) {
-  setup(*(services_t **)state, false);
+  services_t *services = *(services_t **)state;
+#ifdef POS_INSTALLER
+  setup(services, false);
+#else
+  while (!pos_home_pending()) {
+    const char *items[] = {"Personal preferences", "Wi-Fi",
+                           "Expansion hardware", "Back"};
+    int choice = pos_ui_menu("Settings", items, 4);
+    if (choice < 0 || choice == 3)
+      break;
+    if (choice == 0)
+      setup(services, false);
+    if (choice == 1)
+      pos_ui_wifi(services->root);
+    if (choice == 2)
+      pos_ui_expansion(services->root);
+  }
+#endif
 }
 static void diagnostics_foreground(void *state) {
   diagnostics(*(services_t **)state);
 }
 static void files_foreground(void *state) {
+#ifndef POS_INSTALLER
+  pos_ui_files((*(services_t **)state)->root);
+#else
   pos_ui_browse((*(services_t **)state)->root, "POS/Users/Owner");
+#endif
 }
 static void background_foreground(void *state) {
   services_t *services = *(services_t **)state;
@@ -745,12 +643,56 @@ static void wifi_foreground(void *state) {
   (void)state;
 #endif
 }
+static void music_foreground(void *state) {
+#ifndef POS_INSTALLER
+  pos_ui_music((*(services_t **)state)->root);
+#else
+  (void)state;
+#endif
+}
+static void share_foreground(void *state) {
+#ifndef POS_INSTALLER
+  pos_ui_sharing((*(services_t **)state)->root);
+#else
+  (void)state;
+#endif
+}
+static void location_foreground(void *state) {
+#ifndef POS_INSTALLER
+  pos_ui_location((*(services_t **)state)->root);
+#else
+  (void)state;
+#endif
+}
+static void radio_foreground(void *state) {
+#ifndef POS_INSTALLER
+  pos_ui_radio((*(services_t **)state)->root);
+#else
+  (void)state;
+#endif
+}
+static void range_foreground(void *state) {
+#ifndef POS_INSTALLER
+  pos_ui_range((*(services_t **)state)->root);
+#else
+  (void)state;
+#endif
+}
 static void recovery_foreground(void *state) {
   recovery(*(services_t **)state);
 }
 static void modal_render(void *state, pos_view_t *view) {
   (void)state;
   pos_view_clear(view, "Launcher");
+}
+static bool radio_app_available(void *services) {
+  (void)services;
+#ifndef POS_INSTALLER
+  pos_expansion_status_t hardware = pos_expansion_status();
+  return hardware.cap_detected && hardware.lora_enabled;
+#else
+  return false;
+#endif
 }
 static const pos_app_t modal_apps[] = {{.name = "Settings",
                                         .state_size = sizeof(services_t *),
@@ -786,11 +728,51 @@ static const pos_app_t modal_apps[] = {{.name = "Settings",
                                         .state_size = sizeof(services_t *),
                                         .initialize = service_init,
                                         .foreground = wifi_foreground,
+                                        .render = modal_render},
+                                       {.name = "Music",
+                                        .state_size = sizeof(services_t *),
+                                        .initialize = service_init,
+                                        .foreground = music_foreground,
+                                        .render = modal_render},
+                                       {.name = "Share",
+                                        .state_size = sizeof(services_t *),
+                                        .initialize = service_init,
+                                        .foreground = share_foreground,
+                                        .render = modal_render},
+                                       {.name = "Location",
+                                        .state_size = sizeof(services_t *),
+                                        .initialize = service_init,
+                                        .foreground = location_foreground,
+                                        .render = modal_render},
+                                       {.name = "Radio",
+                                        .state_size = sizeof(services_t *),
+                                        .initialize = service_init,
+                                        .foreground = radio_foreground,
+                                        .available = radio_app_available,
+                                        .render = modal_render},
+                                       {.name = "Range Test",
+                                        .state_size = sizeof(services_t *),
+                                        .initialize = service_init,
+                                        .foreground = range_foreground,
+                                        .available = radio_app_available,
                                         .render = modal_render}};
 
+#ifndef POS_INSTALLER
+static void stop_services(void) {
+  pos_audio_stop();
+  pos_ble_stop();
+  pos_expansion_stop();
+}
+#endif
 void pos_desktop(const char *root, bool recovery_only) {
   (void)pos_ui_take_home();
   services_t services = {.root = root};
+#ifndef POS_INSTALLER
+  if (!recovery_only) {
+    pos_expansion_init(root);
+    pos_device_set_sleep_hook(stop_services);
+  }
+#endif
   pos_settings_defaults(&services.settings);
   int settings = pos_settings_load(root, &services.settings);
   if (recovery_only) {
@@ -850,7 +832,8 @@ void pos_desktop(const char *root, bool recovery_only) {
         if (key == POS_KEY_RIGHT)
           selected = (selected + 1) % POS_LAUNCHER_APP_COUNT;
         if (key == POS_KEY_LEFT)
-          selected = (selected + POS_LAUNCHER_APP_COUNT - 1) % POS_LAUNCHER_APP_COUNT;
+          selected =
+              (selected + POS_LAUNCHER_APP_COUNT - 1) % POS_LAUNCHER_APP_COUNT;
         if (key == POS_KEY_ENTER) {
           if (selected == 0) {
             if (pos_core_open(&core, &counter_app))
@@ -860,7 +843,11 @@ void pos_desktop(const char *root, bool recovery_only) {
           if ((selected >= 1 && selected <= 4) || selected >= 6) {
             int modal = selected >= 6 ? selected - 2 : selected - 1;
             if (pos_core_open(&core, &modal_apps[modal]))
-              pos_ui_notice("App unavailable", "Initialization failed.");
+              pos_ui_notice("App unavailable",
+                            (selected == 12 || selected == 13)
+                                ? "LoRa cap missing or features disabled. Open "
+                                  "Settings > Expansion hardware."
+                                : "Initialization failed.");
             else if (pos_core_close(&core))
               pos_ui_notice("App save failed",
                             "Existing saved files retained.");
@@ -883,6 +870,12 @@ void pos_desktop(const char *root, bool recovery_only) {
     else {
       pos_launcher_view(system_root, services.settings.device_name,
                         &services.settings.background, selected, &view);
+#ifndef POS_INSTALLER
+      if (selected == 12 || selected == 13) {
+        if (!radio_app_available(NULL))
+          pos_view_line(&view, 13, "Disabled: check Settings");
+      }
+#endif
     }
     pos_device_show(&view);
   }

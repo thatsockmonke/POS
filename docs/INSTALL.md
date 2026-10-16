@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.3.7-dev is an **experimental foundation**, not the complete master roadmap.
+POS 0.3.8-dev is an **experimental foundation**, not the complete master roadmap.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
 flashing, peripherals, factory boot recovery and electrical power-loss behavior
 have not been tested here. Read [STATUS.md](STATUS.md) before choosing to install.
@@ -9,9 +9,9 @@ Only use the **Cardputer ADV** hardware profile, not the original Cardputer.
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.3.7-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.3.8-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.3.7-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.3.8-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -32,10 +32,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.3.7-dev.zip.sha256
-mkdir pos-0.3.7-dev
-unzip pos-0.3.7-dev.zip -d pos-0.3.7-dev
-cd pos-0.3.7-dev
+sha256sum -c pos-0.3.8-dev.zip.sha256
+mkdir pos-0.3.8-dev
+unzip pos-0.3.8-dev.zip -d pos-0.3.8-dev
+cd pos-0.3.8-dev
 sha256sum -c SHA256SUMS
 ```
 
@@ -179,12 +179,16 @@ with the final runtime. Close the serial program and reset/power-cycle if needed
    Cancelling before save preserves the previous settings. Wi-Fi is optional.
    Passwords stay masked. The Wi-Fi app offers session-only connections or an
    encrypted saved-network vault; unlock saved networks after reboot.
-9. The launcher opens. Try Text Editor, Wi-Fi, Background, Files, Settings, Diagnostics and Counter.
+9. The launcher opens. Try Files, Music, Share, Text Editor, Wi-Fi, Background and Settings.
+   Settings > Expansion hardware shows detected cap/GPS and controls LoRa features.
+   Radio/Range Test require a detected, enabled cap. Transmit and precise-location
+   sharing each require explicit consent.
 
 After a verified normal boot, POS removes only known, unchanged obsolete installer
 files. A pending/failed restore retains the installation media. Unknown files and
 backups are not recursively deleted. The SD is the system drive: leave it inserted
-for normal use. Music/maps/radio features remain future work.
+for normal use. Maps/navigation remain future work. See [APPS.md](APPS.md) for Files, Music,
+BLE sharing and the LoRa/GPS cap.
 
 ## 7. Normal use and recovery
 
@@ -346,4 +350,30 @@ remain `.part-N` for inspection and are not presented as complete downloads.
 This local transfer uses **unencrypted HTTP**, including the session key and
 file contents. Use it only on a trusted network. Outbound Internet downloads
 continue to use validated HTTPS. Wi-Fi file transfer is implemented; BLE sharing
-and the common transport-independent Share interface remain future work.
+is available through Share. See [APPS.md](APPS.md) for pairing, transfer resume
+and the common local/Wi-Fi/BLE Share screen.
+
+
+## Files, Music, Share and the LoRa/GPS cap
+
+Read [APPS.md](APPS.md) for full controls, formats and recovery behavior.
+
+- **Files:** select a file/folder with W/S and Enter. Copy or Cut, navigate to
+  the destination, then Folder actions → Paste. Trash is reversible. Permanent
+  deletion requires typing `DELETE` and cannot be undone.
+- **Music:** put MP3 or PCM 16-bit WAV files in Music. Space pauses, A/D changes
+  tracks, W/S changes volume, R toggles shuffle, P adds to a playlist. Audio stops
+  when closing the app.
+- **Share:** choose a user file, then local copy, Wi-Fi or BLE. On the receiving
+  Panputer choose Receive BLE file, compare pairing numbers on both devices and
+  explicitly accept the offer. Retry the same file to resume a partial transfer.
+- **Expansion hardware:** power off before attaching/removing the official cap.
+  Settings shows detected hardware separately from user enablement. Choose a
+  locally permitted LoRa frequency; attach the correct antenna before enabling
+  transmit. TX consent lasts only for the session. GPS detection does not require
+  a position fix, and remains independent of the LoRa switch. Maps stays gated
+  when GPS is absent; the Maps application is not implemented yet.
+- **Radio / Range Test:** use matching POS peers and frequency settings. Received
+  messages and outbox files live under Owner/Radio; range CSVs under Owner/RangeTests.
+  The Range Test sender requires the receiver's node ID and sends probes at
+  60-second intervals while its screen is open. Leaving stops its log/probe run.

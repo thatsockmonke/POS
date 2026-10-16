@@ -3,7 +3,7 @@
 The factory installer and runtime share the portable recovery library. It does
 not format cards, recursively wipe unknown directories, or delete the only backup.
 The runtime Recovery app exposes backup, restore, a read-only browser of the
-previous installation, a small file-recovery terminal, diagnostics and sleep.
+previous installation, diagnostics and sleep. The POS terminal has been removed.
 Repair/reinstall restart into the factory installer so the running runtime is
 not overwritten underneath its own execution.
 
@@ -22,7 +22,7 @@ Backup scans all regular SD files except these system/recovery paths:
 - `/pos-reinstall.pos` and known restore-prompt/completion markers.
 
 This includes ordinary root-level user-created files, documents, downloaded maps,
-music, games, app data and user-installed app files outside System. POS.previous
+music, app data and user-installed app files outside System. POS.previous
 is a separate recovery source; copy it separately before removing it. Unrecognized
 directories and files are not silently discarded or treated as old OS assets.
 
@@ -150,15 +150,13 @@ or silently replaced; first-time setup uses defaults where possible and preserve
 the unknown files. Data/apps requiring unknown migrations stay accessible as files;
 this version does not execute restored user-installed app binaries.
 
-## File recovery terminal
+## File recovery
 
-Commands are `ls [PATH]`, `pwd`, `cat PATH`, `cp SRC DST`, `free`, `reboot`,
-`shutdown`. Paths are relative to the SD root. `cp` streams and verifies a new
-destination, refuses system/reserved paths, preserves an existing destination and
-never removes its source. `cat` shows a small preview rather than loading a whole
-document. The browser pages through directories in batches of 12 entries with folder page
-counts, fixed Previous/Next actions, first/last labels and an explicit empty state;
-notices scroll across pages. Ctrl+U clears recovery terminal input and all text fields. This is not Bash or a general text editor.
+Files provides ordinary browsing, verified copies, rename/move, Trash/restore and
+explicit permanent deletion. Factory recovery retains a read-only browser for
+previous installations. The POS terminal is no longer part of the environment.
+Backups, previous installations and partial transaction files stay accessible
+on an ordinary computer. See [APPS.md](APPS.md) for Trash and transfer recovery.
 
 Linux can run the same portable recovery engine without hardware:
 

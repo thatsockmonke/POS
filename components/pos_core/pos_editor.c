@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 
 enum { BUFFER = 4096 };
@@ -14,7 +15,7 @@ static int fail(pos_error_t *error, const char *message) {
 }
 static bool user_path(const char *path) {
   return pos_fs_archive_path(path) && pos_fs_user_path(path) &&
-         strncmp(path, "POS/Users/settings.", 19);
+         strncasecmp(path, "POS/Users/settings.", 19);
 }
 static int path(const pos_editor_t *e, const char *name,
                 char out[POS_FS_PATH]) {

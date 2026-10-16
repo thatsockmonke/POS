@@ -249,6 +249,9 @@ static void transfer(const char *root) {
   char selected[241] = "";
   if (choice == 1 && !pos_ui_pick_file(root, "Choose file to share", selected))
     return;
+  pos_ui_wifi_export(root, selected);
+}
+void pos_ui_wifi_export(const char *root, const char *selected) {
   const char *confirm[] = {"Start trusted-LAN session", "Cancel"};
   pos_ui_notice("Local transfer",
                 "This uses HTTP on your local Wi-Fi with a temporary session "

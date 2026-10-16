@@ -79,7 +79,8 @@ void pos_ui_notice(const char *title, const char *body) {
 }
 
 static int menu(const char *title, const char *const *items, int count,
-                unsigned page, unsigned pages, const char *status, int initial) {
+                unsigned page, unsigned pages, const char *status,
+                int initial) {
   if (count < 1 || pos_home_pending())
     return -1;
   int selected = initial >= 0 && initial < count ? initial : 0;
@@ -125,7 +126,7 @@ int pos_ui_menu(const char *title, const char *const *items, int count) {
   return menu(title, items, count, 0, 0, NULL, 0);
 }
 int pos_ui_menu_from(const char *title, const char *const *items, int count,
-                      int selected) {
+                     int selected) {
   return menu(title, items, count, 0, 0, NULL, selected);
 }
 int pos_ui_menu_page(const char *title, const char *const *items, int count,

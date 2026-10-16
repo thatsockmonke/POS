@@ -174,7 +174,7 @@ int pos_receive_file(const char *root, const char *relative, uint64_t expected,
                      void *reader_ctx, pos_io_progress_t progress, void *ctx,
                      pos_error_t *error) {
   if (!pos_fs_archive_path(relative) || !pos_fs_user_path(relative) ||
-      !reader || (!strncmp(relative, "POS/Users/settings.", 19)) ||
+      !reader || (!strncasecmp(relative, "POS/Users/settings.", 19)) ||
       (expected != UINT64_MAX && expected > UINT32_MAX) ||
       (sha && *sha &&
        (strlen(sha) != 64 || strspn(sha, "0123456789abcdefABCDEF") != 64)))

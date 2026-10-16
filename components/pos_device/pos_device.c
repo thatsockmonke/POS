@@ -35,12 +35,15 @@ static QueueHandle_t events;
 static SemaphoreHandle_t drawn;
 static esp_lcd_panel_handle_t panel;
 static i2c_master_dev_handle_t keyboard;
+static i2c_master_bus_handle_t internal_i2c;
+static i2c_master_dev_handle_t codec_i2c, cap_i2c;
 static adc_oneshot_unit_handle_t adc;
 static adc_cali_handle_t calibration;
 static uint16_t *stripe;
 static pos_view_t previous;
 static bool previous_valid, backlight, wifi_initialized, wifi_started;
 static bool serial_input;
+static void (*sleep_hook)(void);
 static RTC_NOINIT_ATTR uint32_t boot_magic, boot_attempts, force_recovery;
 #define BOOT_MAGIC 0x504f5332u
 #define RECOVERY_MAGIC 0x52454332u
@@ -217,8 +220,9 @@ int pos_device_init(void) {
   i2c_device_config_t chip = {.dev_addr_length = I2C_ADDR_BIT_LEN_7,
                               .device_address = 0x34,
                               .scl_speed_hz = 400000};
-  if (i2c_new_master_bus(&pins, &i2c) == ESP_OK &&
-      i2c_master_probe(i2c, 0x34, 50) == ESP_OK &&
+  if (i2c_new_master_bus(&pins, &i2c) == ESP_OK)
+    internal_i2c = i2c;
+  if (internal_i2c && i2c_master_probe(i2c, 0x34, 50) == ESP_OK &&
       i2c_master_bus_add_device(i2c, &chip, &keyboard) == ESP_OK) {
     int bad = 0;
     for (int r = 0x23; r <= 0x2b; ++r)
@@ -370,6 +374,33 @@ void pos_device_wifi_stop(void) {
   info.wifi_connected = false;
   wifi_started = false;
 }
+static i2c_master_dev_handle_t shared_i2c(uint8_t address) {
+  i2c_master_dev_handle_t *device = address == 0x18   ? &codec_i2c
+                                    : address == 0x43 ? &cap_i2c
+                                                      : NULL;
+  if (!device || !internal_i2c)
+    return NULL;
+  if (!*device) {
+    i2c_device_config_t config = {.dev_addr_length = I2C_ADDR_BIT_LEN_7,
+                                  .device_address = address,
+                                  .scl_speed_hz = 100000};
+    if (i2c_master_bus_add_device(internal_i2c, &config, device) != ESP_OK)
+      return NULL;
+  }
+  return *device;
+}
+int pos_device_i2c_read(uint8_t address, uint8_t reg, uint8_t *data) {
+  i2c_master_dev_handle_t device = shared_i2c(address);
+  return device && i2c_master_transmit_receive(device, &reg, 1, data, 1, 50) ==
+                       ESP_OK
+             ? 0
+             : -1;
+}
+int pos_device_i2c_write(uint8_t address, uint8_t reg, uint8_t value) {
+  i2c_master_dev_handle_t device = shared_i2c(address);
+  uint8_t data[] = {reg, value};
+  return device && i2c_master_transmit(device, data, 2, 50) == ESP_OK ? 0 : -1;
+}
 int pos_device_wifi_prepare(void) {
   if (!wifi_initialized) {
     esp_err_t err = esp_netif_init();
@@ -436,6 +467,8 @@ int pos_device_wifi(const char *ssid, const char *password,
   return result;
 }
 void pos_device_sleep(void) {
+  if (sleep_hook)
+    sleep_hook();
   pos_device_wifi_stop();
   pos_device_brightness(0);
   if (info.display_ok)
@@ -443,6 +476,7 @@ void pos_device_sleep(void) {
   esp_sleep_enable_ext1_wakeup_io(1ULL << 0, ESP_EXT1_WAKEUP_ANY_LOW);
   esp_deep_sleep_start();
 }
+void pos_device_set_sleep_hook(void (*hook)(void)) { sleep_hook = hook; }
 
 void pos_device_keyboard_begin(void) {
   atomic_store_explicit(&raw_keys[0], 0, memory_order_relaxed);

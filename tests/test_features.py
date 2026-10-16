@@ -35,6 +35,7 @@ class FeatureTests(unittest.TestCase):
         cls.runner=Path(cls.compilation.name)/"features"
         sdk=Path(os.environ.get("IDF_PATH","/workspace/pos-cloud/esp-idf-v5.5.5"));cjson=sdk/"components/json/cJSON"
         sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/browser.c",ROOT/"main/background.c",ROOT/"main/editor.c",ROOT/"main/wifi.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
+        sources += [ROOT/"main/files.c",ROOT/"main/music.c",ROOT/"main/sharing.c",ROOT/"main/expansion.c"]
         for component in ("pos_core","pos_recovery"):
             sources.extend((ROOT/"components"/component).glob("*.c"))
         command=["gcc","-std=c11","-D_POSIX_C_SOURCE=200809L","-Wall","-Wextra","-Werror","-g","-fsanitize=undefined","-fno-sanitize-recover=all"]
@@ -249,6 +250,32 @@ class FeatureTests(unittest.TestCase):
 
     def test_wifi_transfer_session_stops_on_global_home(self):
         self.run_feature("wifi-ui-transfer")
+    def test_expansion_settings_refuses_missing_cap_and_keeps_maps_gps_gated(self):
+        self.run_feature('hardware-ui-missing')
+    def test_lora_setting_toggle_never_arms_tx_or_disables_detected_gps(self):
+        self.run_feature('hardware-ui-toggle')
+    def music_fixture(self):
+        import wave
+        path=self.card/'Music/tone.wav';path.parent.mkdir(exist_ok=True)
+        with wave.open(str(path),'wb') as out:
+            out.setnchannels(1);out.setsampwidth(2);out.setframerate(22050);out.writeframes(struct.pack('<'+'h'*4096,*([-20000,20000]*2048)))
+    def test_music_closes_with_home_and_releases_audio(self):
+        self.music_fixture();self.run_feature('music-ui-home')
+    def test_music_space_pauses_and_resumes_without_leaving_audio_running(self):
+        self.music_fixture();self.run_feature('music-ui-pause')
+    def test_file_manager_copy_and_cut_paste_actions(self):
+        for action in ('copy','cut'):
+            with self.subTest(action=action):
+                card=self.base/action;folder=card/'POS/Users/Owner';folder.mkdir(parents=True);(folder/'a.txt').write_bytes(b'original contents'*5000);(folder/'destination').mkdir()
+                self.run_feature('files-ui-'+action,card=card)
+                self.assertEqual((folder/'destination/a.txt').read_bytes(),b'original contents'*5000)
+                self.assertEqual((folder/'a.txt').exists(),action=='copy')
+    def test_permanent_delete_requires_exact_confirmation(self):
+        self.write('POS/Users/Owner/a.txt',b'keep');self.run_feature('files-ui-delete-cancel');self.assertEqual((self.card/'POS/Users/Owner/a.txt').read_bytes(),b'keep')
+    def test_ble_receiving_requires_pairing_and_offer_acceptance_then_stops(self):
+        self.run_feature('ble-ui-receive')
+    def test_ble_home_rejects_pairing_and_stops_without_accepting_file(self):
+        self.run_feature('ble-ui-home')
 
     def test_wasd_color_picker_accept_cancel_fine_adjustment_and_bounds(self):
         report=json.loads(self.run_feature("picker").stdout)

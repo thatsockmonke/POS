@@ -78,6 +78,7 @@ bool pos_boot_frame(unsigned step, pos_view_t *view, uint32_t *hold_ms);
 typedef struct {
   const char *name;
   size_t state_size;
+  bool (*available)(void *services);
   int (*initialize)(void *state, void *services);
   void (*foreground)(void *state);
   void (*event)(void *state, const pos_event_t *event);

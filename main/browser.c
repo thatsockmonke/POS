@@ -133,8 +133,10 @@ void pos_ui_browse(const char *root, const char *initial) {
   }
 }
 
-bool pos_ui_pick_file(const char *root, const char *title, char result[241]) {
-  char relative[241] = "POS/Users/Owner/Documents";
+bool pos_ui_pick_file_from(const char *root, const char *title,
+                           const char *initial, char result[241]) {
+  char relative[241];
+  snprintf(relative, sizeof(relative), "%s", initial);
   directory_page_t *page = calloc(1, sizeof(*page));
   if (!page)
     return false;
@@ -201,4 +203,8 @@ bool pos_ui_pick_file(const char *root, const char *title, char result[241]) {
       return true;
     }
   }
+}
+bool pos_ui_pick_file(const char *root, const char *title, char result[241]) {
+  return pos_ui_pick_file_from(root, title, "POS/Users/Owner/Documents",
+                               result);
 }

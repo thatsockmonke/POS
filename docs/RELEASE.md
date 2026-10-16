@@ -1,29 +1,39 @@
-POS 0.3.7-dev adds an SD-backed Text Editor and shared Wi-Fi services.
+POS 0.3.8-dev adds Files, Music, BLE sharing, GPS/LoRa and Radio Range Test.
 
-- Text Editor: New/Open/Recover, ordinary WASD typing, Fn+arrows, Ctrl+S save,
-  Ctrl+F find, Ctrl+G go to line and an unsaved-changes prompt on closing.
-- Documents stay on SD using snapshots and streamed piece indexes. Verified saves
-  keep previous originals; Save As refuses collisions. Working drafts and normal
-  kept-draft text files remain recoverable on ordinary computers.
-- Wi-Fi: scan/manual/saved connections, live status and SNTP time synchronization.
-- Optional saved profiles use a passphrase-encrypted AES-256-GCM NVS vault with
-  PBKDF2-HMAC-SHA256 (100,000 iterations). Session-only connections remain available.
-- HTTPS downloads and GET/POST API responses stream to SD with certificate
-  validation, readback checks and optional expected SHA-256 verification.
-- Temporary LAN file transfer supports uploads and one selected export, with a
-  fresh session key and automatic shutdown when leaving the transfer screen.
-  Local HTTP is unencrypted: use a trusted network.
-- Nine-app launcher retains black/white icons, custom stripe backgrounds, A/D to
-  move, W to open and one foreground app at a time. Existing boot animation retained.
-- A final ESP32 stack audit moved large I/O buffers to bounded heap allocations;
-  a compiler guard prevents stack-heavy editor/network frames returning. The
-  0.3.6-dev candidate was withdrawn before publication.
-- Includes full installation and editor/network/recovery instructions.
+- File manager: folders, previews/editor/music opening, copy/cut/paste with a
+  destination name, rename, verified staged folder copies, Trash/restore and
+  permanent deletion requiring DELETE. Protected system data and existing targets
+  are preserved.
+- Music: SD-streamed MP3 / PCM 16-bit WAV, folder library, pause/next/previous,
+  volume, shuffle and readable M3U playlists; ES8311/I2S audio output.
+- Common Share interface in Files, Text Editor and Share: local copy, temporary
+  Wi-Fi export or BLE transfer. BLE discovers compatible peers, requires matching
+  numeric pairing and explicit offer acceptance, resumes partial chunks, verifies
+  SHA-256 and handles a lost final acknowledgment without overwriting files.
+- GPS/Location and Semtech SX1262 service using the published ADV cap interfaces.
+  Radio messaging includes IDs, duplicate suppression, ACK/retry and verified SD
+  outbox persistence. Precise-location sharing is opt-in; radio messages are unencrypted.
+- Radio Range Test records normal CSV files with GPS/RSSI/SNR, packet IDs,
+  transmit/receive/ACK/timeout counts and periodic position samples.
+- Settings > Expansion hardware shows cap/GPS presence, fix, LoRa feature switch,
+  configured frequency and separate antenna/TX consent. Radio/Range require an
+  enabled detected cap. Maps has a GPS-presence gate; Maps/navigation itself remains
+  future work. GPS detection and LoRa enablement are independent.
+- TX defaults off after reboot, uses +10 dBm and conservative 1% airtime scheduling,
+  and requires a locally permitted configured frequency plus antenna consent.
+- Games and a POS terminal are removed from project scope, including the old
+  recovery-terminal menu and automatic Games-folder creation.
+- Keeps the pink/yellow/blue boot animation, stripe backgrounds and one foreground
+  app; the launcher now has fourteen black icons outlined in white.
+- Includes app controls, installation/recovery instructions, protocol documentation,
+  third-party notices and compiled stack-size guards. MP3 workspace is heap-owned,
+  with output checked against the unmodified upstream decoder.
 
-Download pos-0.3.7-dev.zip and its checksum, extract it, and read INSTALL.md.
-Flash the small USB installer at 0x0. Extract the inner pos-install.zip onto a FAT32
-microSD; the installer verifies and installs the final runtime itself.
+Download pos-0.3.8-dev.zip and its checksum, extract it and read INSTALL.md/APPS.md.
+Extract the inner pos-install.zip onto FAT32 SD; flash only pos-installer-usb.bin at
+0x0. The installer validates and installs the runtime itself. Preserve factory
+recovery and user data, and keep the exact matching package for repair.
 
-This is experimental development firmware. The complete master roadmap is not
-implemented. Actual ADV operation and power-loss resilience still require hardware
-validation; preserve factory flash and user data before experimentation.
+Experimental prerelease: both firmware images and host behavior are checked, but
+actual ADV audio, BLE pairing/throughput, cap coexistence, GPS and RF operation
+still require physical validation. No hardware measurements or LoRa range are claimed.

@@ -4,7 +4,7 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.3.7-dev adds an SD-backed text editor and shared Wi-Fi services.** Both firmware images compile
+**0.3.8-dev adds Files, Music, BLE sharing, GPS/LoRa and Radio Range Test.** Both firmware images compile
 for ESP32-S3. Native tests exercise the actual portable installer, UI, app,
 settings and recovery code. No physical Panputer has been flashed or tested here.
 
@@ -12,8 +12,9 @@ settings and recovery code. No physical Panputer has been flashed or tested here
 
 [GitHub Releases](https://github.com/thatsockmonke/POS/releases) · [Download the complete package](docs/DOWNLOADS.md) · [Full installation guide](docs/INSTALL.md) · [Feature status / remaining roadmap](docs/STATUS.md)
 
-The master roadmap is **not all implemented**: music, BLE sharing,
-GPS/LoRa, maps, online updates and wireless deployment are future work. This release
+The master roadmap is **not all implemented**: maps/navigation, online updates,
+installable packages, power/crash improvements and wireless deployment remain future work.
+Games and a POS terminal have been removed from project scope. This release
 contains the core, launcher, setup, editor, Wi-Fi, storage, installer/recovery and diagnostics.
 
 For the prebuilt bundle, you need Python/esptool on your Linux computer, a FAT32
@@ -30,7 +31,7 @@ Implemented:
   over blue. Pink slides into the top when yellow is halfway across. Large centered
   **POS** lettering fades in across all three stripes, holds for one second, then normal boot continues.
 - Native ST7789 display output and TCA8418 ADV keyboard input, with USB fallback.
-- A nine-app horizontal launcher with black icons outlined in white, streamed from SD.
+- A fourteen-app horizontal launcher with black icons outlined in white, streamed from SD.
   A/D moves the ribbon; W opens the centered app. Only one foreground app runs.
 - Background app: 1-12 horizontal stripes, visual WASD color picker, Q/E hue,
   Shift fine adjustments, launcher preview and explicit Save & Apply.
@@ -38,7 +39,8 @@ Implemented:
 - Central input routing, protected Home shortcut, and a separate input supervisor.
 - One foreground application with initialize/foreground/event/update/render/save/
   exit callbacks and resource release. Counter demonstrates a persistent app;
-  Settings, Diagnostics, Files, Recovery and About also use the app manager.
+  Settings, Diagnostics, Files, Music, Share, Location, Radio, Range Test,
+  Recovery and About also use the app manager.
 - First-time name/device/timezone/brightness setup, plus optional Wi-Fi.
   Connect for a session or save up to four networks in a passphrase-encrypted NVS vault.
   Passwords remain masked and are never written to SD.
@@ -48,6 +50,25 @@ Implemented:
 - Shared Wi-Fi services: scan/manual/saved connections, status, SNTP time sync,
   certificate-validated HTTPS downloads and GET/POST API requests. Responses stream
   to Downloads. A temporary, session-key-protected LAN web page transfers files.
+- Files: paginated browsing, previews/editor/music opening, new folders, rename,
+  copy/cut/paste, verified streamed folder copies, Trash/restore and explicit
+  permanent deletion. Existing targets and protected system paths are refused.
+- Music: SD-streamed MP3 and 16-bit PCM WAV, library/folder browsing, pause,
+  previous/next, volume, shuffle and plain-text M3U playlists.
+- Share: one interface for local save, temporary Wi-Fi transfer and authenticated
+  BLE transfer. Nearby POS peers compare pairing numbers, then accept/reject a
+  file offer; chunks resume from the receiver offset and SHA-256 verifies completion.
+- GPS/Location: checksummed NMEA, latitude/longitude, fix age, altitude, speed,
+  satellites, HDOP and UTC from the official cap's UART.
+- Radio: Semtech SX1262 driver on the shared SD SPI bus, IDs, duplicate suppression,
+  unicast ACK/retry, verified persistent outbox and readable received-message logs.
+  Compatible POS peers use the same frequency/settings; this is not Meshtastic.
+- Radio Range Test: GPS/RSSI/SNR and packet-ID/counter CSV logs, receive-only or
+  timed unicast probes. Unknown coordinates and unavailable signal values stay blank.
+- Settings > Expansion hardware shows cap/GPS detection, fix, feature enablement
+  and transmit permission. Radio/Range require a detected, enabled cap. Maps has a
+  GPS-presence gate; the Maps app itself is still future work. Location sharing
+  requires explicit consent. Transmit consent resets after reboot.
 - Redundant, checksummed settings; formal system/user boundaries and standard folders.
 - On-device installer confirmation, verification/progress/cancellation, factory
   recovery and separate OTA runtime slots. Files and flash are read back before boot selection.
@@ -67,14 +88,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.3.7-dev/launcher.png)
-![Color picker](downloads/0.3.7-dev/color-picker.png)
+![Launcher](downloads/0.3.8-dev/launcher.png)
+![Color picker](downloads/0.3.8-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.3.7-dev/boot-animation.png)
+![POS boot animation](downloads/0.3.8-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.3.7-dev/boot-splash.png)
+[Final splash frame](downloads/0.3.8-dev/boot-splash.png)
 
 This is unsigned development firmware. Physical display orientation, all key
 positions, SD performance, battery calibration, USB recovery and power-cut safety
@@ -88,9 +109,9 @@ On the prepared cloud machine:
 ```sh
 cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
-python tools/posctl.py build
+python tools/posctl.py build --build-root build-v038
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --output dist/pos-0.3.7-dev --zip-output dist/pos-0.3.7-dev.zip
+python tools/posctl.py bundle --build-root build-v038 --output dist/pos-0.3.8-dev --zip-output dist/pos-0.3.8-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -103,7 +124,8 @@ clone the pinned SDK and submodules, run `./install.sh esp32s3`, and source
 `export.sh`. GCC and OpenSSL development headers are needed for native services
 (Debian/Ubuntu: `build-essential libssl-dev`); ESP-IDF provides Python/esptool,
 CMake, Ninja and cJSON. All third-party code used by POS is in the SDK or the
-vendored public-domain font; no Arduino board framework is required.
+vendored public-domain font; no Arduino board framework is required. MP3 and radio drivers are vendored at
+pinned commits; their licenses are included in the source and installation bundle.
 
 Builds use four Ninja jobs and separate ignored `build/installer` and
 `build/runtime` directories and sdkconfigs. When upgrading generated 0.1 configs,
@@ -111,7 +133,9 @@ set main task stack to 16384 and FAT filesystem locks to 32, or preserve the old
 configs and use a fresh `--build-root` so the new defaults apply. Version 0.3.7
 also enables the full TLS certificate bundle; existing generated configs must
 enable it or be replaced using a fresh build root. Pass that same build root to
-`bundle` so installer and runtime come from the matching build.
+`bundle` so installer and runtime come from the matching build. Version 0.3.8
+requires fresh NimBLE/Secure Connections defaults too; the commands above use a
+separate build-v038 root rather than reusing an old generated sdkconfig.
 
 `bundle`, `package`, preview and backup commands refuse existing output names.
 A bundle contains the merged `pos-installer-usb.bin`, `pos-install.zip`, an
@@ -126,13 +150,15 @@ standalone runtime at the factory address. Read [INSTALL.md](docs/INSTALL.md).
 | Menus | W/S or arrows move; Enter selects |
 | Color picker | WASD moves color cursor; Q/E changes hue; Shift makes finer steps; Enter accepts |
 | Text fields | WASD are ordinary letters; Shift, Backspace, Enter; Ctrl+U clears |
+| Music | Space pauses; A/D previous/next; W/S volume; R shuffle; P add to playlist |
 | Text Editor | Type normally; Fn+arrows move; Ctrl+S saves; Ctrl+F finds; Ctrl+G goes to line; Esc opens menu |
 | Back/cancel | Fn+backtick (Escape); closes an app from its main screen |
 | Close app / launcher | Fn+Space or a short G0 button press, from any screen; editor asks about unsaved text; unsaved background edits are discarded |
 | Recover from a stalled app | Hold Fn+Space or G0 for two seconds; restart into recovery |
 | USB fallback | WASD, Enter, Escape, and byte 0x1d for Home; IDF monitor itself reserves Ctrl-] |
 
-See the [editor and Wi-Fi guide](docs/INSTALL.md#text-editor) for draft recovery,
+See the [new apps and expansion hardware guide](docs/APPS.md),
+[transfer/radio formats](docs/PROTOCOLS.md) and the [editor and Wi-Fi guide](docs/INSTALL.md#text-editor) for draft recovery,
 encrypted network profiles, HTTPS and local transfer controls.
 
 Name validation runs when Enter accepts a field: display names use 1–48 printable
@@ -154,7 +180,9 @@ power switch for a true power-off. Peripheral sleep/wake behavior is unverified.
 - `/POS/Users/Owner`: documents, saves and diagnostics. Owner is a stable profile
   directory; changing the display name does not rename your files.
 - `/POS/Users/settings.0.json` and `.1.json`: generation/checksum-based settings slots.
-- `/Downloads`, `/Music`, `/Games`, `/POS/Maps`, `/POS/UserApps`: ordinary user data.
+- `/Downloads`, `/Music`, `/POS/Maps`, `/POS/UserApps`: ordinary user data.
+- `/POS/Users/Owner/Trash`, `/Radio`, `/RangeTests`: user-owned recovery, messaging
+  and CSV data (the latter two paths are beneath the same Owner directory).
 - `/POS/Temp`, `/POS/Cache`, `/POS/Updates` and `/.POS-Recovery-Temp`: disposable system work.
 - `/POS.installing`: owned staging transaction; `/POS.previous`: retained previous system.
 - `/POS-Filesystem-Backup.zip` or `/POS-Filesystem-Backup/`: verified user backup.
@@ -182,5 +210,5 @@ for the actual-device workflow.
 See [format and transaction details](docs/FORMAT.md),
 [recovery semantics](docs/RECOVERY.md), [hardware profile](docs/HARDWARE.md) and
 [third-party notices](THIRD_PARTY.md). The card is never formatted or automatically
-wiped. Music, maps, GPS/LoRa/audio/IMU/IR services, installable apps,
+wiped. Maps/navigation, microphone/IMU/IR services, installable apps,
 signed updates and wireless deployment remain later milestones.

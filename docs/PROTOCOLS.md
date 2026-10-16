@@ -1,0 +1,110 @@
+# POS file transfer and radio formats (version 1)
+
+All multibyte integers below are little-endian. These are deliberately documented
+so a computer can recover user data and implement an interoperable client.
+
+## Common file offer
+
+`pos_share_encode/decode` serializes an offer into exactly 158 bytes:
+
+| Offset | Bytes | Meaning |
+| --- | --- | --- |
+| 0 | 1 | Format version, 1 |
+| 1 | 8 | Stable transfer ID |
+| 9 | 4 | Uncompressed file length |
+| 13 | 81 | Filename, up to 80 bytes plus NUL; zero-padded |
+| 94 | 64 | Lowercase ASCII SHA-256 of the complete file |
+
+Names must be simple FAT-compatible user filenames without directories, traversal,
+leading dot or device-reserved names. Completed targets go under Downloads.
+The ID is the first 64 bits of the SHA-256 (hex interpreted as an integer), XOR
+the filename CRC-32. It identifies resumable data; it is not an authentication key.
+
+Receiver work files are `.pos-share-%016llx.part` and that path plus `.offer`.
+The offer file is the exact binary record above, and the partial is raw file bytes.
+Their metadata must match before append/resume. The saved offset is the synced
+partial file's size. Sequential chunks are written/synced before acknowledgment;
+a repeated already-written range is acknowledged without duplicating bytes.
+Final publication requires the full declared size and a matching read-back SHA-256.
+An existing identical completed target can be verified and acknowledged again;
+different existing content is never overwritten. Inputs/staging files remain on
+failure. Use the original source to retry damaged partials, or copy partial bytes
+to a new path for manual recovery; no proprietary decoder is needed.
+
+## POS BLE GATT service
+
+- Service: `73f5ae10-5c12-4b83-9d48-bae023504f53`
+- Sender writes commands to `73f5ae11-5c12-4b83-9d48-bae023504f53`.
+- Sender reads receiver status from `73f5ae12-5c12-4b83-9d48-bae023504f53`.
+- Both characteristics require authenticated encrypted access. POS uses LE Secure
+  Connections numeric comparison, explicit user confirmation and no bonding.
+- Advertisement carries the service UUID; scan response carries the device name.
+  Discovery/advertising are explicit app sessions, not always-on endpoints.
+
+The sender is the GATT central/client; the receiving POS is the peripheral/server.
+MTU negotiation prefers 185. The protocol also works at the default MTU 23.
+
+| Command | Payload |
+| --- | --- |
+| `O` | 1-byte fragment sequence (starting at zero), then 1–18 offer bytes |
+| `D` | 4-byte file offset, then 1–128 raw file bytes (limited by negotiated MTU) |
+| `F` | No payload; finish and verify |
+| `C` | Cancel; preserve partial data |
+
+Every status is five bytes: status character plus a 4-byte offset/value.
+
+| Status | Meaning/value |
+| --- | --- |
+| `W` | Idle |
+| `M` | Next expected offer-fragment sequence |
+| `P` | Offer complete, waiting for explicit user acceptance |
+| `A` | Accepted, resume at returned file offset |
+| `K` | Chunk committed, returned offset is next byte |
+| `V` | Final verification in progress |
+| `Z` | Complete and verified, returned offset equals file size |
+| `E` | Refused, invalid request or failed transfer |
+
+The client uses acknowledged GATT writes, then reads status until the application
+acknowledgment is visible. It sends one chunk at a time, retries a chunk up to
+three times, and preserves work when a connection/request fails. Offer acceptance
+and final verification have a five-minute wait bound with user cancellation.
+Retrying a completed same-file offer returns `Z` after verifying the existing target,
+which recovers a lost final acknowledgment. The sender's source is never deleted.
+Current resumable source seeks are below 2 GiB.
+
+## POS LoRa packet
+
+| Offset | Bytes | Meaning |
+| --- | --- | --- |
+| 0 | 4 | ASCII `POSR` |
+| 4 | 1 | Format version, 1 |
+| 5 | 1 | Type |
+| 6 | 4 | Sender node ID |
+| 10 | 4 | Destination node ID, 0 means broadcast |
+| 14 | 4 | Nonzero message ID |
+| 18 | 1 | Text length N (0–160) |
+| 19 | N | Printable ASCII text |
+| 19+N | 4 | Standard IEEE CRC-32 over all preceding bytes |
+
+Types: MSG=1, PING=2, ACK=3, LOC=4, NOTE=5, STATUS=6. LOC text is decimal
+`latitude,longitude`, sent only with explicit consent and a valid fix. ACK echoes
+the message ID, names the original sender as destination and has empty text.
+Only a matching intended peer can acknowledge a pending unicast. Broadcasts are
+not ACKed. Recent duplicate suppression still re-ACKs retransmitted unicasts.
+
+Four pending packets are scheduled in RAM; durable outbox files are exact wire
+packets, committed through unique `.part` staging and readback before publication.
+An exhausted retry remains saved for manual retry. The maximum is four TX attempts,
+with nominal delays of 15, 30, 45 and 60 seconds before the next decision. The
+conservative global 1% airtime budget can delay transmission and ACKs. Actual
+transmit attempts, ACKs, duplicates and timeouts must be distinguished in analysis.
+
+Radio settings: SF7, BW125 kHz, CR4/5, 12-symbol preamble, explicit header, hardware
+CRC, private sync register bytes `14 24` and +10 dBm. Frequency is configured
+within the cap's supported 868–923 MHz range and must be permitted locally.
+This is an unencrypted POS protocol, not Meshtastic or LoRaWAN. Received bytes
+are never treated as code, commands or authority to change device settings.
+
+`messages.jsonl` stores readable JSON records with sender, ID, type and text.
+Range CSVs record packet IDs, event kinds and real measurements; their schema is
+described in [APPS.md](APPS.md). No signal-to-distance conversion is performed.

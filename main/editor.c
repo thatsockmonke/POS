@@ -284,26 +284,31 @@ static bool edit(pos_editor_t *e) {
       continue;
     }
     if (event.key == POS_KEY_ESCAPE) {
-      const char *items[] = {"Continue editing", "Save",
-                             "Save As",          "Find text",
-                             "Go to line",       "Start of document",
-                             "End of document",  "Close document"};
-      int choice = pos_ui_menu("Text editor", items, 8);
+      const char *items[] = {"Continue editing",  "Save",
+                             "Save As",           "Share saved file",
+                             "Find text",         "Go to line",
+                             "Start of document", "End of document",
+                             "Close document"};
+      int choice = pos_ui_menu("Text editor", items, 9);
       if (choice == 1)
         save_as(e, false);
       if (choice == 2)
         save_as(e, true);
-      if (choice == 3 || choice == 4)
-        find_text(e, screen, choice == 4);
-      if (choice == 5) {
+      if (choice == 3) {
+        if ((!e->dirty && e->original_exists) || save_as(e, false))
+          pos_ui_share(e->root, e->source);
+      }
+      if (choice == 4 || choice == 5)
+        find_text(e, screen, choice == 5);
+      if (choice == 6) {
         e->cursor = 0;
         screen->top = 0;
       }
-      if (choice == 6) {
+      if (choice == 7) {
         e->cursor = e->length;
         screen->top = previous_row(e, e->cursor);
       }
-      if (choice == 7 || pos_home_pending()) {
+      if (choice == 8 || pos_home_pending()) {
         bool requested = pos_home_pending();
         leave = close_document(e);
         if (leave && requested)
@@ -356,6 +361,17 @@ static bool edit(pos_editor_t *e) {
   }
   free(screen);
   return home;
+}
+void pos_ui_editor_open(const char *root, const char *relative) {
+  pos_editor_t *editor = calloc(1, sizeof(*editor));
+  if (!editor)
+    return;
+  pos_error_t error = {0};
+  if (pos_editor_open(editor, root, relative, progress, NULL, &error))
+    pos_ui_notice("Cannot open document", error.message);
+  else if (edit(editor))
+    pos_home_request();
+  free(editor);
 }
 static bool recover(pos_editor_t *e, const char *root) {
   char folder[POS_FS_PATH];

@@ -1,4 +1,4 @@
-POS 0.3.7-dev - Pan Operating System
+POS 0.3.8-dev - Pan Operating System
 
 Boot: pink -> yellow -> blue flashes. Yellow slides into the middle, then
 pink slides into the top starting halfway through yellow. Large POS fades
@@ -15,4 +15,12 @@ Text Editor: Fn+arrows move; Ctrl+S save, Ctrl+F find, Ctrl+G line.
 Esc opens the editor menu; Home asks about unsaved changes.
 Wi-Fi: scan/connect, encrypted saved networks, time sync, HTTPS and LAN transfer.
 Sync time before HTTPS. Local HTTP transfer is for trusted networks only.
-Radio/GPS/audio apps remain future work. Physical hardware is unverified.
+Files: Copy/Cut, navigate, Folder actions > Paste. Trash is reversible.
+Music: MP3 / PCM 16-bit WAV. Space pause, A/D tracks, W/S volume, R shuffle.
+Share: local save, Wi-Fi, or numeric-paired BLE. Accept each incoming file.
+GPS/LoRa: Settings > Expansion hardware shows presence and feature enablement.
+Radio/Range require a detected, enabled cap; GPS presence separately gates Maps.
+Maps itself remains future work. TX consent resets on reboot; location is opt-in.
+Radio uses the POS protocol, not Meshtastic. Match frequency/settings on peers.
+Range CSVs: POS/Users/Owner/RangeTests. Outbox/messages: POS/Users/Owner/Radio.
+Games and the POS terminal are removed from scope. Physical hardware is unverified.

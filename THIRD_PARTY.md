@@ -20,5 +20,29 @@ storage. Vendored SHA-256:
 
 Hardware pin/register/layout facts were checked against M5Stack's M5Unified,
 M5GFX and M5Cardputer sources linked in docs/HARDWARE.md. Those frameworks are
-not linked into POS. The bundled six 8x8 app icons are project-created bitmap
+not linked into POS. The bundled fourteen 8x8 app icons are project-created bitmap
 data. No new license for the user's POS project is selected by this file.
+
+
+## Added audio and radio dependencies
+
+- **minimp3**, commit `ea99364f61c14656440e8d77e9c233ccf3124633`, CC0:
+  https://github.com/lieff/minimp3/tree/ea99364f61c14656440e8d77e9c233ccf3124633
+  The header, license and commit are vendored under `components/pos_core/vendor/minimp3`.
+  POS changes only workspace ownership: a caller-supplied heap workspace replaces
+  the decoder's large local scratch frame; the original API remains as a heap-backed
+  wrapper. `POS-CHANGES.md` records the adaptation. Generated tone/PCM fixtures verify
+  unchanged output against the unmodified upstream decoder.
+- **Semtech SX126x driver**, commit `a10c5dfdf89788c6ac805e9fe98889de44175aa2`,
+  Clear BSD: https://github.com/Lora-net/sx126x_driver/tree/a10c5dfdf89788c6ac805e9fe98889de44175aa2
+  Source, headers and the full license are vendored under
+  `components/pos_device/vendor/sx126x`. POS supplies the ESP-IDF SPI/busy/reset HAL;
+  upstream driver source is unmodified.
+- **Apache NimBLE**, including its SDK dependencies, is supplied by the pinned
+  ESP-IDF checkout. POS uses its native GATT, GAP and Secure Connections APIs.
+
+Binary bundles include minimp3's CC0 text, Semtech's full Clear BSD notice and
+SDK NimBLE/TinyCrypt license/notice files under `licenses/`, alongside the SDK
+root license and this provenance document. No Bluetooth Classic headphone stack
+is added. The audio fixture is an originally generated sine tone, with reproduction
+instructions in `tests/fixtures/README.md`.

@@ -72,6 +72,10 @@ static void heap_report(void) {
 }
 
 static esp_err_t mount_sd(void) {
+  /* Cap LoRa shares SPI3 with SD. Keep its NSS inactive during SD init. */
+  gpio_config_t cap_cs = {.pin_bit_mask = 1ULL << 5, .mode = GPIO_MODE_OUTPUT};
+  gpio_config(&cap_cs);
+  gpio_set_level(5, 1);
   sdmmc_host_t host = SDSPI_HOST_DEFAULT();
   host.slot = SPI3_HOST;
   host.max_freq_khz = 10000;

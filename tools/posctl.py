@@ -126,7 +126,7 @@ def make_bundle(build_root: Path, payload: Path, output: Path) -> Path:
         shutil.copyfile(ROOT / "docs/INSTALL.md", stage / "INSTALL.md")
         for name in ("RECOVERY.md", "HARDWARE.md", "HARDWARE_VALIDATION.md", "FORMAT.md", "VALIDATION.md"):
             shutil.copyfile(ROOT / "docs" / name, stage / name)
-        for name in ("STATUS.md", "DOWNLOADS.md"):
+        for name in ("STATUS.md", "DOWNLOADS.md", "APPS.md", "PROTOCOLS.md"):
             shutil.copyfile(ROOT / "docs" / name, stage / name)
         # USB commands work with pip-installed esptool; no SDK/build is required.
         (stage / "tools").mkdir()
@@ -137,6 +137,15 @@ def make_bundle(build_root: Path, payload: Path, output: Path) -> Path:
         sdk_license = sdk / "LICENSE"
         if sdk_license.is_file():
             shutil.copyfile(sdk_license, stage / "ESP-IDF-LICENSE.txt")
+        licenses = stage / "licenses"
+        licenses.mkdir()
+        shutil.copyfile(ROOT / "components/pos_core/vendor/minimp3/LICENSE", licenses / "minimp3-CC0.txt")
+        shutil.copyfile(ROOT / "components/pos_device/vendor/sx126x/LICENSE.txt", licenses / "Semtech-Clear-BSD.txt")
+        nimble = sdk / "components/bt/host/nimble/nimble"
+        for source, destination in ((nimble / "LICENSE", "NimBLE-LICENSE.txt"), (nimble / "NOTICE", "NimBLE-NOTICE.txt"),
+                                    (nimble / "ext/tinycrypt/LICENSE", "TinyCrypt-LICENSE.txt")):
+            if source.is_file():
+                shutil.copyfile(source, licenses / destination)
         sums = []
         for path in sorted(stage.rglob("*")):
             if path.is_file():

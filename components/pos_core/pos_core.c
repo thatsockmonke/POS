@@ -121,7 +121,7 @@ int pos_core_close(pos_core_t *core) {
 }
 
 int pos_core_open(pos_core_t *core, const pos_app_t *app) {
-  if (!app || !app->render || pos_core_close(core))
+  if (!app || !app->render || (app->available&&!app->available(core->services)) || pos_core_close(core))
     return -1;
   void *state = calloc(1, app->state_size ? app->state_size : 1);
   if (!state)

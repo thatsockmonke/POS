@@ -14,6 +14,12 @@ physical signals, orientation, timing and calibration remain unverified here.
 | System button | G0, active low | M5Unified ADV button configuration |
 | Battery | ADC1 GPIO 10, divider ratio 2; curve-fit calibration when available | M5Unified power profile |
 | USB | ESP32-S3 native USB Serial/JTAG console | ESP-IDF |
+| Audio codec / I2S | ES8311 0x18 on SDA8/SCL9; BCLK41, LRCK43, data-out42; I2S1, 16-bit stereo slots | M5Unified ADV speaker profile |
+| Cap LoRa SPI | SPI3 shared with SD: SCK40, MOSI14, MISO39, cap NSS5 (SD CS12) | M5Stack cap docs + UserDemo |
+| Cap reset / IRQ / busy | GPIO3 / GPIO4 / GPIO6 | M5Stack cap pin map |
+| Cap antenna switch | PI4IOE5V6408 0x43, P0 output high; high-impedance disabled | M5Stack cap docs |
+| SX1262 clock | DIO3 TCXO 3.0 V, DIO2 RF switching | Pinned M5Stack UserDemo |
+| Cap GNSS | ATGM336H, UART1 TX13/RX15, 115200 8N1 | Cap docs + UserDemo |
 
 Pinned references:
 
@@ -36,8 +42,23 @@ percentage and charging state are not inferred from an uncalibrated reading.
 Diagnostics measure actual SD read/write/CRC integrity and store successful results
 in `POS/Users/Owner/Diagnostics`. Interactive write times include UI/fsync overhead.
 
-The LoRa/GNSS cap, audio, IR and IMU are not initialized by this milestone. Start
-with the bare ADV and verify revision/cap routing before adding those drivers.
+Audio initializes only for playback; BLE only for an explicit sharing session.
+The location/cap service listens for GNSS data and probes cap hardware at runtime.
+LoRa features default off; TX consent is session-only. GPS presence independently
+gates Maps. IR and IMU remain unimplemented. Probe/initialization results are not
+physical performance measurements.
+
+Additional references verified for this release:
+
+- [Official Cap LoRa-1262 pin map and antenna-switch requirement](https://docs.m5stack.com/en/cap/Cap_LoRa-1262)
+- [Official Cardputer ADV audio/pin map](https://docs.m5stack.com/en/core/Cardputer-Adv)
+- [Pinned cap HAL and 3.0-V TCXO configuration](https://github.com/m5stack/M5Cardputer-UserDemo/blob/b549eac0a3c65bc108186c276b8fac0a214aaa4e/main/hal/cap_lora868/cap_lora868.cpp)
+- [Pinned ES8311 speaker register profile](https://github.com/m5stack/M5Unified/blob/e125e73f28b6b83e621e48df432af426bb2ff935/src/M5Unified.inl#L1045)
+
+Semtech's pinned SX126x C driver handles radio register commands and chip
+workarounds, with an ESP-IDF SPI HAL. SPI-device transactions arbitrate access to
+the shared SD bus; radio NSS is held high during SD initialization. This still
+requires actual coexistence tests on the correct cap revision. Do not hot-plug it.
 
 ## Flash and memory
 
@@ -58,8 +79,17 @@ Both images are checked against these partitions during builds. Main task stack 
 16 KiB, FAT locks 32, file streaming buffers 8 KiB; metadata and app allocations are
 bounded. Available runtime heap still requires an actual device measurement.
 Optional Wi-Fi does not start until requested, uses RAM credential storage and
-may consume significant heap. Password persistence, general network services and
-wireless update endpoints are not implemented.
+may consume significant heap. Saved profiles use a passphrase-encrypted NVS
+vault; HTTPS, time sync and file transfers are implemented. Wireless deployment
+and online software updates remain future work. New firmware still fits the
+existing slots, with limited runtime flash headroom; future growth must be
+measured against the actual device's verified flash configuration.
+
+Compiled stack-usage reports are emitted for POS components. MP3 scratch memory
+is in the bounded player heap context; the stock approximately 16-KiB local scratch
+frame is not used. Audio decoder frames and editor/network frames have compiler
+size guards. These static checks do not replace on-device minimum-stack/heap
+measurements while services coexist.
 
 Use [the bring-up record](HARDWARE_VALIDATION.md) to distinguish compiled/simulated
 behavior from observed hardware evidence. No physical result has been filled in.

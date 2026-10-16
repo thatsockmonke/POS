@@ -68,8 +68,7 @@ static void preview(const char *root, const pos_settings_t *draft) {
   if (pos_fs_join(system, root, "POS"))
     return;
   pos_view_t view;
-  pos_launcher_view(system, draft->device_name, &draft->background,
-                    6, &view);
+  pos_launcher_view(system, draft->device_name, &draft->background, 6, &view);
   pos_view_line(&view, 14, "PREVIEW - not saved");
   pos_view_line(&view, 15, "Enter/Esc: back to editor");
   pos_device_show(&view);

@@ -4,6 +4,7 @@
 #include "host_runner.c"
 #undef main
 #include "cJSON.h"
+#include "pos_ble.h"
 #include "pos_console.h"
 #include "pos_core.h"
 #include "pos_device.h"
@@ -11,10 +12,12 @@
 #include "pos_fs.h"
 #include "pos_launcher.h"
 #include "pos_network_service.h"
+#include "pos_peripherals.h"
 #include "pos_recovery.h"
 #include "pos_settings.h"
 #include "ui.h"
 #include <assert.h>
+#include <dirent.h>
 #include <limits.h>
 #include <signal.h>
 #include <sys/resource.h>
@@ -28,6 +31,128 @@ static bool display_error, device_error, empty_folder_seen, last_page_seen,
 static unsigned folder_pages_seen, picker_frames;
 static bool background_preview_seen;
 static pos_view_t picker_last;
+static pos_expansion_status_t fake_expansion;
+static unsigned hardware_changes, audio_writes, audio_stops, ble_accepts,
+    ble_pairings;
+static bool audio_active, ble_active, advance_after_audio,
+    hardware_missing_seen, maps_ready_seen;
+static pos_ble_status_t fake_ble;
+int pos_audio_write(const int16_t *pcm, size_t frames, unsigned rate,
+                    pos_error_t *e) {
+  (void)e;
+  assert(pcm && frames && rate == 22050);
+  audio_active = true;
+  ++audio_writes;
+  if (advance_after_audio && ui_next < ui_count &&
+      ui_events[ui_next].key == INT_MIN)
+    ++ui_next;
+  return 0;
+}
+void pos_audio_stop(void) {
+  audio_active = false;
+  ++audio_stops;
+}
+pos_expansion_status_t pos_expansion_status(void) { return fake_expansion; }
+int pos_expansion_configure(bool enabled, uint32_t hz, bool tx,
+                            pos_error_t *e) {
+  if (enabled && !fake_expansion.cap_detected) {
+    snprintf(e->message, sizeof(e->message), "LoRa cap not detected.");
+    return -1;
+  }
+  ++hardware_changes;
+  fake_expansion.lora_enabled = enabled;
+  fake_expansion.frequency_hz = hz;
+  fake_expansion.tx_enabled = enabled && tx;
+  return 0;
+}
+bool pos_expansion_maps_available(void) {
+  return fake_expansion.maps_available;
+}
+int pos_expansion_send(uint8_t type, uint32_t dest, const char *text,
+                       bool location, pos_error_t *e) {
+  (void)type;
+  (void)dest;
+  (void)text;
+  (void)location;
+  (void)e;
+  return 0;
+}
+int pos_expansion_retry(pos_error_t *e) {
+  (void)e;
+  return 0;
+}
+int pos_expansion_range(bool enabled, pos_error_t *e) {
+  (void)e;
+  fake_expansion.logging = enabled;
+  return 0;
+}
+int pos_ble_start(const char *root, const char *name, bool receive,
+                  pos_error_t *e) {
+  (void)root;
+  (void)name;
+  (void)e;
+  assert(!ble_active);
+  ble_active = true;
+  fake_ble.ready = true;
+  fake_ble.connected = true;
+  fake_ble.secure = !receive;
+  fake_ble.pairing = receive;
+  fake_ble.passkey = 123456;
+  fake_ble.offered = receive;
+  strcpy(fake_ble.offer.name, "Incoming.txt");
+  fake_ble.offer.size = 5;
+  return 0;
+}
+void pos_ble_stop(void) { ble_active = false; }
+pos_ble_status_t pos_ble_status(void) { return fake_ble; }
+void pos_ble_poll(void) {}
+void pos_ble_poll_progress(pos_io_progress_t progress, void *ctx) {
+  (void)progress;
+  (void)ctx;
+  if (fake_ble.receiving)
+    fake_ble.complete = true;
+}
+int pos_ble_pair(bool accept, pos_error_t *e) {
+  (void)e;
+  fake_ble.pairing = false;
+  fake_ble.secure = accept;
+  if (accept)
+    ++ble_pairings;
+  return 0;
+}
+int pos_ble_accept(bool accept, pos_error_t *e) {
+  (void)e;
+  fake_ble.offered = false;
+  fake_ble.receiving = accept;
+  if (accept)
+    ++ble_accepts;
+  return 0;
+}
+int pos_ble_accept_progress(bool accept,pos_io_progress_t progress,void *ctx,pos_error_t *e){(void)progress;(void)ctx;return pos_ble_accept(accept,e);}
+int pos_ble_scan(pos_error_t *e) {
+  (void)e;
+  fake_ble.scanning = false;
+  return 0;
+}
+unsigned pos_ble_peers(pos_ble_peer_t peers[8]) {
+  memset(peers, 0, 8 * sizeof(*peers));
+  strcpy(peers[0].name, "Other Panputer");
+  return 1;
+}
+int pos_ble_connect(unsigned peer, pos_error_t *e) {
+  (void)e;
+  assert(peer == 0);
+  fake_ble.secure = true;
+  return 0;
+}
+int pos_ble_send(const char *relative, pos_io_progress_t progress, void *ctx,
+                 pos_error_t *e) {
+  (void)progress;
+  (void)ctx;
+  (void)e;
+  assert(relative && *relative);
+  return 0;
+}
 static void push_key(int key, unsigned mods) {
   assert(ui_count < sizeof(ui_events) / sizeof(ui_events[0]));
   ui_events[ui_count++] = (pos_event_t){key, mods, true};
@@ -65,6 +190,19 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout) {
 void pos_device_show(const pos_view_t *view) {
   ++ui_frames;
   ui_last = *view;
+  if (getenv("POS_TRACE_UI")) {
+    fprintf(stderr, "TITLE %s selected=%d\n", view->lines[0],
+            view->selected_row);
+    for (unsigned i = 1; i < POS_ROWS; ++i)
+      if (*view->lines[i])
+        fprintf(stderr, "  %s\n", view->lines[i]);
+  }
+  for (unsigned i = 0; i < POS_ROWS; ++i) {
+    if (strstr(view->lines[i], "not detected"))
+      hardware_missing_seen = true;
+    if (strstr(view->lines[i], "GPS requirement ready"))
+      maps_ready_seen = true;
+  }
   if (view->color_picker) {
     ++picker_frames;
     picker_last = *view;
@@ -608,7 +746,7 @@ static int picker_tests(void) {
   return 0;
 }
 static int launcher_tests(const char *root) {
-  assert(POS_LAUNCHER_APP_COUNT == 9);
+  assert(POS_LAUNCHER_APP_COUNT == 14);
   pos_event_t event = {'w', 0, true};
   assert(pos_launcher_action(&event) == POS_KEY_ENTER);
   event.key = 'a';
@@ -800,9 +938,122 @@ static int core_tests(void) {
   return 0;
 }
 
+static void keys_down(unsigned count) {
+  for (unsigned i = 0; i < count; ++i)
+    push_key('s', 0);
+}
+static int apps_ui(const char *root, const char *mode) {
+  if (!strcmp(mode, "hardware-ui-missing")) {
+    fake_expansion.frequency_hz = 915000000;
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_expansion(root);
+    assert(hardware_missing_seen && !fake_expansion.lora_enabled &&
+           !hardware_changes && pos_home_pending());
+    return 0;
+  }
+  if (!strcmp(mode, "hardware-ui-toggle")) {
+    fake_expansion.cap_detected = true;
+    fake_expansion.gps_detected = true;
+    fake_expansion.maps_available = true;
+    fake_expansion.frequency_hz = 915000000;
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_expansion(root);
+    assert(hardware_changes == 2 && !fake_expansion.lora_enabled &&
+           !fake_expansion.tx_enabled && fake_expansion.gps_detected &&
+           fake_expansion.maps_available && maps_ready_seen);
+    return 0;
+  }
+  if (!strncmp(mode, "music-ui-", 9)) {
+    advance_after_audio = true;
+    idle_event();
+    if (!strcmp(mode, "music-ui-pause")) {
+      push_key(' ', 0);
+      push_key(' ', 0);
+    }
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_music_file(root, "Music/tone.wav");
+    assert(audio_writes && !audio_active && audio_stops && pos_home_pending());
+    if (strstr(mode, "pause"))
+      assert(audio_writes >= 2 && audio_stops >= 2);
+    return 0;
+  }
+  if (!strncmp(mode, "files-ui-", 9)) {
+    char folder[POS_FS_PATH];
+    pos_fs_join(folder, root, "POS/Users/Owner");
+    DIR *directory = opendir(folder);
+    assert(directory);
+    struct dirent *entry;
+    unsigned at = 4, file_index = 4, directory_index = 4;
+    while ((entry = readdir(directory)))
+      if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) {
+        if (!strcmp(entry->d_name, "a.txt"))
+          file_index = at;
+        if (!strcmp(entry->d_name, "destination"))
+          directory_index = at;
+        ++at;
+      }
+    closedir(directory);
+    keys_down(file_index);
+    push_key(POS_KEY_ENTER, 0);
+    if (!strcmp(mode, "files-ui-delete-cancel")) {
+      keys_down(6);
+      push_key(POS_KEY_ENTER, 0);
+      push_text("NO");
+      push_key(POS_KEY_ENTER, 0);
+      push_key(POS_KEY_HOME, 0);
+      pos_ui_files(root);
+      return 0;
+    }
+    keys_down(strstr(mode, "cut") ? 2 : 1);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER, 0);
+    keys_down(directory_index);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER, 0);
+    keys_down(3);
+    push_key(POS_KEY_ENTER, 0);
+    keys_down(1);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER,0); /* Accept default paste filename. */
+    idle_event();
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_files(root);
+    assert(pos_home_pending());
+    return 0;
+  }
+  if (!strcmp(mode, "ble-ui-receive")) {
+    push_key(POS_KEY_ENTER, 0);
+    keys_down(1);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER, 0);
+    keys_down(1);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER, 0);
+    pos_ui_ble(root, NULL, true);
+    assert(!ble_active && ble_accepts == 1 && ble_pairings == 1);
+    return 0;
+  }
+  if (!strcmp(mode, "ble-ui-home")) {
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_ble(root, NULL, true);
+    assert(!ble_active && !ble_accepts && !ble_pairings && pos_home_pending());
+    return 0;
+  }
+  return 2;
+}
 int main(int argc, char **argv) {
   if (argc < 3)
     return 2;
+  if (strstr(argv[2], "-ui-") && strncmp(argv[2], "editor-ui-", 10) &&
+      strncmp(argv[2], "wifi-ui-", 8))
+    return apps_ui(argv[1], argv[2]);
   if (!strcmp(argv[2], "install") || !strcmp(argv[2], "boot") ||
       !strcmp(argv[2], "validate"))
     return pos_installer_runner_main(argc, argv);
