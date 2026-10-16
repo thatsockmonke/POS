@@ -10,7 +10,7 @@ settings and recovery code. No physical Panputer has been flashed or tested here
 
 ## Download and install
 
-[Download the complete package](docs/DOWNLOADS.md) · [Full installation guide](docs/INSTALL.md) · [Feature status / remaining roadmap](docs/STATUS.md)
+[GitHub Releases](https://github.com/thatsockmonke/POS/releases) · [Download the complete package](docs/DOWNLOADS.md) · [Full installation guide](docs/INSTALL.md) · [Feature status / remaining roadmap](docs/STATUS.md)
 
 The master roadmap is **not all implemented**: music, the paged editor, BLE sharing,
 GPS/LoRa, maps, online updates and wireless deployment are future work. This release

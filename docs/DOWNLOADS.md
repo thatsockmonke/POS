@@ -8,18 +8,18 @@ You do not need to compile the OS to use a prebuilt package.
 
 **POS 0.3.3-dev — experimental, hardware validation not yet performed.**
 
-- [Download pos-0.3.3-dev.zip](https://github.com/thatsockmonke/POS/raw/refs/heads/main/downloads/0.3.3-dev/pos-0.3.3-dev.zip)
-- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/raw/refs/heads/main/downloads/0.3.3-dev/pos-0.3.3-dev.zip.sha256)
+- [POS 0.3.3-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.3.3-dev)
+- [Download pos-0.3.3-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.3.3-dev/pos-0.3.3-dev.zip)
+- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.3.3-dev/pos-0.3.3-dev.zip.sha256)
 - [Browse versioned downloads](https://github.com/thatsockmonke/POS/tree/main/downloads)
 - [Full installation guide](INSTALL.md)
 - [Implemented / partial / planned features](STATUS.md)
 
-These links point to files committed with the corresponding source revision. For
-a private repository, sign into the GitHub account with access before downloading;
-the repository does **not** need to be public. If publishing the current changes
-has not succeeded, the links will not exist yet: use the generated workspace
-artifacts or the build steps below. A cloud environment being published does not
-by itself push source or create a GitHub firmware release.
+Every new POS version is published as a versioned GitHub Release with its matching
+installation ZIP and checksum. Development versions are marked **prerelease**.
+For a private repository, sign into the GitHub account with access before
+downloading; the repository does **not** need to be public. The versioned files
+committed under `downloads/` remain available as a fallback.
 
 Extract the named POS ZIP, **not GitHub's automatic Source code ZIP**, and follow
 `INSTALL.md` inside it. Flash only `pos-installer-usb.bin` at 0x0; extract the inner
@@ -34,9 +34,13 @@ GitHub may wrap the artifact in another ZIP; extract that wrapper, then use the
 named `pos-VERSION.zip` and `.sha256` file inside.
 
 Pushing a matching `vVERSION` tag runs the checks and creates an **experimental
-prerelease** with the ZIP/checksum attached. The tag must match `PROJECT_VER` in
+prerelease** with the ZIP/checksum and splash preview attached. The tag must match `PROJECT_VER` in
 CMakeLists.txt. The main branch build uploads artifacts; it does not automatically
 claim hardware validation or mark development firmware stable.
+
+For each new version, update `PROJECT_VER`, the SD payload version and release
+notes together, then push the matching `vVERSION` tag after validation. Published
+release assets are retained on workflow reruns; corrections need a new version.
 
 ## Build a package yourself
 
