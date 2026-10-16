@@ -85,8 +85,13 @@ jobs:
         run: |
           # Preserve already published binaries when a workflow is rerun or a
           # locally verified package has been published for this tag.
-          if gh release view "$POS_TAG" >/dev/null 2>&1; then
-            echo "Release $POS_TAG already exists; keeping its published assets."
-            exit 0
+          if release_draft=$(gh release view "$POS_TAG" --json isDraft --jq '.isDraft' 2>/dev/null); then
+            if [ "$release_draft" = false ]; then
+              echo "Release $POS_TAG already exists; keeping its published assets."
+              exit 0
+            fi
+            gh release upload "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/boot-splash.png --clobber
+            gh release edit "$POS_TAG" --draft=false --prerelease --latest=false --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md
+          else
+            gh release create "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/boot-splash.png --verify-tag --prerelease --latest=false --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md
           fi
-          gh release create "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/boot-splash.png --verify-tag --prerelease --latest=false --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md
