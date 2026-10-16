@@ -4,12 +4,12 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.5.4-dev fixes the guided installer's interrupted USB backup handling. It
-retries failed fast reads using smaller ROM transfers, keeps progress readable,
-and still requires two matching full-capacity reads before any firmware write.**
-The official signed update feed, arrow navigation and existing apps are included.
-Both firmware roles and native tests are checked; physical POS installation and
-recovery validation is still outstanding.
+**0.5.5-dev corrects the upside-down ADV display, makes setup screens black,
+and matches the stock ADV keyboard's Fn behavior. USB flashing is verified
+before the new firmware is allowed to boot.**
+The official signed update feed and verified ROM backup fallback are included.
+Both firmware roles and native tests are checked; the corrected orientation and
+key behavior still need confirmation on Panputer.
 
 ## Download and install
 
@@ -121,14 +121,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.5.4-dev/launcher.png)
-![Color picker](downloads/0.5.4-dev/color-picker.png)
+![Launcher](downloads/0.5.5-dev/launcher.png)
+![Color picker](downloads/0.5.5-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.5.4-dev/boot-animation.png)
+![POS boot animation](downloads/0.5.5-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.5.4-dev/boot-splash.png)
+[Final splash frame](downloads/0.5.5-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -145,7 +145,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.4-dev --zip-output dist/pos-0.5.4-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.5-dev --zip-output dist/pos-0.5.5-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -185,11 +185,12 @@ USB terminals can use their normal arrow keys.
 | Context | Keys |
 | --- | --- |
 | Launcher | Left/Right arrows move; Up or Enter opens the centered app |
-| Menus | Up/Down arrows move; Enter selects |
+| Menus | Fn+Up/Down arrows move; Enter selects (also works while holding Fn) |
 | Color picker | Arrow keys move color cursor; Q/E changes hue; Shift makes finer steps; Enter accepts |
 | Text fields | WASD are ordinary letters; Shift, Backspace, Enter; Ctrl+U clears |
 | Music | Space pauses; Left/Right previous/next; Up/Down volume; R shuffle; P add to playlist |
 | Text Editor | Type normally; Fn+arrows move; Ctrl+S saves; Ctrl+F finds; Ctrl+G goes to line; Esc opens menu |
+| Typing | Hold Aa/Shift for capitals/symbols; Fn+letters also types capitals, as in stock ADV; Del erases left; Fn+Del erases ahead in the editor |
 | Back/cancel | Fn+backtick (Escape); closes an app from its main screen |
 | Close app / launcher | Fn+Space or a short G0 button press, from any screen; editor asks about unsaved text; unsaved background edits are discarded |
 | Recover from a stalled app | Hold Fn+Space or G0 for two seconds; restart into recovery |

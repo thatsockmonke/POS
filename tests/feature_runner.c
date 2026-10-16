@@ -27,6 +27,7 @@
 static pos_event_t ui_events[512];
 static unsigned ui_next, ui_count, ui_frames;
 static bool secret_leaked, notice_tail_seen, selection_seen;
+static bool check_black_screens;
 static pos_view_t ui_last;
 static bool display_error, device_error, empty_folder_seen, last_page_seen,
     keep_sd_seen;
@@ -214,6 +215,13 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout) {
 void pos_device_show(const pos_view_t *view) {
   ++ui_frames;
   ui_last = *view;
+  if (check_black_screens) {
+    assert(view->black_background);
+    assert(pos_view_pixel(view, 239, 130) == 0);
+    assert(pos_view_pixel(view, 239, 0) == 0);
+    if (view->selected_row >= 0)
+      assert(pos_view_pixel(view, 239, view->selected_row * 8) == 0xffff);
+  }
   for (unsigned i = 0; i < 12; ++i)
     if (view->editor_selected[i])
       selection_seen = true;
@@ -349,6 +357,12 @@ static int editor_ui_tests(const char *root, const char *mode) {
     push_key('c', POS_MOD_CTRL);
     idle_event();
     push_key(POS_KEY_RIGHT, POS_MOD_CTRL);
+    push_key('s', POS_MOD_CTRL);
+    idle_event();
+    push_key(POS_KEY_HOME, 0);
+  } else if (!strcmp(mode, "editor-ui-delete")) {
+    push_key('l', POS_MOD_CTRL); /* Start of line. */
+    push_key(POS_KEY_DELETE, POS_MOD_FN);
     push_key('s', POS_MOD_CTRL);
     idle_event();
     push_key(POS_KEY_HOME, 0);
@@ -593,6 +607,7 @@ static int text_qol_tests(void) {
   return 0;
 }
 static int setup_tests(const char *root, const char *mode) {
+  check_black_screens = true;
   pos_settings_t current;
   pos_settings_defaults(&current);
   int loaded = pos_settings_load(root, &current);
@@ -638,6 +653,23 @@ static int setup_tests(const char *root, const char *mode) {
   printf("{\"saved\":%s,\"display_error\":%s,\"device_error\":%s}\n",
          saved ? "true" : "false", display_error ? "true" : "false",
          device_error ? "true" : "false");
+  return 0;
+}
+static int keyboard_ui_tests(void) {
+  /* Physical Fn, Down, release Down, Enter while Fn remains held. */
+  const uint8_t raw[] = {0x83, 0xba, 0x3a, 0xc3, 0x43};
+  pos_keyboard_t keyboard = {0};
+  ui_next = ui_count = 0;
+  check_black_screens = true;
+  for (unsigned i = 0; i < sizeof(raw); ++i) {
+    pos_event_t e;
+    if (pos_keyboard_decode(&keyboard, raw[i], &e))
+      ui_events[ui_count++] = e;
+  }
+  const char *items[] = {"First", "Second"};
+  assert(pos_ui_menu("Installer", items, 2) == 1);
+  assert(ui_last.selected_row == 4);
+  puts("Physical Fn navigation and selection passed");
   return 0;
 }
 static void choose(unsigned index) {
@@ -1252,6 +1284,17 @@ int main(int argc, char **argv) {
     return boot_splash_tests();
   if (!strcmp(argv[2], "text-qol"))
     return text_qol_tests();
+  if (!strcmp(argv[2], "keyboard-ui"))
+    return keyboard_ui_tests();
+  if (!strcmp(argv[2], "keyboard-events")) {
+    pos_keyboard_t keyboard = {0};
+    for (int i = 3; i < argc; ++i) {
+      pos_event_t e;
+      if (pos_keyboard_decode(&keyboard, strtoul(argv[i], NULL, 0), &e))
+        printf("%d %u %d\n", e.key, e.modifiers, e.pressed);
+    }
+    return 0;
+  }
   if (!strncmp(argv[2], "setup-", 6))
     return setup_tests(argv[1], argv[2]);
   if (!strncmp(argv[2], "browse-", 7))

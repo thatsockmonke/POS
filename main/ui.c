@@ -18,6 +18,7 @@ static unsigned message_page(const char *title, const char *body, unsigned page,
                              bool notice) {
   pos_view_t v;
   pos_view_clear(&v, title);
+  v.black_background = true;
   unsigned line = 0;
   while (body && *body) {
     size_t n = 0;
@@ -89,6 +90,7 @@ static int menu(const char *title, const char *const *items, int count,
     if (redraw) {
       pos_view_t view;
       pos_view_clear(&view, title);
+      view.black_background = true;
       if (pages)
         pos_view_line(&view, 1, "Folder page %u/%u", page + 1, pages);
       if (status)
@@ -100,7 +102,7 @@ static int menu(const char *title, const char *const *items, int count,
       if (count > 10)
         pos_view_line(&view, 14, "Menu %d/%d", selected / 10 + 1,
                       (count + 9) / 10);
-      pos_view_line(&view, 15, "Arrows:move Enter:OK Esc:back");
+      pos_view_line(&view, 15, "Fn+arrows Enter:OK Fn+`:back");
       pos_device_show(&view);
       redraw = false;
     }
@@ -145,6 +147,7 @@ bool pos_ui_text(const char *title, const char *label, char *text,
     if (redraw) {
       pos_view_t v;
       pos_view_clear(&v, title);
+      v.black_background = true;
       pos_view_line(&v, 3, "%s", label);
       size_t start = n > 28 ? n - 28 : 0;
       if (secret) {
@@ -154,7 +157,7 @@ bool pos_ui_text(const char *title, const char *label, char *text,
         pos_view_line(&v, 6, "%s_", text + start);
       pos_view_line(&v, 10, "%zu/%zu characters", n, capacity - 1);
       pos_view_line(&v, 12, "Enter: accept  Ctrl+U: clear");
-      pos_view_line(&v, 13, "Backspace: erase");
+      pos_view_line(&v, 13, "Del: erase (top-right key)");
       pos_view_line(&v, 15, "Fn+`: back  Fn+Space: home");
       pos_device_show(&v);
       redraw = false;
@@ -220,6 +223,7 @@ int pos_ui_progress(void *ctx, const char *phase, const char *name,
     last = now;
     pos_view_t v;
     pos_view_clear(&v, pos_ui_phase_title(phase));
+    v.black_background = true;
     pos_view_line(&v, 3, "%s", name);
     if (strlen(name) > 30)
       pos_view_line(&v, 4, "%.30s", name + 30);

@@ -25,7 +25,7 @@ import zipfile
 import pos_setup_storage as storage
 from pos_setup_storage import SetupError
 
-VERSION = "0.5.4-dev"
+VERSION = "0.5.5-dev"
 REPOSITORY = "thatsockmonke/POS"
 MAX_DOWNLOAD = 256 * 1024 * 1024
 MAX_UNPACK = 256 * 1024 * 1024
@@ -467,6 +467,10 @@ def backup_and_recovery(state: Path) -> tuple[str, Path]:
     report = {"format": 1, "device_id": probe["device_id"], "backup_sha256": posctl.sha256(backup),
               "factory_boot_observed": True, "basis": "operator observation", "utc": int(time.time())}
     report_path = Path(str(backup) + ".pos-setup-recovery.json")
+    if report_path.exists() or report_path.is_symlink():
+        # A retry can reuse the same known-good backup. Keep earlier evidence
+        # and record this fresh operator observation separately.
+        report_path = Path(str(backup) + f".pos-setup-recovery-{time.time_ns()}.json")
     with report_path.open("x") as f:
         os.chmod(report_path, 0o600); json.dump(report, f, indent=2); f.write("\n"); f.flush(); os.fsync(f.fileno())
     return port, backup
@@ -577,7 +581,7 @@ def main(argv=None) -> int:
     parser.add_argument("--version", action="version", version="POS Setup " + VERSION)
     parser.add_argument("--doctor", action="store_true", help="Read-only check of Linux/Crostini card/USB access")
     parser.add_argument("--download-only", action="store_true", help="Download and verify the latest published POS, including development releases")
-    parser.add_argument("--release", help="Choose a specific release, e.g. v0.5.4-dev")
+    parser.add_argument("--release", help="Choose a specific release, e.g. v0.5.5-dev")
     parser.add_argument("--bundle", type=Path, help="Use an already downloaded POS ZIP plus matching .sha256 file")
     parser.add_argument("--sd-folder", type=Path, help="Offer this mounted/shared card folder (copy only; never formats)")
     parser.add_argument("--work-dir", type=Path, default=Path.home()/".local/share/pos-setup", help="Private download/backup folder; default ~/.local/share/pos-setup")

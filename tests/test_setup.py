@@ -336,6 +336,15 @@ class SetupTests(unittest.TestCase):
             self.assertEqual(selected,backup);new.assert_not_called();restored.assert_called_once_with(port,backup,True)
         proof=json.loads(Path(str(backup)+".pos-setup-recovery.json").read_text())
         self.assertTrue(proof["factory_boot_observed"]);self.assertEqual(proof["backup_sha256"],storage.sha256(backup))
+        original=Path(str(backup)+".pos-setup-recovery.json").read_bytes()
+        with patch.object(wizard,"serial_port",return_value="/dev/ttyACM0"),patch("builtins.input",side_effect=["y","1","y","y"]), \
+             patch.object(posctl,"hardware_probe",return_value=metadata),patch.object(posctl,"factory_backup") as new,patch.object(posctl,"factory_restore") as restored:
+            port,selected=wizard.backup_and_recovery(self.state)
+            self.assertEqual(selected,backup);new.assert_not_called();restored.assert_called_once_with(port,backup,True)
+        self.assertEqual(Path(str(backup)+".pos-setup-recovery.json").read_bytes(),original)
+        repeated=list(folder.glob("original.bin.pos-setup-recovery-*.json"))
+        self.assertEqual(len(repeated),1);self.assertEqual(repeated[0].stat().st_mode&0o777,0o600)
+        self.assertTrue(json.loads(repeated[0].read_text())["factory_boot_observed"])
 
     def test_known_exfat_ext4_and_card_subfolders_cannot_masquerade_as_fat32(self):
         for kind in ("ext4","exfat","ntfs"):

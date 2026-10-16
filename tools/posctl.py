@@ -437,6 +437,19 @@ def factory_backup(port: str, output: Path) -> None:
     readback.unlink()
 
 
+def hardware_write_verified(port: str, image: Path) -> None:
+    # The merged image includes NVS/OTA data. Never boot it before comparing:
+    # its first boot legitimately writes those regions (e.g. health counters).
+    hardware_command(port, "--after", "no_reset", "write_flash", "0x0", str(image.absolute()))
+    hardware_command(port, "--after", "no_reset", "verify_flash", "0x0", str(image.absolute()))
+    # A read-only command with an explicit post-command hard reset starts the
+    # app only after verification; do not depend on ESPTOOL_AFTER in the shell.
+    try:
+        hardware_command(port, "--after", "hard_reset", "read_mac")
+    except USBCommandError as error:
+        raise USBCommandError("Flash readback verified, but automatic restart failed. Power-cycle the Cardputer.\n" + str(error)) from error
+
+
 def factory_restore(port: str, backup: Path, confirmed: bool) -> None:
     if not confirmed:
         raise ValueError("Restoring replaces internal flash. Supply --confirm-restore only after reviewing the matching backup")
@@ -450,8 +463,7 @@ def factory_restore(port: str, backup: Path, confirmed: bool) -> None:
         raise ValueError("Backup belongs to a different device; no write attempted")
     if not current.get("plain_development_flash") or not report.get("plain_development_flash"):
         raise ValueError("This restore tool supports unencrypted development flash with Secure Boot disabled; use the vendor's recovery for other configurations")
-    hardware_command(port, "write_flash", "0x0", str(backup.absolute()))
-    hardware_command(port, "verify_flash", "0x0", str(backup.absolute()))
+    hardware_write_verified(port, backup)
     # Record evidence separately; never rewrite or delete the known-good backup.
     evidence = Path(str(backup) + f".restore-verified-{time.time_ns()}.json")
     with evidence.open("x") as stream:

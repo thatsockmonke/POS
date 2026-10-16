@@ -124,7 +124,8 @@ class DeployTests(unittest.TestCase):
         metadata=dict(format=1,chip="esp32s3",readback_verified=True,plain_development_flash=True,device_id=self.target['device_id'],bytes=backup.stat().st_size,sha256=posctl.sha256(backup))
         Path(str(backup)+'.json').write_text(json.dumps(metadata));args=SimpleNamespace(confirm_flash=True,image=file,sha256=posctl.sha256(file),factory_backup=backup,port='mock-port')
         with patch.object(posctl,'hardware_probe',return_value=metadata),patch.object(posctl,'hardware_command') as command:
-            pos_deploy.flash(args,posctl);self.assertEqual([call.args[1] for call in command.call_args_list],['write_flash','verify_flash'])
+            pos_deploy.flash(args,posctl);self.assertEqual([call.args[3] for call in command.call_args_list],['write_flash','verify_flash','read_mac'])
+            self.assertEqual([call.args[1:3] for call in command.call_args_list],[('--after','no_reset'),('--after','no_reset'),('--after','hard_reset')])
         metadata['device_id']='00:11:22:33:44:55'
         with patch.object(posctl,'hardware_probe',return_value=metadata),patch.object(posctl,'hardware_command') as command:
             with self.assertRaises(ValueError):pos_deploy.flash(args,posctl)

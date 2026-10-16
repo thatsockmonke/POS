@@ -15,9 +15,16 @@ enum {
   POS_KEY_DOWN,
   POS_KEY_LEFT,
   POS_KEY_RIGHT,
-  POS_KEY_HOME
+  POS_KEY_HOME,
+  POS_KEY_DELETE
 };
-enum { POS_MOD_SHIFT = 1, POS_MOD_CTRL = 2, POS_MOD_FN = 4, POS_MOD_ALT = 8 };
+enum {
+  POS_MOD_SHIFT = 1,
+  POS_MOD_CTRL = 2,
+  POS_MOD_FN = 4,
+  POS_MOD_ALT = 8,
+  POS_MOD_META = 16
+};
 typedef struct {
   int key;
   unsigned modifiers;
@@ -26,6 +33,7 @@ typedef struct {
 typedef struct {
   bool held[56];
   bool home_held;
+  int pressed_key[56];
 } pos_keyboard_t;
 /* TCA8418 FIFO event: low seven bits are 1 + row*10 + column, bit 7 is down. */
 bool pos_keyboard_decode(pos_keyboard_t *keyboard, uint8_t raw,
@@ -51,6 +59,7 @@ typedef struct {
   char lines[POS_ROWS][POS_COLS + 1];
   int selected_row;
   bool tiles;
+  bool black_background;
   int selected_tile;
   uint8_t icons[3][8];
   bool solid_color;

@@ -300,5 +300,4 @@ def flash(args, api) -> None:
             not current.get("device_id") or backup.is_symlink() or backup.stat().st_size != metadata.get("bytes") or
             api.sha256(backup) != metadata.get("sha256")):
         raise ValueError("Factory backup does not match this unencrypted development device; no write attempted")
-    api.hardware_command(args.port, "write_flash", "0x0", str(args.image.absolute()))
-    api.hardware_command(args.port, "verify_flash", "0x0", str(args.image.absolute()))
+    api.hardware_write_verified(args.port, args.image)

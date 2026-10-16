@@ -2,13 +2,15 @@
 
 Target: `m5stack-cardputer-adv`, ESP32-S3. This is an explicit profile, not automatic
 revision detection. The constants below are verified against M5Stack source;
-physical signals, orientation, timing and calibration remain unverified here.
+physical signals, timing and calibration require bench checks. An initial user test
+confirmed USB backup/recovery, installer boot and SD detection, and reported an
+upside-down display. The corrected rotation still needs on-device confirmation.
 
 | Function | GPIO / configuration | Source |
 | --- | --- | --- |
 | SD SCK / MISO / MOSI / CS | 40 / 39 / 14 / 12, SPI3 at 10 MHz | M5Unified ADV pin table |
 | LCD SCK / MOSI / CS / DC / reset / backlight | 36 / 35 / 37 / 34 / 33 / 38, SPI2 at 20 MHz | M5GFX Cardputer/ADV ST7789 profile |
-| LCD geometry | 240x135 landscape; swapped axes, gap 40/52, inversion | M5GFX profile; orientation needs bench confirmation |
+| LCD geometry | 240x135 landscape; swap XY, mirror X only, gap 40/53, inversion | Stock M5GFX rotation 1; correction pending bench confirmation |
 | ADV keyboard | TCA8418 0x34, SDA 8, SCL 9, 400 kHz, 7x8 matrix | M5Unified + M5Cardputer ADV reader |
 | Keyboard IRQ | GPIO 11 published; POS polls FIFO/status instead | M5Cardputer ADV reader |
 | System button | G0, active low | M5Unified ADV button configuration |
@@ -31,6 +33,20 @@ Pinned references:
 - [M5GFX display profile](https://github.com/m5stack/M5GFX/blob/347a23274081a105cb9fc0fc3bbf0e15c78e79c3/src/M5GFX.cpp)
 - [ADV keyboard/remap](https://github.com/m5stack/M5Cardputer/blob/f1392858b9994c3547120e602a57d3553d16ab01/src/utility/Keyboard/KeyboardReader/TCA8418.cpp)
 - [Key layout](https://github.com/m5stack/M5Cardputer/blob/f1392858b9994c3547120e602a57d3553d16ab01/src/utility/Keyboard/Keyboard.h)
+
+- [Stock ADV keyboard and Fn layer](https://github.com/m5stack/M5Cardputer-UserDemo/blob/b549eac0a3c65bc108186c276b8fac0a214aaa4e/main/hal/keyboard/keyboard.cpp)
+
+The stock display profile uses a 135x240 panel at native offsets 52/40 and
+rotation 1. After swapping axes, its MADCTL orientation is MV+MX (not MY), and
+the row offset becomes `240 - (135 + 52) = 53`. This applies equally to the
+installer, boot animation, setup and launcher.
+
+The stock ADV Fn layer differs from the M5Cardputer library: keys without an
+Fn override fall through, including Enter/Tab/numbers/punctuation. Fn+letters
+produce capitals; Fn+backtick is Escape, Fn+Del is forward Delete, and Fn with
+semicolon/comma/period/slash produces Up/Left/Down/Right. Aa/Shift, Ctrl, Alt
+and Opt/Meta are tracked independently. POS retains its reserved Fn+Space Home
+shortcut. Key releases keep the identity emitted on press when modifiers change.
 
 Only IDF drivers are linked, not Arduino/M5Unified/M5GFX implementations. A failed
 TCA probe leaves USB input available. LCD failure leaves text output available.

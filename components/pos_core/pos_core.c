@@ -15,7 +15,9 @@ bool pos_home_take(void) {
   return value;
 }
 
-/* Functional layout/remap from M5Stack's ADV TCA8418 and Keyboard key map. */
+/* Physical remap and Fn behavior from stock M5Cardputer-UserDemo's
+ * main/hal/keyboard/keyboard.cpp at b549eac0a3c65bc108186c276b8fac0a214aaa4e.
+ * Fn+letters type uppercase; keys without an override keep working. */
 static const int normal[4][14] = {
     {'`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=',
      POS_KEY_BACKSPACE},
@@ -40,7 +42,8 @@ bool pos_keyboard_decode(pos_keyboard_t *k, uint8_t raw, pos_event_t *event) {
   k->held[index] = down;
   unsigned mods =
       (k->held[29] ? POS_MOD_SHIFT : 0) | (k->held[42] ? POS_MOD_CTRL : 0) |
-      (k->held[28] ? POS_MOD_FN : 0) | (k->held[44] ? POS_MOD_ALT : 0);
+      (k->held[28] ? POS_MOD_FN : 0) | (k->held[44] ? POS_MOD_ALT : 0) |
+      (k->held[43] ? POS_MOD_META : 0);
   bool home = k->held[28] && k->held[55]; /* Fn+Space, reserved globally */
   if (home && !k->home_held) {
     k->home_held = true;
@@ -48,12 +51,22 @@ bool pos_keyboard_decode(pos_keyboard_t *k, uint8_t raw, pos_event_t *event) {
     return true;
   }
   k->home_held = home;
+  if (!down) {
+    int key = k->pressed_key[index];
+    k->pressed_key[index] = 0;
+    if (!key)
+      return false;
+    *event = (pos_event_t){key, mods, false};
+    return true;
+  }
   int key = normal[y][x];
   if (!key || (home && index == 55))
     return false;
   if (mods & POS_MOD_FN) {
     if (index == 0)
       key = POS_KEY_ESCAPE;
+    else if (index == 13)
+      key = POS_KEY_DELETE;
     else if (index == 39)
       key = POS_KEY_UP;
     else if (index == 52)
@@ -62,10 +75,14 @@ bool pos_keyboard_decode(pos_keyboard_t *k, uint8_t raw, pos_event_t *event) {
       key = POS_KEY_DOWN;
     else if (index == 54)
       key = POS_KEY_RIGHT;
-    else
-      return false;
+    else if (key >= 'a' && key <= 'z') {
+      key -= 'a' - 'A';
+      mods |= POS_MOD_SHIFT;
+    } else if ((mods & POS_MOD_SHIFT) && key < 128)
+      key = shifted[y][x];
   } else if ((mods & POS_MOD_SHIFT) && key < 128)
     key = shifted[y][x];
+  k->pressed_key[index] = key;
   *event = (pos_event_t){key, mods, down};
   return true;
 }

@@ -236,6 +236,52 @@ class FeatureTests(unittest.TestCase):
         self.run_feature("editor-ui-save")
         self.assertEqual((self.card/"POS/Users/Owner/Documents/Untitled.txt").read_bytes(),b"wasd")
 
+    def test_stock_fn_delete_removes_character_ahead_of_editor_cursor(self):
+        self.run_feature("editor-ui-delete")
+        self.assertEqual((self.card/"POS/Users/Owner/Documents/Untitled.txt").read_bytes(),b"asd")
+
+    def test_physical_stock_fn_arrows_and_enter_operate_black_installer_menu(self):
+        self.run_feature("keyboard-ui")
+
+    def test_entire_stock_adv_key_layout_normal_shift_and_fn_layers(self):
+        # Stock UserDemo keyboard.cpp b549eac0...: physical TCA codes by row,
+        # normal/Shift character legends and Fn overrides. No decoder-derived
+        # expectations; in particular stock Fn+number stays a number.
+        scans=[[1,5,11,15,21,25,31,35,41,45,51,55,61,65],
+               [2,6,12,16,22,26,32,36,42,46,52,56,62,66],
+               [3,7,13,17,23,27,33,37,43,47,53,57,63,67],
+               [4,8,14,18,24,28,34,38,44,48,54,58,64,68]]
+        normal=[list("`1234567890-=")+[258],list("\tqwertyuiop[]\\"),
+                [None,None,*"asdfghjkl;'",256],[None,None,None,*"zxcvbnm,./ "]]
+        shifted=[list("~!@#$%^&*()_+")+[258],list("\tQWERTYUIOP{}|"),
+                 [None,None,*'ASDFGHJKL:"',256],[None,None,None,*"ZXCVBNM<>? "]]
+        overrides={1:257,65:264,57:259,54:261,58:260,64:262}
+        for row in range(4):
+            for column in range(14):
+                code=scans[row][column];base=normal[row][column]
+                for layer,prefix,mods in [("normal",[],0),("shift",[0x87],1),("fn",[0x83],4)]:
+                    with self.subTest(code=code,layer=layer):
+                        actual=[tuple(map(int,line.split())) for line in self.run_feature("keyboard-events",*prefix,code|128,code).stdout.splitlines()]
+                        if base is None:expected=[]
+                        elif layer=="fn" and code==68:expected=[(263,4,1)] # POS global Home.
+                        else:
+                            key=shifted[row][column] if layer=="shift" else base
+                            if layer=="fn":
+                                key=overrides.get(code,base)
+                                if isinstance(key,str) and key.isalpha():key=key.upper();mods|=1
+                            if isinstance(key,str):key=ord(key)
+                            expected=[(key,mods,1),(key,4 if layer=="fn" else mods,0)]
+                        self.assertEqual(actual,expected)
+
+    def test_key_releases_keep_pressed_identity_when_modifiers_are_released_first(self):
+        actual=self.run_feature("keyboard-events",0x83,0xb9,0x03,0x39).stdout
+        self.assertEqual(actual,"259 4 1\n259 0 0\n")
+        actual=self.run_feature("keyboard-events",0x87,0x8c,0x07,0x0c).stdout
+        self.assertEqual(actual,"87 1 1\n87 0 0\n")
+
+    def test_stock_opt_meta_modifier_is_preserved_in_app_events(self):
+        self.assertEqual(self.run_feature("keyboard-events",0x88,0x8d,0x0d,0x08).stdout,"97 16 1\n97 16 0\n")
+
     def test_settings_brightness_validation_save_and_cancel_preserve_other_preferences(self):
         self.run_feature("settings-ui-brightness")
         for name in ("settings-ui-cancel","settings-ui-timezone","settings-ui-safe","settings-ui-profile"):

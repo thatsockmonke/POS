@@ -8,7 +8,7 @@ manual flash addresses or an understanding of partitions.
 
 ## Start here
 
-1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.4-dev).
+1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.5-dev).
 2. Download **`pos-setup`**. This is the executable wizard, not the Source code ZIP.
    Its optional `pos-setup.sha256` checksum is beside it. The complete POS ZIP
    also includes a copy of the wizard.
@@ -73,7 +73,9 @@ prompts. Everything is a numbered menu or a plain-English confirmation.
 - After you put the card into the powered-off ADV and reconnect USB, asks you to
   type `FLASH`. It checks the installer images/layout and matching backup, writes
   the USB installer at the correct address and verifies flash readback. Progress
-  is visible. It never uses a force flag, burns eFuses or erases the whole flash.
+  is visible. Verification finishes while the device stays in the ROM downloader;
+  only then does the wizard reset it. This prevents first-boot settings writes
+  from interfering with the full-image comparison. It never uses a force flag, burns eFuses or erases the whole flash.
 
 Backups contain whatever software was on the Cardputer before that backup was
 made. A new backup is the manufacturer's factory software only if that software
@@ -153,7 +155,7 @@ system, use [RECOVERY.md](RECOVERY.md) to back up/reinstall or the signed update
 ### Backup stops with “Corrupt data” or the screen stays black
 
 This can happen during a fast esptool USB read through ChromeOS forwarding.
-Version 0.5.4-dev adds one automatic ROM compatibility retry, using smaller
+Version 0.5.4-dev added one automatic ROM compatibility retry, using smaller
 request/response transfers instead of the fast streaming stub protocol. Progress
 is displayed as readable, rate-limited lines. The retry is slower; leave USB
 connected while it is making progress. Do not start another serial program.
@@ -166,21 +168,49 @@ USB and share it with Linux again before retrying. If ROM reads also fail,
 try another data cable/port or a regular Linux computer: the tool cannot repair
 ChromeOS USB forwarding. Keep all completed backups.
 
-If your card was already prepared using **0.5.3-dev**, download the new
-**0.5.4-dev `pos-setup` executable**, then run it with `--release v0.5.3-dev`
-and choose **3. Flash Cardputer only**. The new executable supplies the fixed
-USB helpers while using the matching old firmware/card package. You do not
-need to format or prepare that card again. With one USB port, leave the card
-inside the powered-off Cardputer, then connect the Cardputer; the card reader
-is not needed during flashing. For a fresh 0.5.4-dev install, prepare the card
-and flash using that same version instead.
+### Upgrading the prepared installer after the upside-down-screen fix
+
+The display/keyboard fix is in **both 0.5.5-dev firmware roles**. Refresh the
+SD package as well as the USB installer; using `--release v0.5.3-dev` would keep
+installing the old firmware.
+
+If the card has only the old installer files and you have **not installed POS**:
+
+1. Power off the Cardputer and connect the card reader to your Chromebook.
+2. In ChromeOS Files, rename the card's top-level **pos-install** folder to
+   **pos-install-old** (or another unused name). Keep the old files; formatting
+   is unnecessary. Preserve any `pos-install.copying` folder under another name too.
+3. Download this release's **pos-setup**, replace the old executable and run it
+   with `--release v0.5.5-dev`. Choose **2. Prepare the microSD only** and select
+   the card's shared top-level folder. It copies and verifies the matching package.
+4. Eject the card, put it into the powered-off ADV, connect the ADV and share its
+   USB connection with Linux. Run the same command and choose **3. Flash Cardputer
+   only**. Select the earlier verified factory backup, rather than making a new
+   backup of the POS installer. Follow the restore/observed-factory-boot prompts,
+   then type FLASH when asked.
+5. On the Cardputer choose **Install POS / resume**, type **INSTALL**, and
+   power-cycle when prompted. Setup uses black screens. Navigate with Fn held
+   plus the printed arrows; Enter also works while Fn remains held. Fn+backtick
+   goes back, and the printed Del key erases the previous character.
+
+With the paths used in the reported Crostini session, run:
+
+```sh
+chmod +x "/mnt/shared/MyFiles/Downloads/pos-setup"
+"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.5.5-dev --sd-folder "/mnt/shared/removable/POS Drive"
+```
+
+If the card already contains an installed **/POS** tree, keep it and your files.
+Use the signed Software Update from the installed OS, or the documented backup
+and reinstall path. The card-preparation wizard intentionally refuses to overwrite
+an installed system. Keep the private factory `.bin` and its `.json` on Linux.
 
 Optional commands for troubleshooting:
 
 ```sh
 ~/pos-setup --download-only                 # Download/verify without device changes
-~/pos-setup --release v0.5.4-dev             # Use a specific published version
-~/pos-setup --bundle /path/pos-0.5.4-dev.zip # Use a ZIP and matching .sha256 offline
+~/pos-setup --release v0.5.5-dev             # Use a specific published version
+~/pos-setup --bundle /path/pos-0.5.5-dev.zip # Use a ZIP and matching .sha256 offline
 ~/pos-setup --sd-folder '/mnt/chromeos/removable/YOUR CARD'
 ```
 

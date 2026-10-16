@@ -500,6 +500,13 @@ static bool edit(pos_editor_t *e) {
       e->cursor = start;
       editing = true;
       result = pos_editor_replace(e, count, "", 0, &error);
+    } else if (event.key == POS_KEY_DELETE &&
+               (count || e->cursor < e->length)) {
+      if (!count)
+        count = next(e, e->cursor) - e->cursor;
+      e->cursor = start;
+      editing = true;
+      result = pos_editor_replace(e, count, "", 0, &error);
     } else if (event.key == POS_KEY_ENTER || event.key == '\t' ||
                (event.key >= 32 && event.key <= 126 &&
                 !(event.modifiers & POS_MOD_ALT))) {

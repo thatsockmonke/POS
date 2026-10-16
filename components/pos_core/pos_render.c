@@ -154,7 +154,8 @@ uint16_t pos_view_pixel(const pos_view_t *v, int x, int y) {
   if (v->color_picker && picker_pixel(v, x, y, &picker))
     return picker;
   int row = y / 8, column = x / 8;
-  uint16_t bg = v->color_picker ? 0 : 0x0842, fg = 0xffff;
+  uint16_t bg = v->color_picker || v->black_background ? 0 : 0x0842,
+           fg = 0xffff;
   if (v->tiles) {
     unsigned count = v->background.count;
     bg = count && count <= POS_BACKGROUND_MAX_STRIPES
@@ -162,11 +163,11 @@ uint16_t pos_view_pixel(const pos_view_t *v, int x, int y) {
              : pos_boot_colors[y / 45];
   }
   if (row == 0) {
-    bg = v->tiles || v->color_picker ? 0 : 0x034c;
+    bg = v->tiles || v->color_picker || v->black_background ? 0 : 0x034c;
     fg = 0xffff;
   }
   if (row == v->selected_row) {
-    bg = 0x07ff;
+    bg = v->black_background ? 0xffff : 0x07ff;
     fg = 0;
   }
   if (v->tiles) {

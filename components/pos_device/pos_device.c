@@ -210,8 +210,10 @@ int pos_device_init(void) {
         esp_lcd_panel_reset(panel) == ESP_OK &&
         esp_lcd_panel_init(panel) == ESP_OK &&
         esp_lcd_panel_swap_xy(panel, true) == ESP_OK &&
-        esp_lcd_panel_mirror(panel, false, true) == ESP_OK &&
-        esp_lcd_panel_set_gap(panel, 40, 52) == ESP_OK &&
+        /* Stock ADV M5GFX rotation 1: MV+MX. After swapping axes,
+         * the 135-pixel window starts at 240-(135+52) = 53. */
+        esp_lcd_panel_mirror(panel, true, false) == ESP_OK &&
+        esp_lcd_panel_set_gap(panel, 40, 53) == ESP_OK &&
         esp_lcd_panel_invert_color(panel, true) == ESP_OK &&
         esp_lcd_panel_disp_on_off(panel, true) == ESP_OK)
       info.display_ok = true;

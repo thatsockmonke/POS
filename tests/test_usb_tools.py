@@ -142,10 +142,40 @@ class UsbToolsTests(unittest.TestCase):
         self.backup_device()
         with patch.object(posctl,"hardware_probe",return_value=PROBE),patch.object(posctl,"hardware_command",return_value="ok") as command:
             posctl.factory_restore("mock-port",self.backup,True)
-            self.assertEqual([call.args[1] for call in command.call_args_list],["write_flash","verify_flash"])
+            self.assertEqual([call.args[3] for call in command.call_args_list],["write_flash","verify_flash","read_mac"])
         evidence=list(self.backup.parent.glob("*.restore-verified-*.json"));self.assertEqual(len(evidence),1)
         report=json.loads(evidence[0].read_text());self.assertTrue(report["flash_readback_verified"]);self.assertFalse(report["factory_boot_observed"])
         self.assertEqual(self.backup.read_bytes(),self.data)
+
+    def test_usb_verification_precedes_first_boot_mutation_of_nvs(self):
+        self.backup.write_bytes(self.data)
+        flash=bytearray();booted=False
+        def command(port,*args):
+            nonlocal booted
+            operation=args[2]
+            if operation=="write_flash":flash[:]=Path(args[-1]).read_bytes()
+            if operation=="verify_flash":
+                if flash!=Path(args[-1]).read_bytes():raise posctl.USBCommandError("digest mismatch")
+                self.assertFalse(booted)
+            if args[1]=="hard_reset":
+                booted=True;flash[0x9000]^=1 # Health/settings writes on first boot.
+            return "ok"
+        with patch.object(posctl,"hardware_command",side_effect=command):
+            posctl.hardware_write_verified("mock-port",self.backup)
+        self.assertTrue(booted)
+        self.assertNotEqual(flash,self.data)
+
+    def test_write_or_verify_failure_cannot_trigger_boot(self):
+        for fail_at in (1,2):
+            with self.subTest(fail_at=fail_at),patch.object(posctl,"hardware_command",side_effect=["ok"]*(fail_at-1)+[posctl.USBCommandError("verification or write failed")]) as command:
+                with self.assertRaises(posctl.USBCommandError):posctl.hardware_write_verified("mock-port",self.backup)
+                self.assertEqual(command.call_count,fail_at)
+                self.assertTrue(all(call.args[1:3]==("--after","no_reset") for call in command.call_args_list))
+
+    def test_restart_failure_distinguishes_completed_verification(self):
+        with patch.object(posctl,"hardware_command",side_effect=["ok","ok",posctl.USBCommandError("USB disconnected")]):
+            with self.assertRaisesRegex(posctl.USBCommandError,"readback verified.*restart failed"):
+                posctl.hardware_write_verified("mock-port",self.backup)
 
 
 if __name__=="__main__":unittest.main()
