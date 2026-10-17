@@ -21,7 +21,7 @@ class ReleaseUpdateTests(unittest.TestCase):
         self.base=Path(self.temp.name);self.root=self.base/'repo';(self.root/'updates').mkdir(parents=True)
         self.private=self.base/'private.pem';self.public=self.root/'updates/public-key.pem'
         fingerprint=pos_updates.keygen(self.private,self.public)
-        self.config=dict(format=1,repository='owner/POS',branch='main',manifest='updates/manifest.json',minimum_version='0.4.0-dev',fingerprint=fingerprint)
+        self.config=dict(format=1,repository='owner/POS',branch='main',manifest='updates/latest.json',fingerprint=fingerprint)
         (self.root/'updates/publisher.json').write_text(json.dumps(self.config))
     def bundle(self,version='0.5.3-dev',data=b'System asset'):
         fw=bytes(image(version));rec=lambda p,b:dict(path=p,size=len(b),sha256=hashlib.sha256(b).hexdigest())
@@ -40,6 +40,45 @@ class ReleaseUpdateTests(unittest.TestCase):
         self.assertEqual(result['sequence'],1);self.assertEqual(result['release'],'0.5.3-dev')
         self.assertEqual(result['base_url'],'https://raw.githubusercontent.com/owner/POS/main/updates/releases/0.5.3-dev/')
         self.assertEqual(publisher.validate_feed(self.root),result)
+    def test_publisher_has_no_version_cutoff_and_preserves_legacy_reader_field(self):
+        result=publisher.publish(self.root,self.bundle('0.1.0-dev'),self.private)
+        self.assertEqual(result['minimum_version'],'0.0.0')
+        self.assertNotIn('minimum_version',publisher.configuration(self.root))
+
+    def test_transition_pins_old_feed_and_future_releases_drop_legacy_field(self):
+        bridge=publisher.publish(self.root,self.bundle('0.6.0-dev'),self.private)
+        old_feed=self.root/'updates/manifest.json';pinned=old_feed.read_bytes()
+        self.assertEqual(bridge['minimum_version'],'0.0.0')
+        self.assertEqual(pinned,(self.root/'updates/latest.json').read_bytes())
+        future=publisher.publish(self.root,self.bundle('0.6.1-dev'),self.private)
+        self.assertNotIn('minimum_version',future)
+        self.assertEqual(old_feed.read_bytes(),pinned)
+        self.assertEqual(publisher.validate_feed(self.root)['release'],'0.6.1-dev')
+        self.assertEqual(publisher.validate_feed(self.root,legacy=True)['release'],'0.6.0-dev')
+
+    def test_future_signed_manifest_with_obsolete_field_is_refused(self):
+        publisher.publish(self.root,self.bundle('0.6.0-dev'),self.private)
+        future=publisher.publish(self.root,self.bundle('0.6.1-dev'),self.private)
+        future['minimum_version']='0.0.0'
+        body=json.dumps(future,separators=(',',':')).encode()
+        sig=subprocess.run(['openssl','dgst','-sha256','-sign',str(self.private)],input=body,check=True,capture_output=True).stdout
+        raw=json.dumps(dict(payload=body.decode(),signature=sig.hex())).encode()
+        (self.root/'updates/releases/0.6.1-dev/manifest.json').write_bytes(raw)
+        (self.root/'updates/latest.json').write_bytes(raw)
+        with self.assertRaisesRegex(ValueError,'must omit'):
+            publisher.validate_feed(self.root)
+
+    def test_future_release_requires_publishing_transition_first(self):
+        with self.assertRaises(ValueError):publisher.publish(self.root,self.bundle('0.6.1-dev'),self.private)
+        self.assertFalse((self.root/'updates/latest.json').exists())
+        self.assertFalse((self.root/'updates/releases/0.6.1-dev').exists())
+
+    def test_transition_imports_existing_old_feed_sequence(self):
+        previous=publisher.publish(self.root,self.bundle(),self.private)
+        (self.root/'updates/latest.json').unlink() # Simulate a pre-0.6 checkout.
+        bridge=publisher.publish(self.root,self.bundle('0.6.0-dev'),self.private)
+        self.assertEqual(bridge['sequence'],previous['sequence']+1)
+
     def test_retry_preserves_signature_and_export_is_deterministic(self):
         bundle=self.bundle();publisher.publish(self.root,bundle,self.private)
         before=(self.root/'updates/manifest.json').read_bytes()

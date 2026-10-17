@@ -36,17 +36,16 @@ def fingerprint(public: bytes) -> str:
 
 def configuration(root: Path) -> dict:
     root = root.resolve(strict=True)
-    for path in (root/'updates', root/'updates/publisher.json', root/'updates/public-key.pem', root/'updates/releases'):
+    for path in (root/'updates', root/'updates/publisher.json', root/'updates/public-key.pem', root/'updates/releases', root/'updates/manifest.json', root/'updates/latest.json'):
         if path.is_symlink() or not path.resolve().is_relative_to(root):
             raise ValueError('Publisher paths must stay inside the checkout without symlinks')
     config = json.loads((root/'updates/publisher.json').read_text())
     if (config.get('format') != 1 or
             not re.fullmatch(r'[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+', config.get('repository', '')) or
             not re.fullmatch(r'[A-Za-z0-9_-]+', config.get('branch', '')) or
-            config.get('manifest') != 'updates/manifest.json' or
+            config.get('manifest') != 'updates/latest.json' or
             fingerprint((root/'updates/public-key.pem').read_bytes()) != config.get('fingerprint')):
         raise ValueError('Invalid publisher configuration or trusted public key')
-    pos_updates.version(config['minimum_version'])
     return config
 
 
@@ -60,9 +59,11 @@ def expected_base(config: dict, version: str) -> str:
             f"{config['branch']}/updates/releases/{version}/")
 
 
-def validate_feed(root: Path) -> dict:
+def validate_feed(root: Path, legacy: bool = False) -> dict:
     config = configuration(root)
-    channel = root/config['manifest']
+    channel = root/('updates/manifest.json' if legacy else config['manifest'])
+    if not legacy and not channel.exists() and not channel.is_symlink():
+        channel = root/'updates/manifest.json'  # Import the last pre-0.6 sequence.
     if not channel.is_file() or channel.is_symlink():
         raise ValueError('Signed update channel is missing or is a symlink')
     if channel.stat().st_size > 32768:
@@ -76,6 +77,8 @@ def validate_feed(root: Path) -> dict:
     if directory.is_symlink() or not directory.is_dir():
         raise ValueError('Channel has no corresponding release directory')
     data = signed_directory(directory, root/'updates/public-key.pem')
+    if pos_updates.compare(release, pos_updates.TRANSITION_RELEASE) > 0 and 'minimum_version' in data:
+        raise ValueError('Updates after 0.6.0-dev must omit the obsolete minimum_version field')
     if (channel.read_bytes() != (directory/'manifest.json').read_bytes() or
             data['release'] != release or data['base_url'] != expected_base(config, release)):
         raise ValueError('Channel and immutable signed release do not match')
@@ -89,6 +92,16 @@ def verified_bundle(archive: Path, state: Path):
         raise ValueError(str(exc)) from exc
 
 
+def write_channel(channel: Path, data: bytes) -> None:
+    temporary = channel.with_suffix('.json.part')
+    if channel.is_symlink() or temporary.exists() or temporary.is_symlink():
+        raise ValueError('Interrupted or symlinked channel write preserved; inspect before retrying')
+    with temporary.open('xb') as stream:
+        stream.write(data)
+        stream.flush(); os.fsync(stream.fileno())
+    os.replace(temporary, channel)
+
+
 def publish(root: Path, archive: Path, private: Path) -> dict:
     config = configuration(root)
     if private.is_symlink() or not private.is_file() or private.stat().st_mode & 0o077:
@@ -99,7 +112,7 @@ def publish(root: Path, archive: Path, private: Path) -> dict:
                             check=True, capture_output=True).stdout
     if fingerprint(public) != config['fingerprint']:
         raise ValueError('Signing key differs from the key trusted by firmware')
-    previous = validate_feed(root) if (root/config['manifest']).exists() else None
+    previous = validate_feed(root) if (root/config['manifest']).exists() or (root/'updates/manifest.json').exists() else None
     with tempfile.TemporaryDirectory(prefix='pos-release-update-') as work:
         state = Path(work)
         bundle, manifest = verified_bundle(archive, state)
@@ -107,8 +120,11 @@ def publish(root: Path, archive: Path, private: Path) -> dict:
         if archive.name != f'pos-{release}.zip':
             raise ValueError('Release archive filename and firmware version differ')
         pos_updates.version(release)
-        if pos_updates.compare(release, config['minimum_version']) < 0:
-            raise ValueError('Firmware version is below the supported update minimum')
+        future = pos_updates.compare(release, pos_updates.TRANSITION_RELEASE) > 0
+        if future:
+            bridge = validate_feed(root, legacy=True)
+            if bridge['release'] != pos_updates.TRANSITION_RELEASE or 'minimum_version' not in bridge:
+                raise ValueError('Publish the required 0.6.0-dev transition release first')
         destination = root/'updates/releases'/release
         if destination.exists() or destination.is_symlink():
             existing = signed_directory(destination, root/'updates/public-key.pem')
@@ -128,7 +144,7 @@ def publish(root: Path, archive: Path, private: Path) -> dict:
             install = bundle/'card/pos-install'
             stage = state/'signed'
             args = SimpleNamespace(kind='firmware', release=release,
-                minimum_version=config['minimum_version'], sequence=sequence,
+                sequence=sequence,
                 base_url=expected_base(config, release), private_key=private,
                 firmware=install/'firmware.bin', payload=install/'payload', output=stage)
             pos_updates.make_update(args, posctl)
@@ -149,14 +165,9 @@ def publish(root: Path, archive: Path, private: Path) -> dict:
             # Fail rather than merge into an existing/incomplete release directory.
             shutil.copytree(stage, destination)
             signed_directory(destination, root/'updates/public-key.pem')
-        channel = root/config['manifest']
-        temporary = channel.with_suffix('.json.part')
-        if temporary.exists() or temporary.is_symlink():
-            raise ValueError('Interrupted channel write preserved; inspect manifest.json.part before retrying')
-        with temporary.open('xb') as stream:
-            stream.write((destination/'manifest.json').read_bytes())
-            stream.flush(); os.fsync(stream.fileno())
-        os.replace(temporary, channel)
+        write_channel(root/config['manifest'], (destination/'manifest.json').read_bytes())
+        if not future:
+            write_channel(root/'updates/manifest.json', (destination/'manifest.json').read_bytes())
         return validate_feed(root)
 
 

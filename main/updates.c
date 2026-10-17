@@ -174,9 +174,7 @@ static bool install_url(const char *root, const char *url,
   int result = pos_update_load(full, s->key, esp_app_get_description()->version,
                                s->sequence, &u, &error);
   if (result) {
-    pos_ui_notice(result == 1    ? "POS is up to date"
-                  : result == -2 ? "Clean installation required"
-                                 : "Update rejected",
+    pos_ui_notice(result == 1 ? "POS is up to date" : "Update rejected",
                   error.message);
     return false;
   }
@@ -185,12 +183,12 @@ static bool install_url(const char *root, const char *url,
     size += u->package->files[i].size;
   char body[350];
   snprintf(body, sizeof(body),
-           "Release: %s\nType: %s\nMinimum version: %s\nSystem files: "
+           "Release: %s\nType: %s\nSystem files: "
            "%u\nMaximum download: %llu bytes\nSignature verified. Existing "
            "user files stay in place; previous System is retained. Firmware "
            "updates restart into the inactive OTA slot.",
            u->release, u->firmware ? "Firmware + SD system" : "SD assets only",
-           u->minimum, (unsigned)u->package->count, (unsigned long long)size);
+           (unsigned)u->package->count, (unsigned long long)size);
   pos_ui_notice("Update available", body);
   const char *options[] = {"Cancel", "Download and install verified update"};
   bool success = false;

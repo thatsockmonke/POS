@@ -7,21 +7,34 @@ There is no GitHub login or manual key import for a fresh/default installation.
 1. Connect Wi-Fi when prompted. POS synchronizes time when the clock has not been
    set; a correct date is required for HTTPS certificate validation.
 2. Choose **Check for Updates**. POS verifies the signature, hardware, package
-   format, semantic/minimum version and increasing signed sequence.
+   format, semantic version and increasing signed sequence.
 3. Review the new release/type/size, then approve **Download and install verified
    update**. Escape/Home cancels preparation; the short commit step finishes safely.
 4. A firmware update writes and verifies the inactive OTA slot, switches the verified
    SD System and restarts. Keep power and SD connected. Leave POS running normally
    for at least **60 seconds** so the new boot can be confirmed. A failed boot uses
    IDF rollback and the retained previous System. Asset-only updates do not flash.
-5. The current version reports **POS is up to date**. A version below the signed
-   minimum requires backup and clean installation rather than an unsafe direct jump.
+5. The current version reports **POS is up to date**. From **0.6.0-dev**, there is
+   no minimum-version cutoff or displayed minimum. Existing working updaters can
+   install this release normally; installations without an updater still need USB
+   installation. Signature/hash, model/format, sequence and downgrade checks remain.
 
-The official channel is:
+**Required update order: install 0.6.0-dev before any later update.** It is the
+last transition release that carries the obsolete minimum field for older
+updaters. Future update packages omit it completely.
+
+The official channel for 0.6.0-dev and newer is:
 
 ```text
-https://raw.githubusercontent.com/thatsockmonke/POS/main/updates/manifest.json
+https://raw.githubusercontent.com/thatsockmonke/POS/main/updates/latest.json
 ```
+
+The old `updates/manifest.json` address stays pinned to signed **0.6.0-dev**.
+Older devices therefore discover that required release first, even after newer
+versions ship. Installing 0.6.0 migrates only the exact old official URL/key to
+`latest.json`, preserving the trusted key and accepted sequence. Custom/partial
+sources remain unchanged. Custom servers should likewise offer 0.6.0 before
+serving later metadata. Fresh USB installations can use their matching bundle.
 
 The built-in public key is [public-key.pem](../updates/public-key.pem), with DER
 SPKI SHA-256 fingerprint:
@@ -60,7 +73,8 @@ all contents, signs the firmware/System records and publishes:
 
 - `updates/releases/<version>/`: immutable signed manifest, firmware, System
   payload, public key, distribution licenses and hashes.
-- `updates/manifest.json`: the current signed channel. Versions and sequences
+- `updates/latest.json`: the current signed channel; `updates/manifest.json`
+  remains pinned to the 0.6.0-dev transition for older clients. Versions and sequences
   must increase; interrupted/repeated jobs never replace existing version bytes.
 - `pos-update-<version>.zip` and its checksum on the same GitHub release. This is
   the signed OTA download, distinct from the full installer ZIP.
@@ -95,7 +109,7 @@ python tools/pos_release_updates.py --bundle /downloads/pos-0.5.3-dev.zip \
 python tools/pos_release_updates.py --verify
 ```
 
-Commit/push only the generated `updates/manifest.json` and version directory.
+Commit/push only the generated `updates/latest.json`, the bridge `updates/manifest.json` when publishing 0.6.0, and the version directory.
 The push triggers verification against the exact released bundle and attaches
 its deterministic signed update ZIP. It requires no CI private key because the
 signature already exists. Do not regenerate or overwrite a published version.
@@ -120,8 +134,8 @@ Build a new runtime first, then make a firmware update directory:
 
 ```sh
 python tools/posctl.py update-package --kind firmware \
-  --firmware build-v040/runtime/pos_runtime.bin --payload sd-payload \
-  --release 0.4.0-dev --minimum-version 0.4.0-dev --sequence 1 \
+  --firmware build-v050/runtime/pos_runtime.bin --payload sd-payload \
+  --release 0.6.0-dev --sequence 1 \
   --base-url https://your-server.example/pos/1/ \
   --private-key /your/private/location/pos-signing.pem --output dist/update-1
 ```
@@ -140,7 +154,7 @@ resources; the tool merges their records into a complete target manifest:
 ```sh
 python tools/posctl.py update-package --kind assets \
   --installed-manifest /path/to/target-installed.pos --payload /path/to/changed-assets \
-  --release 0.4.1-dev --minimum-version 0.4.0-dev --sequence 2 \
+  --release 0.6.1-dev --sequence 2 \
   --base-url https://your-server.example/pos/2/ \
   --private-key /your/private/location/pos-signing.pem --output dist/update-2
 ```
@@ -158,9 +172,21 @@ be reused locally. No user-installed app/package manager is implied by the term
 
 The UTF-8 envelope has exactly `payload` (the exact signed JSON string) and
 `signature` (lowercase hex DER ECDSA signature). SHA-256 covers every payload byte.
-The payload has exactly `format` (1), `model`, `release`, `minimum_version`,
-`sequence` (1..4294967295), `kind` (`firmware`/`assets`), `base_url` (HTTPS) and
-`package` (the ordinary complete installer-manifest object). Signed manifests are
+The payload has `format` (1), `model`, `release`, `sequence` (1..4294967295),
+`kind` (`firmware`/`assets`), `base_url` (HTTPS) and `package` (the ordinary complete
+installer-manifest object). No other fields are accepted except the optional
+legacy `minimum_version`. The 0.6.0-dev parser validates that field's syntax when
+present but never uses it to block upgrades or show a minimum. The publisher
+emits the neutral value `0.0.0` only for 0.6.0-dev and older packages, because
+already-installed readers require eight fields to download the transition.
+Packages newer than 0.6.0-dev contain exactly seven fields and never include
+`minimum_version`. There is no minimum-version CLI option or publisher setting.
+The official publisher requires the 0.6.0 bridge before publishing a later release
+and never advances the old feed beyond it. Published older manifests/signatures
+remain unchanged. Runtime legacy-field parsing and old-source migration can be
+removed in a later release once the required 0.6.0 transition is established;
+keep the frozen bridge available for devices that have not upgraded yet.
+Signed manifests are
 limited to 32 KiB. All System paths and per-file sizes/hashes use the installer's
 strict parser. Each HTTP response is bounded before publication, including
 unknown-length/chunked responses.

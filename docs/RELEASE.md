@@ -1,24 +1,29 @@
-POS 0.5.10-dev updates the boot sequence and removes Fn from everyday navigation.
+POS 0.6.0-dev — required transition before any future update.
 
-- Boot starts on a completely black screen. Pink slides into the top third
-  from the left; yellow starts in the middle when pink is halfway, then blue
-  starts at the bottom when yellow is halfway. After the flag completes,
-  large centered POS fades in and holds for one second. No color flashes.
-- The first black frame is drawn before the backlight turns on. Boot artwork
-  takes priority over the battery overlay, which returns on normal screens.
-- Printed arrow keys work directly in the launcher, menus, Files, Background,
-  color picker, Music and Recorder without Fn. Shift still gives fine picker
-  adjustment. Text fields/editor keep punctuation; Fn+arrows still moves the
-  text cursor. USB arrows and existing Fn navigation remain supported.
-- Saved 1x–64x microphone gain, live gain changes, spring/fade app transitions,
-  graphical app views and protected user-data/update behavior are retained.
-- Updated installation instructions, controls and animated boot preview.
+**Update to 0.6.0-dev first before installing any later release.** This is the
+last release that carries the obsolete minimum_version field so older installed
+updaters can read it. All later update packages omit that field entirely.
 
-Both firmware roles build. Native checks cover the entire black/stripe sequence,
-exact half-slide staggering, logo fade/hold, preview timings, physical TCA8418
-navigation with/without Fn, punctuation entry and live microphone gain.
-Physical animation timing still needs an on-device check. Previews use the real
-portable renderer with sample state, not a recording of hardware.
+- Software Update no longer shows Minimum version or blocks direct upgrades
+  based on that value. There is no --minimum-version option or publisher setting.
+- The old official updates/manifest.json feed stays pinned to signed 0.6.0-dev.
+  Older devices will therefore discover 0.6.0 first even when newer versions exist.
+  0.6.0 automatically migrates the exact old official source/key to updates/latest.json,
+  preserving trust and the accepted signed sequence. Custom sources stay untouched.
+- This transition package retains a neutral 0.0.0 legacy value. An older updater
+  may display it once while reviewing 0.6.0; the line is gone after upgrading.
+  Future packages contain no minimum_version key. Legacy runtime parsing/source
+  migration can be removed later while the frozen 0.6.0 bridge remains available.
+- Signatures, HTTPS certificates, file hashes, hardware/package compatibility,
+  signed sequences, firmware downgrade prevention, rollback and user-data
+  preservation remain. Older releases/signatures remain immutable.
+- Includes the black-start staggered flag/logo boot, navigation without Fn in
+  menus/apps, microphone gain, spring transitions and graphical app views.
 
-Install through Settings → System → Software Update → Check for Updates over
-Wi-Fi. No SD format or factory restore is needed. Experimental prerelease.
+Builds/tests cover new metadata, the transition feed and migration, future packages
+without the field, existing-updater compatibility and protected update behavior.
+Physical USB/OTA/power-loss behavior remains subject to on-device validation.
+
+Install over Wi-Fi through Settings → System → Software Update → Check for Updates.
+No SD formatting or USB reflash is needed for a working installation with Software
+Update. Experimental prerelease.

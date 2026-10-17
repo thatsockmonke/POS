@@ -5,7 +5,7 @@
 #define POS_UPDATE_MAX 32768
 #define POS_UPDATE_JOURNAL "pos-update.pos"
 typedef struct {
-  char release[32], minimum[32], base_url[512], id[65];
+  char release[32], base_url[512], id[65];
   uint32_t sequence;
   bool firmware;
   pos_package_t *package;
@@ -20,14 +20,14 @@ typedef struct {
   char url[512], key[513];
 } pos_update_source_t;
 extern const char pos_update_official_url[], pos_update_official_key[];
-/* Defaults never override a custom/partly configured source or sequence floor. */
+/* Defaults preserve custom/partial sources and sequences. 0.6 migrates only
+ * the exact old official source/key from the bridge to the current feed. */
 void pos_update_source_official(pos_update_source_t *source);
 bool pos_update_source_use_default(pos_update_source_t *source);
 /* Fingerprint is SHA-256 of DER SubjectPublicKeyInfo; only P-256 keys. */
 int pos_update_key_fingerprint(const char *pem,char fingerprint[65]);
 int pos_update_load(const char *file,const char *trusted_key,const char *current_version,uint32_t minimum_sequence,pos_update_t **out,pos_error_t *error);
 void pos_update_free(pos_update_t *update);
-/* -2 means older than minimum supported version (clean installation needed). */
 int pos_version_compare(const char *left,const char *right,int *comparison);
 int pos_update_apply(const char *root,const pos_update_t *,const pos_update_platform_t *,pos_error_t *);
 /* Run before validating System, including after OTA rollback. 1=new boot pending. */

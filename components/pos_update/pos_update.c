@@ -238,14 +238,21 @@ int pos_update_load(const char *file, const char *key, const char *current,
              *model = string(j, "model"), *kind = string(j, "kind"),
              *base = string(j, "base_url");
   cJSON *format = cJSON_GetObjectItemCaseSensitive(j, "format"),
+        *legacy_minimum =
+            cJSON_GetObjectItemCaseSensitive(j, "minimum_version"),
         *sequence = cJSON_GetObjectItemCaseSensitive(j, "sequence"),
         *package = cJSON_GetObjectItemCaseSensitive(j, "package");
   int compare;
-  if (!cJSON_IsObject(j) || cJSON_GetArraySize(j) != 8 ||
+  /* Older feed readers require this field. Accept and validate its syntax
+   * when present, but it no longer limits direct upgrades. */
+  if (!cJSON_IsObject(j) || cJSON_GetArraySize(j) != (legacy_minimum ? 8 : 7) ||
       !cJSON_IsNumber(format) || format->valuedouble != 1 || !model ||
-      strcmp(model, POS_MODEL) || !release || !minimum ||
-      pos_version_compare(release, minimum, &compare) || compare < 0 || !kind ||
-      (strcmp(kind, "firmware") && strcmp(kind, "assets")) || !base ||
+      strcmp(model, POS_MODEL) || !release ||
+      pos_version_compare(release, release, &compare) ||
+      pos_version_compare(current, current, &compare) ||
+      (legacy_minimum &&
+       (!minimum || pos_version_compare(minimum, minimum, &compare))) ||
+      !kind || (strcmp(kind, "firmware") && strcmp(kind, "assets")) || !base ||
       !pos_https_url_valid(base) || strchr(base, '?') || strlen(base) > 350 ||
       !cJSON_IsNumber(sequence) || sequence->valuedouble < 1 ||
       sequence->valuedouble > UINT32_MAX ||
@@ -260,7 +267,6 @@ int pos_update_load(const char *file, const char *key, const char *current,
   if (pos_hash_data(body, strlen(body), u->id))
     goto invalid;
   strcpy(u->release, release);
-  strcpy(u->minimum, minimum);
   strcpy(u->base_url, base);
   u->sequence = sequence->valuedouble;
   u->firmware = !strcmp(kind, "firmware");
@@ -276,14 +282,6 @@ int pos_update_load(const char *file, const char *key, const char *current,
     fail(error,
          "This update is already installed or has an older signed sequence.");
     result = 1;
-    goto done;
-  }
-  if (pos_version_compare(current, u->minimum, &compare))
-    goto invalid;
-  if (compare < 0) {
-    fail(error, "This version cannot upgrade directly. Back up your filesystem "
-                "and perform a clean installation.");
-    result = -2;
     goto done;
   }
   if (u->firmware) {

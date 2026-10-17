@@ -168,7 +168,7 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def validate_update(directory: Path, public_key: Path, api):
-    from pos_updates import validate_package
+    from pos_updates import validate_package, version
     path = directory / "manifest.json"
     if path.is_symlink() or path.stat().st_size > 32768:
         raise ValueError("Invalid signed manifest")
@@ -177,11 +177,19 @@ def validate_update(directory: Path, public_key: Path, api):
     if set(envelope) != {"payload", "signature"} or not isinstance(envelope["payload"], str):
         raise ValueError("Unsupported signed envelope")
     payload = json.loads(envelope["payload"])
-    if (set(payload) != {"format", "model", "release", "minimum_version", "sequence", "kind", "base_url", "package"} or
+    fields = {"format", "model", "release", "sequence", "kind", "base_url", "package"}
+    if (set(payload) not in (fields, fields | {"minimum_version"}) or
             payload["format"] != 1 or payload["model"] != api.MODEL or payload["kind"] not in ("firmware", "assets") or
             type(payload["sequence"]) is not int or not 1 <= payload["sequence"] <= 0xffffffff or
             not valid_https(payload["base_url"])):
         raise ValueError("Invalid signed update metadata")
+    if not isinstance(payload['release'], str):
+        raise ValueError('Invalid release version')
+    version(payload['release'])
+    if 'minimum_version' in payload:
+        if not isinstance(payload['minimum_version'], str):
+            raise ValueError('Invalid legacy version metadata')
+        version(payload['minimum_version'])  # Read legacy metadata without enforcing it.
     validate_package(payload["package"], api)
     public = public_key.read_bytes()
     if len(public) > 512 or b"PRIVATE" in public:

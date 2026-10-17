@@ -1,4 +1,4 @@
-POS 0.5.10-dev - Pan Operating System
+POS 0.6.0-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -12,6 +12,8 @@ Ctrl+U clears text fields; setup validates names before continuing.
 Files shows folder pages and empty folders. Keep SD inserted when restarting.
 
 System files are integrity checked on boot. Put user files outside System.
+Update to 0.6.0-dev before later versions; subsequent packages omit the minimum field.
+The official source migrates automatically; signatures/hashes remain required.
 Text Editor: Fn+arrows move; Ctrl+S save, Ctrl+F find, Ctrl+G line.
 Esc opens the editor menu; Home asks about unsaved changes.
 Wi-Fi: scan/connect, encrypted saved networks, time sync, HTTPS and LAN transfer.

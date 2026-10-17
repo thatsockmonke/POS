@@ -224,7 +224,7 @@ int main(int argc, char **argv) {
     return 1;
   }
   if (!strcmp(mode, "meta")) {
-    printf("%s %s %u %u\n", u->release, u->minimum, u->sequence, u->firmware);
+    printf("%s %u %u\n", u->release, u->sequence, u->firmware);
     pos_update_free(u);
     return 0;
   }

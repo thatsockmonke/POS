@@ -4,7 +4,15 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.5.10-dev starts on black, forms the pink/yellow/blue flag, then fades in POS.**
+**0.6.0-dev is the required transition release: update to it before any later release.**
+It removes the updater's minimum-version cutoff and displayed minimum. Later
+update packages omit the obsolete field entirely. Older devices are offered
+0.6.0 first; after installing it, the official update feed switches automatically.
+Signed updates retain signature, hash, hardware, format, sequence and downgrade
+checks. Installed older updaters can still download this release; no SD formatting
+or USB reflash is needed for an installation with working Software Update.
+
+Boot starts on black, forms the pink/yellow/blue flag, then fades in POS.
 The full-screen color flashes are removed. Each stripe starts halfway through the
 previous one. Printed arrow keys now navigate menus and apps without holding Fn;
 text fields keep punctuation, and Fn+arrows still moves the editor cursor.
@@ -19,7 +27,7 @@ has a squishy red button and jumping count, and Music has a disc/progress view.
 The user confirms the 0.5.8-dev microphone records sound; gain, motion and the new
 layouts still need a physical usability/performance check.
 
-[Animated UI preview](downloads/0.5.10-dev/ui-animation.png) · [Recorder](downloads/0.5.10-dev/recorder.png) · [Files](downloads/0.5.10-dev/files.png) · [Background](downloads/0.5.10-dev/background.png) · [Counter](downloads/0.5.10-dev/counter.png)
+[Animated UI preview](downloads/0.6.0-dev/ui-animation.png) · [Recorder](downloads/0.6.0-dev/recorder.png) · [Files](downloads/0.6.0-dev/files.png) · [Background](downloads/0.6.0-dev/background.png) · [Counter](downloads/0.6.0-dev/counter.png)
 
 Previews use the actual portable renderer with example state; they are not
 hardware recordings or device frame-rate measurements.
@@ -134,14 +142,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.5.10-dev/launcher.png)
-![Color picker](downloads/0.5.10-dev/color-picker.png)
+![Launcher](downloads/0.6.0-dev/launcher.png)
+![Color picker](downloads/0.6.0-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.5.10-dev/boot-animation.png)
+![POS boot animation](downloads/0.6.0-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.5.10-dev/boot-splash.png)
+[Final splash frame](downloads/0.6.0-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -158,7 +166,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.10-dev --zip-output dist/pos-0.5.10-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.0-dev --zip-output dist/pos-0.6.0-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png

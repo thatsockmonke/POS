@@ -506,7 +506,6 @@ def main() -> int:
     p.add_argument("--installed-manifest",type=Path)
     p.add_argument("--payload",type=Path,required=True)
     p.add_argument("--release",required=True)
-    p.add_argument("--minimum-version",required=True)
     p.add_argument("--sequence",type=int,required=True)
     p.add_argument("--base-url",required=True)
     p.add_argument("--private-key",type=Path,required=True)

@@ -8,7 +8,7 @@ manual flash addresses or an understanding of partitions.
 
 ## Start here
 
-1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.10-dev).
+1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.6.0-dev).
 2. Download **`pos-setup`**. This is the executable wizard, not the Source code ZIP.
    Its optional `pos-setup.sha256` checksum is beside it. The complete POS ZIP
    also includes a copy of the wizard.
@@ -203,7 +203,7 @@ installs the already-prepared 0.5.5-dev software; formatting/re-copying is unnec
 ### Upgrading the prepared installer after the upside-down-screen fix
 
 The display/keyboard fix was introduced in **both 0.5.5-dev firmware roles**
-and is included in 0.5.10-dev. Refresh the
+and is included in 0.6.0-dev. Refresh the
 SD package as well as the USB installer; using `--release v0.5.3-dev` would keep
 installing the old firmware.
 
@@ -214,7 +214,7 @@ If the card has only the old installer files and you have **not installed POS**:
    **pos-install-old** (or another unused name). Keep the old files; formatting
    is unnecessary. Preserve any `pos-install.copying` folder under another name too.
 3. Download this release's **pos-setup**, replace the old executable and run it
-   with `--release v0.5.10-dev`. Choose **2. Prepare the microSD only** and select
+   with `--release v0.6.0-dev`. Choose **2. Prepare the microSD only** and select
    the card's shared top-level folder. It copies and verifies the matching package.
 4. Eject the card, put it into the powered-off ADV, connect the ADV and share its
    USB connection with Linux. Run the same command and choose **3. Flash Cardputer
@@ -230,7 +230,7 @@ With the paths used in the reported Crostini session, run:
 
 ```sh
 chmod +x "/mnt/shared/MyFiles/Downloads/pos-setup"
-"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.5.10-dev --sd-folder "/mnt/shared/removable/POS Drive"
+"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.6.0-dev --sd-folder "/mnt/shared/removable/POS Drive"
 ```
 
 If the card already contains an installed **/POS** tree, keep it and your files.
@@ -242,8 +242,8 @@ Optional commands for troubleshooting:
 
 ```sh
 ~/pos-setup --download-only                 # Download/verify without device changes
-~/pos-setup --release v0.5.10-dev             # Use a specific published version
-~/pos-setup --bundle /path/pos-0.5.10-dev.zip # Use a ZIP and matching .sha256 offline
+~/pos-setup --release v0.6.0-dev             # Use a specific published version
+~/pos-setup --bundle /path/pos-0.6.0-dev.zip # Use a ZIP and matching .sha256 offline
 ~/pos-setup --sd-folder '/mnt/chromeos/removable/YOUR CARD'
 ```
 
@@ -339,7 +339,7 @@ back to the selected icon on return. Motion is bounded, skips missed frames on
 slow renders, and retains one foreground app. The display streams scanlines;
 these changes do not allocate a whole-screen framebuffer.
 
-## Boot and arrow keys (0.5.10-dev)
+## Boot and arrow keys (since 0.5.10-dev)
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 then blue starts halfway through yellow. POS fades in once all three stripes
@@ -351,3 +351,15 @@ Text entry keeps punctuation; use Fn+arrows to move the editor cursor. Shift
 still gives fine picker adjustment. Fn+arrows and USB arrows also keep working.
 Update normally through Settings → System → Software Update → Check for Updates;
 no card formatting is required.
+
+## Software Update (0.6.0-dev)
+
+**Install 0.6.0-dev before any later update.** Older official installations are
+always offered 0.6.0 first; it automatically switches to the current update feed.
+Future packages have no minimum-version field at all. This release is the
+transition, so an older updater can still read it.
+
+The new updater no longer shows a minimum version or requires a clean reinstall
+because of a version cutoff. Signatures, file hashes, hardware compatibility,
+package format, increasing signed sequences and downgrade prevention still apply.
+Use Settings → System → Software Update → Check for Updates as usual.

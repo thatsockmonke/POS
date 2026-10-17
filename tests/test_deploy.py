@@ -4,6 +4,7 @@ import io
 import json
 from pathlib import Path
 import struct
+import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -48,10 +49,21 @@ class DeployTests(unittest.TestCase):
             firmware=dict(path='firmware.bin',size=512,sha256='e'*64),files=[dict(path='System/readme.txt',size=3,sha256='f'*64)])))
         self.update_dir=self.root/'update'
         pos_updates.make_update(SimpleNamespace(kind='assets',firmware=None,installed_manifest=old,payload=payload.parent,
-            release='0.5.1-dev',minimum_version='0.5.0-dev',sequence=1,base_url='https://updates.example.test/1/',
+            release='0.5.1-dev',sequence=1,base_url='https://updates.example.test/1/',
             private_key=private,output=self.update_dir),posctl)
         self.target['trusted_key']=fingerprint
         return (self.update_dir/'manifest.json').read_bytes()
+    def test_local_update_verifier_accepts_optional_legacy_version_without_cutoff(self):
+        original=json.loads(json.loads(self.update())['payload'])
+        for legacy in (False,True):
+            payload=dict(original)
+            if legacy:payload['minimum_version']='99.0.0'
+            else:payload.pop('minimum_version')
+            body=json.dumps(payload,separators=(',',':')).encode()
+            sig=subprocess.run(['openssl','dgst','-sha256','-sign',str(self.root/'private.pem')],input=body,check=True,capture_output=True).stdout
+            (self.update_dir/'manifest.json').write_text(json.dumps(dict(payload=body.decode(),signature=sig.hex())))
+            self.assertEqual(pos_deploy.validate_update(self.update_dir,self.public,posctl)[1]['release'],'0.5.1-dev')
+
     def args(self):
         return SimpleNamespace(device='http://192.168.1.8:8080',key_file=self.key,update_dir=self.update_dir,
             manifest_url='https://updates.example.test/latest.json',public_key=self.public,validation_report=self.report,evidence_root=self.root,wait=3)

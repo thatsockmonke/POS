@@ -10,6 +10,9 @@ import subprocess
 import tempfile
 from urllib.parse import urlsplit
 
+# Only the transition release and older packages carry the obsolete field.
+TRANSITION_RELEASE = '0.6.0-dev'
+LEGACY_MINIMUM_VERSION = '0.0.0'
 
 def version(value: str):
     m=re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*))?',value)
@@ -62,7 +65,7 @@ def validate_package(package,api):
 
 
 def make_update(args,api):
-    if compare(args.release,args.minimum_version)<0:raise ValueError('Release must be at least minimum_version')
+    version(args.release)
     if not 1<=args.sequence<=0xffffffff:raise ValueError('Sequence must be 1..4294967295 and increase for every published update')
     url=urlsplit(args.base_url)
     if url.scheme!='https' or not url.hostname or url.username or url.password or url.query or url.fragment or any(c.isspace() for c in args.base_url) or len(args.base_url)>350:raise ValueError('base-url must be a complete HTTPS directory URL without credentials, query or fragment')
@@ -82,7 +85,6 @@ def make_update(args,api):
             if not args.installed_manifest:raise ValueError('Asset updates require the exact --installed-manifest for their target firmware')
             package=json.loads(args.installed_manifest.read_text())
             validate_package(package,api)
-            if compare(package['version'],args.minimum_version)<0:raise ValueError('Asset target firmware is below minimum_version')
             records={record['path'].lower():record for record in package['files']}
             count=0
             if args.payload.is_symlink() or not args.payload.is_dir():raise ValueError('Payload must be a real directory')
@@ -101,7 +103,9 @@ def make_update(args,api):
             if not count:raise ValueError('Include at least one changed asset')
             package['files']=sorted(records.values(),key=lambda r:r['path'])
         validate_package(package,api)
-        payload={'format':1,'model':api.MODEL,'release':args.release,'minimum_version':args.minimum_version,'sequence':args.sequence,'kind':args.kind,'base_url':args.base_url,'package':package}
+        payload={'format':1,'model':api.MODEL,'release':args.release,'sequence':args.sequence,'kind':args.kind,'base_url':args.base_url,'package':package}
+        if compare(args.release,TRANSITION_RELEASE)<=0:
+            payload['minimum_version']=LEGACY_MINIMUM_VERSION
         body=json.dumps(payload,separators=(',',':'),ensure_ascii=True)
         signature=subprocess.run(['openssl','dgst','-sha256','-sign',str(args.private_key)],input=body.encode(),check=True,capture_output=True).stdout
         public=subprocess.run(['openssl','pkey','-in',str(args.private_key),'-pubout'],check=True,capture_output=True).stdout

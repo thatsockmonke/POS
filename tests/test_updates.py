@@ -48,10 +48,11 @@ class UpdateTests(unittest.TestCase):
     def run_c(self,mode,*args,expected=0):
         r=subprocess.run([str(self.runner),mode,*map(str,args)],capture_output=True,text=True)
         self.assertEqual(r.returncode,expected,r.stdout+r.stderr);return r
-    def signed(self,kind='assets',sequence=1,minimum='0.4.0-dev',mutate=None):
+    def signed(self,kind='assets',sequence=1,minimum=None,mutate=None):
         package=copy.deepcopy(self.old);package['files'][0]=self.record('System/Assets/icons.bin',b'new icons');(self.feed/'payload/System/Assets').mkdir(parents=True,exist_ok=True);(self.feed/'payload/System/Assets/icons.bin').write_bytes(b'new icons')
         if kind=='firmware':package['version']='0.4.1-dev';package['firmware']=self.record('firmware.bin',b'n'*512);(self.feed/'firmware.bin').write_bytes(b'n'*512)
-        p=dict(format=1,model=self.old['model'],release='0.4.1-dev',minimum_version=minimum,sequence=sequence,kind=kind,base_url='https://updates.example.test/pos/',package=package)
+        p=dict(format=1,model=self.old['model'],release='0.4.1-dev',sequence=sequence,kind=kind,base_url='https://updates.example.test/pos/',package=package)
+        if minimum is not None:p['minimum_version']=minimum
         if mutate:mutate(p)
         body=json.dumps(p,separators=(',',':'));sig=subprocess.run(['openssl','dgst','-sha256','-sign',str(self.private)],input=body.encode(),check=True,capture_output=True).stdout
         self.meta.write_text(json.dumps(dict(payload=body,signature=sig.hex())));return p
@@ -101,11 +102,24 @@ class UpdateTests(unittest.TestCase):
         self.signed();self.load();j=json.loads(self.meta.read_text());j['payload']=j['payload'].replace('0.4.1-dev','0.4.2-dev');self.meta.write_text(json.dumps(j));self.load(expected=1)
         self.signed();other=self.base/'other-public.pem';pos_updates.keygen(self.base/'other-private.pem',other);self.run_c('meta',self.card,self.meta,other,'0.4.0-dev',0,expected=1)
         for change in [lambda p:p.update(format=99),lambda p:p.update(model='wrong'),lambda p:p['package']['files'][0].update(path='../user.txt'),lambda p:p.update(base_url='http://plain.test/'),lambda p:p['package']['files'].append(copy.deepcopy(p['package']['files'][0]))]:self.signed(mutate=change);self.load(expected=1)
-    def test_minimum_version_sequence_and_firmware_downgrade_checks(self):
-        self.signed(minimum='0.4.1-dev');self.assertIn('clean installation',self.load(expected=1).stderr)
+    def test_signed_sequence_and_firmware_downgrade_checks(self):
         self.signed(sequence=8);self.load();self.load(expected=1,floor=8);self.load(expected=1,floor=9)
         self.signed('firmware');self.load(current='0.4.1-dev',expected=1);self.load(current='0.5.0',expected=1)
         self.signed(mutate=lambda p:p['package'].update(version='0.3.8-dev'));self.load(expected=1)
+    def test_updates_have_no_version_cutoff_with_or_without_legacy_metadata(self):
+        for minimum in (None,'99.0.0'):
+            with self.subTest(legacy_minimum=minimum):
+                self.signed('firmware',minimum=minimum)
+                self.load(current='0.3.0-dev')
+                self.signed(minimum=minimum);self.load()
+        self.ui('cancel')
+
+    def test_malformed_legacy_metadata_unknown_fields_and_bad_current_version_are_rejected(self):
+        for value in (None,42,{},'bad','0.04.0','1'*200):
+            self.signed(mutate=lambda p:p.update(minimum_version=value));self.load(expected=1)
+        self.signed(mutate=lambda p:p.update(unexpected=True));self.load(expected=1)
+        self.signed('firmware');self.load(current='bad',expected=1)
+
     def test_asset_only_update_never_flashes_and_keeps_user_data_and_previous_system(self):
         self.signed();r=self.apply();self.assertEqual(r.stdout.strip(),'0 0');self.assertEqual((self.card/'POS/System/Assets/icons.bin').read_bytes(),b'new icons');self.assertEqual((self.card/'POS/System/README.txt').read_bytes(),b'old README')
         self.assertEqual(self.run_c('recover',self.card,'0.4.0-dev').stdout.strip(),'1');self.assertEqual(self.run_c('confirm',self.card).stdout.strip(),'1');self.assertFalse((self.card/'pos-update.pos').exists());self.assertEqual(next((self.card/'POS/Updates').glob('*/old-System/Assets/icons.bin')).read_bytes(),b'old icons');self.assertEqual((self.card/'POS/Users/Owner/Documents/precious.txt').read_bytes(),b'keep my words')
@@ -155,8 +169,8 @@ class UpdateTests(unittest.TestCase):
 
     def test_signing_tool_round_trip_and_no_key_or_package_overwrite(self):
         installed=self.base/'installed.pos';installed.write_text(json.dumps(self.old));payload=self.base/'assets';(payload/'System/Assets').mkdir(parents=True);(payload/'System/Assets/icons.bin').write_bytes(b'tool icons')
-        args=SimpleNamespace(kind='assets',release='0.4.1-dev',minimum_version='0.4.0-dev',sequence=7,base_url='https://updates.example.test/pos/',output=self.base/'signed',payload=payload,installed_manifest=installed,private_key=self.private,firmware=None)
-        out=pos_updates.make_update(args,posctl);self.meta=out/'manifest.json';self.load();self.assertEqual((out/'payload/System/Assets/icons.bin').read_bytes(),b'tool icons')
+        args=SimpleNamespace(kind='assets',release='0.4.1-dev',sequence=7,base_url='https://updates.example.test/pos/',output=self.base/'signed',payload=payload,installed_manifest=installed,private_key=self.private,firmware=None)
+        out=pos_updates.make_update(args,posctl);self.meta=out/'manifest.json';self.assertEqual(json.loads(json.loads(self.meta.read_text())['payload'])['minimum_version'],'0.0.0');self.load();self.assertEqual((out/'payload/System/Assets/icons.bin').read_bytes(),b'tool icons')
         with self.assertRaises(ValueError):pos_updates.make_update(args,posctl)
         old=self.private.read_bytes()
         with self.assertRaises(ValueError):pos_updates.keygen(self.private,self.public)

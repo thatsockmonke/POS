@@ -2,7 +2,6 @@
   "format": 1,
   "repository": "thatsockmonke/POS",
   "branch": "main",
-  "manifest": "updates/manifest.json",
-  "minimum_version": "0.4.0-dev",
+  "manifest": "updates/latest.json",
   "fingerprint": "ce79ef57358d4714d7b5748e2f0c0140f4d916426a0d82ace21dce5a7b0d8561"
 }

@@ -2,7 +2,7 @@ name: Build and package POS
 on:
   push:
     branches: [main]
-    paths-ignore: ['updates/releases/**', 'updates/manifest.json']
+    paths-ignore: ['updates/releases/**', 'updates/manifest.json', 'updates/latest.json']
     tags: ['v*']
   pull_request:
   workflow_dispatch:
