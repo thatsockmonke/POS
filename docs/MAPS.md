@@ -36,16 +36,16 @@ redownload is required. Pressing P updates labels without rereading the map.
    certificate validation stays enabled. Public services can be busy: try later,
    another selected provider, or a smaller region. There is no silent fallback
    or background location upload.
-   **OpenStreetMap (500 m)** uses the official OSM map API for a single 500 m
-   square. Larger areas use the explicitly selected VK or Germany Overpass
-   service. The consistently failing Private.coffee endpoint has been removed.
+   **OpenStreetMap (worldwide)** uses the official OSM map API for one explicitly
+   selected square, from 500 m through 4 km. VK and Overpass API also cover the
+   world; provider labels describe coverage rather than server location. The consistently failing Private.coffee endpoint has been removed.
    Direct OSM responses include buildings and other objects: POS builds a
    sorted node index on SD, resolves road references, retains access/barrier
    nodes and restriction relations, and filters non-road ways/relations.
    It does not bulk-download the editing API or fetch regions in the background.
 3. POS saves the original XML, a compact road map, and a routing graph after
-   checking them. Keep roughly 64 MiB free for downloads, temporary sort
-   runs and route calculation. Files stream through reusable buffers.
+   checking them. Allow at least 256 MiB free for larger downloads, normalized XML, temporary sort
+   runs and route calculation; dense areas can require more. Files stream through reusable buffers.
 4. Open **Saved regions (offline)**. Arrows pan, **+/-** zoom, **C** follows GPS.
    Blue is your current position; pink is the selected destination. The screen
    is north up. **Enter** opens map options.
@@ -142,7 +142,7 @@ updates, backups and firmware rollback:
 - `Map-data-license.txt`: attribution and ODbL URL; keep this and the source XML
   when sharing derived map data.
 
-Downloads remain capped at 8 MiB XML / 30,000 geometry segments, latitude between
+Downloads remain capped at 64 MiB XML / 30,000 geometry segments, latitude between
 -80 and +80 degrees, and no date-line crossing. The catalog is paged. Road and
 route viewports each use 2,640 bytes. A* labels and an indexed priority queue live
 on SD with two 4-KiB RAM cache pages per mutable table; read-only graph tables use
@@ -154,7 +154,7 @@ Direct-OSM import accepts up to 60,000 node definitions/references and uses
 dictionary is allocated. Conflicting/duplicate IDs, missing references, invalid
 coordinates, incomplete XML and existing destinations are refused. Cancellation
 removes only its own work directory and preserves originals and completed maps.
-Very dense 500 m regions may exceed these limits; choose another area or an
+Dense regions of any selected size may exceed these limits; choose another area or an
 Overpass service. These public services have no availability guarantee.
 
 HTTP failures display the actual status (including rate limiting/server errors).
@@ -200,13 +200,15 @@ No road database is bundled in firmware; the world coastlines below ship on SD.
 Regional-map previews use generated example state.
 
 Providers: OpenStreetMap's official `api.openstreetmap.org` map endpoint (explicit
-500 m squares), VK Maps (`maps.mail.ru`, Russia) and Overpass API (Germany).
+500 m through 4 km squares), VK Maps (`maps.mail.ru`, Russia) and Overpass API (Germany).
 The Overpass instances are listed at https://wiki.openstreetmap.org/wiki/Overpass_API.
 A download sends the selected bounding box to the explicitly chosen provider.
 Overpass queries request road geometry, restriction relations and tagged highway
 nodes with a 64 MiB **server-side** working-memory cap. Direct OSM downloads
 include other objects that are filtered on SD. The device accepts at most
-8 MiB of response bytes. There is no bulk tile scraping or automatic retry loop.
+64 MiB of response bytes. OSM can reject dense areas under its own node limit
+before download; no automatic subdivision, background crawl or larger memory
+allocation bypasses those limits. There is no bulk tile scraping or automatic retry loop.
 
 Host tests cover an independent shortest-path reference, multiple external-sort
 runs and routing cache pages, restrictions/access/one-way/barrier edge cases,
@@ -247,3 +249,14 @@ https://github.com/nvkelso/natural-earth-vector/blob/ca96624a56bd078437bca8184e7
 Rebuild with `python tools/build_world_map.py ne_110m_land.geojson world.map`.
 The compiler verifies its pinned SHA-256 before generating the asset.
 Full provenance travels in `System/Assets/world-source.txt`.
+
+## Saved-area outline
+
+A thin white square marks the selected region's geographic bounds in Saved
+regions. It moves with pan and scales with zoom, independent of road lines.
+Zoom out with **-** to see the full square: at the default zoom the screen is
+wider than it is tall, so the square's north/south edges can be off-screen.
+The border is never clamped to the display when the actual edge lies elsewhere.
+OSM ways crossing the selection can include geometry beyond the square; it marks
+the requested coverage, not a guarantee that every outside road is unavailable.
+The world coastline overview has no regional boundary.

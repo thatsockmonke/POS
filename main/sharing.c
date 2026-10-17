@@ -55,9 +55,8 @@ void pos_ui_ble(const char *root, const char *relative, bool receive) {
   pos_settings_defaults(&settings);
   pos_settings_load(root, &settings);
   pos_error_t e = {0};
-  pos_ui_message(
-      "BLE sharing",
-      "Starting authenticated BLE transfer...\nEsc cancels; Fn+Space closes.");
+  pos_ui_message("BLE sharing", "POS / Linux PC sharing\nStarting secure "
+                                "Bluetooth...\nEsc cancels; Fn+Space closes.");
   if (pos_ble_start(root, settings.device_name, receive, &e)) {
     pos_ui_notice("BLE unavailable", e.message);
     return;
@@ -106,8 +105,9 @@ void pos_ui_ble(const char *root, const char *relative, bool receive) {
                                   : "Discoverable nearby");
       pos_view_line(&view, 4, "%.30s", s.offer.name);
       pos_view_line(&view, 6, "%u / %u bytes", s.offset, s.offer.size);
-      pos_view_line(&view, 9, "Accept offers only from");
-      pos_view_line(&view, 10, "a device you recognize.");
+      pos_view_line(&view, 9, "PC: POS Transfer > Send");
+      pos_view_line(&view, 10, "Choose Bluetooth on PC");
+      pos_view_line(&view, 12, "Confirm matching codes");
       pos_view_line(&view, 15, "Esc:stop Fn+Space:close");
       pos_device_show(&view);
       pos_event_t event;
@@ -118,9 +118,10 @@ void pos_ui_ble(const char *root, const char *relative, bool receive) {
   } else {
     bool connected = false;
     while (!pos_home_pending() && !connected) {
-      pos_ui_message("Find nearby POS",
-                     "The other Panputer must open Share > Receive BLE file. "
-                     "Scanning...\nEsc cancels.");
+      pos_ui_message(
+          "Find Bluetooth receiver",
+          "Panputer: Share > Receive BLE file.\nLinux PC: POS "
+          "Transfer > Receive > Bluetooth.\nScanning... Esc cancels.");
       if (pos_ble_scan(&e)) {
         pos_ui_notice("Scan failed", e.message);
         break;
@@ -141,9 +142,8 @@ void pos_ui_ble(const char *root, const char *relative, bool receive) {
       }
       items[count] = "Scan again";
       items[count + 1] = "Cancel";
-      int choice =
-          pos_ui_menu(count ? "Choose nearby POS" : "No POS devices found",
-                      items, count + 2);
+      int choice = pos_ui_menu(count ? "Choose POS / PC" : "No receivers found",
+                               items, count + 2);
       if (choice < 0 || choice == (int)count + 1)
         break;
       if (choice == (int)count)
@@ -173,7 +173,7 @@ done:
 }
 void pos_ui_share(const char *root, const char *relative) {
   const char *items[] = {"Save local copy", "Wi-Fi file transfer",
-                         "Send over BLE", "Back"};
+                         "Send over BLE to POS / PC", "Back"};
   int choice = pos_ui_menu("Share file", items, 4);
   if (choice == 0) {
     char target[241];
@@ -194,9 +194,10 @@ void pos_ui_share(const char *root, const char *relative) {
 }
 void pos_ui_sharing(const char *root) {
   while (!pos_home_pending()) {
-    const char *items[] = {"Share a file", "Receive BLE file",
-                           "Receive Wi-Fi files", "Back"};
-    int choice = pos_ui_menu("Share", items, 4);
+    const char *items[] = {"Share a file with POS / PC",
+                           "Receive BLE file / PC", "Receive Wi-Fi files / PC",
+                           "Back"};
+    int choice = pos_ui_menu("Share with POS / PC", items, 4);
     if (choice < 0 || choice == 3)
       break;
     if (choice == 0) {

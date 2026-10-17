@@ -1,4 +1,4 @@
-# POS development status — 0.6.9-dev
+# POS development status — 0.6.10-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -26,10 +26,10 @@ layouts and display-off still require physical validation; other peripherals ret
 | Battery / recovery | Always-visible percentage/icon on black, smoothing/hysteresis and near-full voltage indication; RTC panic snapshot, persistent JSON crash logs, NVS failure counter and explicit Safe Mode exit; existing manual deep sleep retained | Battery percentage/full indication is an estimate; calibrate on hardware. Automatic power management is removed from scope |
 | Text editor / huge documents | SD-backed editor, bounded nearby-read cache, queued-typing batches, change-only rendering, confirmed Trash deletion and streamed saves/search/line navigation; 32-level session undo/redo, highlighted selection, SD clipboard, word/page/line/document navigation and recoverable drafts | Physical large-file responsiveness; session history restarts after reopening/recovery |
 | Music/audio | Streamed MP3 and PCM 16-bit WAV, folders/library, Files-only Audio Player, playback controls, shuffle, M3U playlists and ES8311/I2S output | Physical audio/timing validation; other codecs optional |
-| BLE/shared transfer | POS peer discovery, encrypted numeric-comparison pairing, accept/reject, chunk ACK/retry, resume, SHA-256 and lost-final-ACK recovery; common local/Wi-Fi/BLE Share entry point | Physical peer interoperability/throughput validation; third-party clients |
+| BLE/shared transfer | POS peer discovery, encrypted numeric-comparison pairing, accept/reject, chunk ACK/retry, resume, SHA-256 and lost-final-ACK recovery; common local/Wi-Fi/BLE Share entry point | Physical peer interoperability/throughput validation; Linux Bluetooth/Wi-Fi Send/Receive tool implemented; physical BlueZ/adapter and Cardputer pairing still needs verification |
 | GPS/LoRa cap | Verified published pins, Semtech driver, shared SPI, UART NMEA location service, Settings detection/enablement panel and GPS-based Maps gate | Actual cap/revision/peripheral coexistence validation |
 | Range test / messaging | Radio messaging, IDs, bounded retries/duplicate suppression, verified SD outbox, opt-in location and range-test CSVs with packet IDs/GPS/RSSI/SNR | Physical range measurements; future coverage visualizations |
-| Maps/navigation | Arrow pan, +/- zoom, shared Fine/Normal/Large pan steps (P), GPS recenter/follow (C), GPS-gated on-device region downloads, direct OSM (500 m) plus selected Overpass services, bounded SD node-reference conversion and explicit HTTP/TLS diagnostics; SD-backed road geometry/names/graph; offline mode-aware road search and shortest-distance A*; walking/cycling/driving access, barriers, one-way and node-via turn rules; conservative conditional/via-way blocking; saved/resumed routes, route overlay, next-turn arrow/road name, GPS progress/off-route/arrival, explicit recalculation | Physical GPS/SD/heap/TLS validation; cross-region routing, Unicode fonts/search, lane/exit guidance and richer OSM/vehicle constraints are further refinements. Old 0.6.3 maps need fresh downloads for routing. See [MAPS.md](MAPS.md) |
+| Maps/navigation | Arrow pan, +/- zoom, shared Fine/Normal/Large pan steps (P), GPS recenter/follow (C), GPS-gated on-device region downloads, direct OSM (up to 4 km) plus selected Overpass services, white saved-region boundary, bounded SD node-reference conversion and explicit HTTP/TLS diagnostics; SD-backed road geometry/names/graph; offline mode-aware road search and shortest-distance A*; walking/cycling/driving access, barriers, one-way and node-via turn rules; conservative conditional/via-way blocking; saved/resumed routes, route overlay, next-turn arrow/road name, GPS progress/off-route/arrival, explicit recalculation | Physical GPS/SD/heap/TLS validation; cross-region routing, Unicode fonts/search, lane/exit guidance and richer OSM/vehicle constraints are further refinements. Old 0.6.3 maps need fresh downloads for routing. See [MAPS.md](MAPS.md) |
 | Recorder / IR / IMU | Dedicated streamed PCM WAV Recorder, interrupted WAV recovery, Files-only Audio Player; shared ES8311 microphone with a dedicated capture task and 64,000-byte/two-second mono buffer (32,000-byte fallback), pre-capture WAV creation, right-slot extraction, saturated 8x PCM gain, codec readback and saved live integer 1x–4096x gain and a clean themed mono meter, BMI270 configuration/scaled readings and 38 kHz NEC IR transmit; Settings screens | User confirms the 0.5.8-dev microphone works; new gain/UI changes need retesting. Microphone channel/gain/timing, IMU orientation/calibration and IR waveform validation; no built-in IR receiver |
 | Developer tools / wireless deploy | `posctl flash` with matching verified factory backup/readback; streamed `files`; temporary LAN `deploy` requests through the signed HTTPS updater, target/build-bound evidence checks and boot confirmation polling | Recovery/OTA physical tests must pass before firmware deployment; manually reopen a temporary session after reboot for verification. No always-on deployment server |
 
@@ -111,3 +111,21 @@ move to Files > Trash. Routes close before moving their files; the map catalog
 file moves last, and failures preserve originals or recoverable Trash entries.
 Other regions, unrelated names and the world asset remain. Empty pages rescan.
 Hardware FAT32/removal/power-cut behavior still requires physical validation.
+
+## 0.6.10-dev PC transfer tool and map boundaries
+
+`pos-transfer` is a Linux Send/Receive CLI with Wi-Fi and the existing authenticated POS
+BLE protocol, numeric-comparison agent, explicit file acceptance, streamed
+SHA-256, resumable partials and no-overwrite publication. It is a separate release
+download and included in the USB/SD bundle. Crostini usually has no usable
+Bluetooth adapter; native Linux and a BLE peripheral-capable adapter are needed
+for receiving. BlueZ/GATT API exchange is tested on a real private D-Bus against
+a simulated BlueZ service, not a physical radio. Wi-Fi uses the temporary keyed trusted-LAN service without Bluetooth dependencies.
+Share screens explicitly explain POS/PC use. See [TRANSFER.md](TRANSFER.md).
+
+All three map providers accept 500 m through 4 km. Direct OSM uses one explicit
+bbox; density/server constraints may still refuse a request. XML remains on SD
+(up to 64 MiB), node processing is external-memory, and rendering streams records
+into a 2,640-byte viewport. Existing node/geometry/routing bounds remain. Saved
+regional maps have a white geographic square outline that pans/zooms with the
+region; off-screen edges are not falsely pinned to the screen.

@@ -82,7 +82,7 @@ class MapTests(unittest.TestCase):
         part.unlink();self.compile();before=self.map.read_bytes();self.run_map('compile',self.raw,self.map,ok=False);self.assertEqual(self.map.read_bytes(),before)
         self.run_map('raster',self.map,'cancel',ok=False)
     def test_oversized_download_and_excessive_geometry_are_refused(self):
-        self.raw.write_bytes(b' '*(8*1024*1024+1));self.run_map('compile',self.raw,self.map,ok=False)
+        with self.raw.open('wb') as f:f.truncate(64*1024*1024+1);self.run_map('compile',self.raw,self.map,ok=False)
         self.raw.write_bytes(b'<osm version="0.6"><way id="1">'+b'<nd lat="34.05" lon="-118.24"/><nd lat="34.051" lon="-118.241"/>'*15001+b'</way></osm>')
         self.run_map('compile',self.raw,self.map,ok=False);self.assertFalse(self.map.exists())
     def test_long_attributes_quotes_and_nd_boundaries(self):
@@ -102,9 +102,21 @@ class MapTests(unittest.TestCase):
         bbox=list(map(float,urllib.parse.parse_qs(parsed.query)['bbox'][0].split(',')))
         self.assertLess(bbox[0],0);self.assertGreater(bbox[2],0)
         self.assertLess(bbox[1],34);self.assertGreater(bbox[3],34)
-        self.run_map("query",34,0,1000,0,ok=False)
+        for latitude in (0,34,80):
+            for width in (500,1000,2000,4000):
+                url=self.run_map("query",latitude,0,width,0)
+                box=list(map(float,urllib.parse.parse_qs(urllib.parse.urlparse(url).query)['bbox'][0].split(',')))
+                self.assertLess((box[2]-box[0])*(box[3]-box[1]),0.25)
         self.run_map("query",34,0,1000,3,ok=False)
         for args in [('nan',0,1000),(81,0,1000),(0,180,1000),(0,0,5000),(0,0,0)]:self.run_map('query',*args,ok=False)
     def test_north_up_projection_bearing_and_marker_rendering(self):self.run_map('geometry')
     def test_extremely_long_segments_clip_in_bounded_time(self):
         self.compile(osm([(-80,-179),(80,179)]));self.run_map('raster',self.map)
+
+    def test_4km_map_and_xml_larger_than_old_8mib_limit_stream_successfully(self):
+        with self.raw.open('wb') as output:
+            for _ in range(36):output.write(b' '*(256*1024))
+            output.write(osm())
+        self.run_map('compile-4km',self.raw,self.map)
+        self.assertEqual(struct.unpack_from('<I',self.map.read_bytes(),12)[0],4000)
+        self.assertGreater(int(self.run_map('raster',self.map)),0)

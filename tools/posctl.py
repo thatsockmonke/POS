@@ -126,17 +126,21 @@ def make_bundle(build_root: Path, payload: Path, output: Path) -> Path:
         shutil.copyfile(ROOT / "docs/INSTALL.md", stage / "INSTALL.md")
         for name in ("RECOVERY.md", "HARDWARE.md", "HARDWARE_VALIDATION.md", "FORMAT.md", "VALIDATION.md"):
             shutil.copyfile(ROOT / "docs" / name, stage / name)
-        for name in ("STATUS.md", "RELEASE.md", "DOWNLOADS.md", "APPS.md", "PROTOCOLS.md", "UPDATES.md", "DEVELOPMENT.md", "MIGRATIONS.md", "EASY_INSTALL.md", "FIRMWARE_HISTORY.md", "BUG_REPORT_0.6.2.md", "BUG_REPORT_0.6.5.md", "BUG_REPORT_0.6.7.md", "UPDATER_HEAP.md", "MAPS.md"):
+        for name in ("STATUS.md", "RELEASE.md", "DOWNLOADS.md", "APPS.md", "PROTOCOLS.md", "UPDATES.md", "DEVELOPMENT.md", "MIGRATIONS.md", "EASY_INSTALL.md", "FIRMWARE_HISTORY.md", "BUG_REPORT_0.6.2.md", "BUG_REPORT_0.6.5.md", "BUG_REPORT_0.6.7.md", "UPDATER_HEAP.md", "MAPS.md", "TRANSFER.md"):
             shutil.copyfile(ROOT / "docs" / name, stage / name)
         # USB commands work with pip-installed esptool; no SDK/build is required.
         (stage / "tools").mkdir()
-        for name in ("posctl.py", "pos_validation.py", "pos_updates.py", "pos_deploy.py", "pos_setup.py", "pos_setup_storage.py", "build_setup.py", "pos_release_updates.py", "pos_release_assets.py"):
+        for name in ("posctl.py", "pos_validation.py", "pos_updates.py", "pos_deploy.py", "pos_setup.py", "pos_setup_storage.py", "build_setup.py", "pos_release_updates.py", "pos_release_assets.py", "pos_transfer.py"):
             shutil.copyfile(ROOT / "tools" / name, stage / "tools" / name)
         (stage / "updates").mkdir()
         for name in ("public-key.pem", "publisher.json"):
             shutil.copyfile(ROOT / "updates" / name, stage / "updates" / name)
         from build_setup import build as build_setup
         build_setup(stage / "pos-setup")
+        shutil.copyfile(ROOT / "tools/pos_transfer.py", stage / "pos-transfer")
+        (stage / "pos-transfer").chmod(0o755)
+        (stage / "pos-transfer.sha256").write_text(
+            sha256(stage / "pos-transfer") + "  pos-transfer\n")
         shutil.copyfile(ROOT / "THIRD_PARTY.md", stage / "THIRD_PARTY.md")
         sdk = Path(os.environ.get("IDF_PATH", "/workspace/pos-cloud/esp-idf-v5.5.5"))
         sdk_license = sdk / "LICENSE"

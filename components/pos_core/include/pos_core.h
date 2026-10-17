@@ -81,7 +81,8 @@ typedef struct {
   const uint8_t *map_route_pixels;
   uint8_t map_turn;
   uint32_t map_generation;
-  bool map_fix, map_waypoint, map_world;
+  bool map_fix, map_waypoint, map_world, map_region;
+  int16_t map_left, map_top, map_right, map_bottom;
   int16_t map_gps_x, map_gps_y, map_target_x, map_target_y;
   bool solid_color;
   uint16_t color_rgb565;

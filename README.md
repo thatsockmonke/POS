@@ -4,11 +4,13 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**Current release: [0.6.9-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.6.9-dev) — experimental.**
+**Current release: [0.6.10-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.6.10-dev) — experimental.**
 
-New: a three-choice installer (**Prepare the microSD / Flash Cardputer / Restore
-backup**) with concise output, and **Map options → Delete region** with recoverable
-Trash deletion of its sources, graph and saved routes.
+New: **[POS Transfer](docs/TRANSFER.md)** sends files both ways between Linux and
+Cardputer over **Wi-Fi or Bluetooth**, with a simple two-choice menu. Share screens
+now explain PC use. Saved maps have a white coverage outline, and direct
+OpenStreetMap downloads accept **500 m through 4 km**, with streamed SD processing.
+The three-choice installer and recoverable map-region deletion remain available.
 
 Both map views use **arrows** to pan, **+/-** to zoom and **C** to follow GPS.
 **P** cycles Normal / Large / Fine pan distances, shows the
@@ -30,7 +32,7 @@ its route, next maneuver/road name and remaining distance.
 **Download your regions again after updating from 0.6.3** to include access and
 restriction data. Existing road maps remain viewable. Routes cover the selected
 cached graph; unsupported conditional/via-way rules are blocked conservatively.
-[World map preview](downloads/0.6.9-dev/world.png) · See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.6.9-dev/maps.png).
+[World map preview](downloads/0.6.10-dev/world.png) · See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.6.10-dev/maps.png).
 
 Earlier Recorder playback, launcher, editor and Wi-Fi improvements remain:
 The launcher keeps its selection box fixed while crisp 32×32 icons slide on an
@@ -64,7 +66,7 @@ Upgrade through **0.6.0-dev** first if using an older installation. Active updat
 metadata stays at exactly seven fields; the old bridge feed remains frozen.
 Black-start flag/logo boot, microphone gain and themed app visuals remain.
 
-[Animated UI preview](downloads/0.6.9-dev/ui-animation.png) · [Recorder](downloads/0.6.9-dev/recorder.png) · [Files](downloads/0.6.9-dev/files.png) · [Background](downloads/0.6.9-dev/background.png) · [Counter](downloads/0.6.9-dev/counter.png)
+[Animated UI preview](downloads/0.6.10-dev/ui-animation.png) · [Recorder](downloads/0.6.10-dev/recorder.png) · [Files](downloads/0.6.10-dev/files.png) · [Background](downloads/0.6.10-dev/background.png) · [Counter](downloads/0.6.10-dev/counter.png)
 
 Previews use the actual portable renderer with example state; they are not
 hardware recordings or device frame-rate measurements.
@@ -179,14 +181,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.6.9-dev/launcher.png)
-![Color picker](downloads/0.6.9-dev/color-picker.png)
+![Launcher](downloads/0.6.10-dev/launcher.png)
+![Color picker](downloads/0.6.10-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.6.9-dev/boot-animation.png)
+![POS boot animation](downloads/0.6.10-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.6.9-dev/boot-splash.png)
+[Final splash frame](downloads/0.6.10-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -203,7 +205,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.9-dev --zip-output dist/pos-0.6.9-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.10-dev --zip-output dist/pos-0.6.10-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -323,3 +325,8 @@ Settings → **IR & motion** provides live BMI270 readings and explicit NEC send
 See [Developer tooling](docs/DEVELOPMENT.md) for `posctl flash`, `files` and gated
 `deploy`. HTTPS uses ESP-IDF's common-root certificate bundle to preserve the
 existing OTA layout; validation remains enabled and unsupported roots are rejected.
+
+Transfer files between POS and Linux with the simple **[POS Transfer tool](docs/TRANSFER.md)**:
+[download pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.6.10-dev/pos-transfer),
+then run `python3 ~/Downloads/pos-transfer`. Choose Send/Receive and Wi-Fi/Bluetooth.
+Wi-Fi works without Bluetooth helpers and is the preferred Crostini route.

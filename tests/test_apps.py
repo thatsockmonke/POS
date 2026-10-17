@@ -6,12 +6,16 @@ from pathlib import Path
 import resource
 import shutil
 import struct
+import sys
 import subprocess
 import tempfile
 import unittest
 import wave
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT/'tools'))
+import pos_transfer as pc_transfer
+
 class AppsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -32,6 +36,28 @@ class AppsTests(unittest.TestCase):
         self.assertEqual(result.returncode,expected,result.stdout+result.stderr);return result.stdout
     def write(self,name,data):
         p=self.root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(data);return p
+    def test_pc_and_device_share_offers_and_receive_engines_interoperate(self):
+        data=bytes(range(256))*9
+        source=self.write('Documents/source.bin',data)
+        self.run_app('share','offer','Documents/source.bin')
+        device_wire=(self.root/'offer.bin').read_bytes()
+        self.assertEqual(device_wire,pc_transfer.offer_for(source))
+        receiver=pc_transfer.Receiver(self.root/'pc-downloads')
+        try:
+            for seq,at in enumerate(range(0,158,18)):
+                receiver.feed(b'O'+bytes([seq])+device_wire[at:at+18])
+            receiver.accept()
+            for at in range(0,len(data),128):
+                receiver.feed(b'D'+struct.pack('<I',at)+data[at:at+128])
+            receiver.finish()
+            self.assertEqual(receiver.completed.read_bytes(),data)
+        finally:receiver.close()
+        (self.root/'offer.bin').write_bytes(pc_transfer.offer_for(source))
+        self.run_app('share','fragments')
+        self.run_app('share','write')
+        self.run_app('share','finish')
+        self.assertEqual((self.root/'Downloads/source.bin').read_bytes(),data)
+
     def test_directory_copy_preserves_files_empty_directories_and_originals(self):
         self.write('Documents/source/a.txt',b'hello'*40000);self.write('Documents/source/deep/b.txt',b'other');(self.root/'Documents/source/empty').mkdir()
         self.run_app('files','copy','Documents/source','Documents/copy')

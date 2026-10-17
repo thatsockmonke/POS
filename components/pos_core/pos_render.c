@@ -189,6 +189,12 @@ static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
     if (!v->map_world &&
         ((x == 120 && abs(my - 44) <= 3) || (my == 44 && abs(x - 120) <= 3)))
       return 0xfec0;
+    /* Geographic edges, never a screen-clamped fake boundary when panning. */
+    if (v->map_region && (((x == v->map_left || x == v->map_right) &&
+                           my >= v->map_top && my <= v->map_bottom) ||
+                          ((my == v->map_top || my == v->map_bottom) &&
+                           x >= v->map_left && x <= v->map_right)))
+      return 0xffff;
     unsigned p = (unsigned)(my * 240 + x);
     if (v->map_route_pixels && ((v->map_route_pixels[p / 8] >> (p % 8)) & 1))
       return 0xfec0;

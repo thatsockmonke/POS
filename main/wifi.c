@@ -225,7 +225,8 @@ void pos_ui_wifi_export(const char *root, const char *selected) {
   pos_network_status_t status = pos_network_status();
   char message[350];
   snprintf(message, sizeof(message),
-           "On your computer, open:\nhttp://%s:8080/\n?key=%s\nUploads: "
+           "PC: POS Transfer > Wi-Fi\nOr browser: "
+           "http://%s:8080/\n?key=%s\nUploads: "
            "Downloads\n%s\nEnter/Esc: stop session\nFn+Space: close app",
            status.ip, key,
            *selected ? "One selected file shared" : "Uploads only");

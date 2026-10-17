@@ -80,21 +80,15 @@ static void download_run(const char *root, char raw[POS_FS_PATH],
                   "latitude, away from the date line.");
     return;
   }
-  const char *providers[] = {"OpenStreetMap (500 m)", "VK Maps (Russia)",
-                             "Overpass API (Germany)", "Cancel"};
+  const char *providers[] = {"OpenStreetMap (worldwide)",
+                             "VK Overpass (worldwide)",
+                             "Overpass API (worldwide)", "Cancel"};
   int provider = pos_ui_menu("Choose map provider", providers, 4);
   if (provider < 0 || provider == 3)
     return;
-  if (!provider && m.width_m != 500) {
-    pos_ui_notice("Choose a smaller region",
-                  "OpenStreetMap's direct API is limited here to a 500 m "
-                  "square. Choose 500 m, or an Overpass provider for larger "
-                  "areas. Dense areas can still exceed the download limit.");
-    return;
-  }
   char summary[400];
   snprintf(summary, sizeof(summary),
-           "%.5f, %.5f\n%u m square\nRoads and paths, north up.\nUp to 8 MiB "
+           "%.5f, %.5f\n%u m square\nRoads and paths, north up.\nUp to 64 MiB "
            "download.\nThis area is sent to this service: %s. OSM "
            "contributors / ODbL. No background location sharing.",
            m.latitude, m.longitude, m.width_m, pos_map_providers[provider]);
@@ -484,6 +478,18 @@ static __attribute__((noinline)) void open_map(const char *root,
       pos_ui_style(v);
       v->map_pixels = s->pixels;
       v->map_generation = generation;
+      v->map_region = true;
+      double dy = m.width_m / (2 * 111195.08);
+      double dx = dy / cos(m.latitude * 3.14159265358979323846 / 180);
+      int bx, by;
+      pos_map_project(m.latitude + dy, m.longitude - dx, lat, lon, width, &bx,
+                      &by);
+      v->map_left = bx;
+      v->map_top = by;
+      pos_map_project(m.latitude - dy, m.longitude + dx, lat, lon, width, &bx,
+                      &by);
+      v->map_right = bx;
+      v->map_bottom = by;
       if (s->route)
         v->map_route_pixels = s->route_pixels;
       v->map_fix = gps.fix;

@@ -44,11 +44,8 @@ int pos_map_query(const pos_map_info_t *m, unsigned provider, char url[512]) {
     return -1;
   double dy = m->width_m / (2 * METERS), dx = dy / cos(m->latitude * RAD);
   if (!provider) {
-    /* The editing API is for explicit small areas, never bulk region scraping.
-     * It includes non-road objects: resolve/filter them on SD before compiling.
-     */
-    if (m->width_m != 500)
-      return -1;
+    /* One explicit small bbox (up to 4 km), never bulk region scraping.
+     * Resolve/filter references on SD; server density limits still apply. */
     int n = snprintf(url, 512, "%s?bbox=%.6f,%.6f,%.6f,%.6f",
                      pos_map_providers[0], m->longitude - dx, m->latitude - dy,
                      m->longitude + dx, m->latitude + dy);

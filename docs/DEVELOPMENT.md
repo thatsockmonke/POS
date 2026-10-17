@@ -123,3 +123,21 @@ For a guided first installation, [pos-setup](EASY_INSTALL.md) downloads current
 releases and automates safe SD preparation/USB backup and flashing. Build its
 standalone executable with `python tools/build_setup.py --output dist/pos-setup`.
 It embeds the verified USB helper modules and runs without a checkout.
+
+## Linux PC transfer validation
+
+The standard host suite includes the dependency-free transfer engine, Wi-Fi
+HTTP fixture and interoperability with native POS C offer/receive code. To run
+the real private D-Bus GATT/agent smoke test without a physical Bluetooth radio:
+
+```sh
+python3 -m venv /tmp/pos-transfer-test
+/tmp/pos-transfer-test/bin/pip --isolated install bleak==0.22.3 dbus-fast==2.44.5
+/tmp/pos-transfer-test/bin/python tests/ble_dbus_smoke.py
+```
+
+Requires `dbus-daemon` (CI Ubuntu includes it). The test uses a private daemon and
+simulated BlueZ to check actual D-Bus serialization/export, secure flags, numeric
+comparison callbacks, file transfer, disconnect/resume and unregister cleanup.
+It does not operate a Bluetooth radio or validate physical pairing/encryption.
+Use native Linux and Cardputer for that final interoperability check.

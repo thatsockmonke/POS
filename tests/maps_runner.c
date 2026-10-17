@@ -55,7 +55,9 @@ int main(int argc, char **argv) {
     if (!result)
       puts(url);
   }
-  if (!strcmp(argv[1], "compile") && argc >= 4)
+  if (!strcmp(argv[1], "compile-4km"))
+    m.width_m = 4000;
+  if ((!strcmp(argv[1], "compile") || !strcmp(argv[1], "compile-4km")) && argc >= 4)
     result = pos_map_compile(argv[2], argv[3], &m, cancel,
                              argc > 4 ? (void *)1 : NULL, &e);
   if (!strcmp(argv[1], "raster") && argc >= 3) {
@@ -102,6 +104,22 @@ int main(int argc, char **argv) {
     v.map_route_pixels = route_pixels;
     route_pixels[(20 * 240 + 40) / 8] |= 1u << ((20 * 240 + 40) % 8);
     assert(pos_view_pixel(&v, 40, 36) == 0xfec0);
+    v.map_fix = false;
+    v.map_waypoint = false;
+    v.map_region = true;
+    v.map_left = 30;
+    v.map_right = 210;
+    v.map_top = 10;
+    v.map_bottom = 70;
+    assert(pos_view_pixel(&v, 30, 26) == 0xffff);
+    assert(pos_view_pixel(&v, 100, 86) == 0xffff);
+    assert(pos_view_pixel(&v, 29, 26) == 0x0842);
+    v.map_left = -50;
+    v.map_right = 290;
+    v.map_top = -50;
+    v.map_bottom = 140;
+    assert(pos_view_pixel(&v, 0, 20) == 0x0842);
+    v.map_region = false;
     uint32_t hashes[5];
     for (unsigned direction = 1; direction <= 5; ++direction) {
       v.map_turn = direction;

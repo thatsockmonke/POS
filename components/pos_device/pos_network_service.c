@@ -472,6 +472,20 @@ static esp_err_t send_file(httpd_req_t *request) {
     return ESP_FAIL;
   }
   httpd_resp_set_hdr(request, "X-POS-SHA256", sha);
+  char encoded[361];
+  const char *name = strrchr(share.export_file, '/');
+  name = name ? name + 1 : share.export_file;
+  if (pos_transfer_name_valid(name)) {
+    static const char hex[] = "0123456789ABCDEF";
+    size_t at = 0;
+    for (const unsigned char *p = (const unsigned char *)name; *p; ++p) {
+      encoded[at++] = '%';
+      encoded[at++] = hex[*p >> 4];
+      encoded[at++] = hex[*p & 15];
+    }
+    encoded[at] = 0;
+    httpd_resp_set_hdr(request, "X-POS-Filename", encoded);
+  }
   httpd_resp_set_type(request, "application/octet-stream");
   httpd_resp_set_hdr(request, "Content-Disposition",
                      "attachment; filename=\"panputer-file\"");

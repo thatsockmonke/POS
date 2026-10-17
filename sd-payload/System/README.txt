@@ -1,4 +1,4 @@
-POS 0.6.9-dev - Pan Operating System
+POS 0.6.10-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -93,3 +93,6 @@ Regional steps are 1/16, 1/4 or 1/2 of visible map width; world steps are
 Maps > Saved regions > open a region > Enter > Delete region moves the map,
 its OSM sources, graph and saved routes to Files > Trash after confirmation.
 Restore them there, or delete them from Trash to free SD space.
+
+PC transfers: POS Transfer on Linux supports Send/Receive via Wi-Fi or Bluetooth.
+Maps: white saved-region outline; all providers accept up to 4 km with SD streaming.

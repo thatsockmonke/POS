@@ -108,3 +108,16 @@ are never treated as code, commands or authority to change device settings.
 `messages.jsonl` stores readable JSON records with sender, ID, type and text.
 Range CSVs record packet IDs, event kinds and real measurements; their schema is
 described in [APPS.md](APPS.md). No signal-to-distance conversion is performed.
+
+## POS trusted-LAN file transfer
+
+During an explicitly opened Wi-Fi file-transfer screen, port 8080 accepts
+`Authorization: Bearer <16-hex-session-key>`. This is local HTTP, not TLS; use
+a trusted LAN. `POST /upload?name=<percent-encoded-basename>` accepts an ordinary
+body with Content-Length and `X-POS-SHA256`; POS streams, verifies and publishes
+only to Downloads, preserving existing files. `GET /download` exposes only the
+file selected on-device and returns `X-POS-SHA256`, plus `X-POS-Filename` in
+0.6.10-dev (percent-encoded UTF-8 basename). Clients validate names, stream and
+verify before no-overwrite publication. HTTP redirects are not followed with the
+key. Wi-Fi transfers do not currently resume. Closing the POS screen stops the
+server and discards its temporary key. The Linux client is `pos-transfer`.

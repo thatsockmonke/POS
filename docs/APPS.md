@@ -402,3 +402,11 @@ A receiver is still required to enable Maps. Arrows pan, +/− zoom, **C** retur
 to GPS follow, **0** fits the planet, and Enter/Escape returns to the Maps menu.
 Saved regional roads, search, downloads and turn guidance remain available there.
 The global overview is coastlines, not a planet-sized road/routing database.
+
+## PC file transfers (0.6.10-dev)
+
+Share explicitly labels POS/PC send and receive options. Linux **POS Transfer**
+provides Send/Receive over Bluetooth and Wi-Fi. The Bluetooth sender help explains
+Linux Receive mode; Wi-Fi sessions mention the terminal tool as well as the browser.
+Wi-Fi exports provide a percent-encoded original filename header for PC clients.
+See [TRANSFER.md](TRANSFER.md) for download, simple steps and Crostini limitations.

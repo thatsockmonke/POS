@@ -59,6 +59,11 @@ static int preview(const char *root, const char *output, unsigned screen,
     pos_map_line(route_pixels, 94, 44, 180, 44);
     v.map_pixels = map_pixels;
     v.map_route_pixels = route_pixels;
+    v.map_region = true;
+    v.map_left = 80;
+    v.map_right = 154;
+    v.map_top = 7;
+    v.map_bottom = 81;
     v.map_turn = 3;
     v.map_fix = v.map_waypoint = true;
     v.map_gps_x = 94;
