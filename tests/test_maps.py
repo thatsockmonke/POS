@@ -29,6 +29,35 @@ class MapTests(unittest.TestCase):
         self.assertEqual(p.returncode,0 if ok else 1,p.stdout+p.stderr);return p.stdout
     def compile(self,data=None):
         self.raw.write_bytes(osm() if data is None else data);return self.run_map('compile',self.raw,self.map)
+    def world(self,path,lat=0,lon=0,zoom=0,ok=True):
+        p=subprocess.run([str(self.runner),'world',str(path),str(lat),str(lon),str(zoom)],capture_output=True)
+        self.assertEqual(p.returncode,0 if ok else 1,p.stderr)
+        return p.stdout
+    def test_world_asset_streams_at_poles_date_line_and_all_zooms(self):
+        asset=ROOT/'sd-payload/System/Assets/world.map'
+        images=set()
+        for lat,lon in ((0,0),(34.05,-118.248),(90,180),(-90,-180),(0,179.9),(0,-179.9)):
+            for zoom in range(9):
+                pixels=self.world(asset,lat,lon,zoom)
+                self.assertEqual(len(pixels),2640)
+                images.add(pixels)
+        self.assertGreater(len(images),20)
+        self.run_map('world-geometry')
+    def test_world_asset_corruption_bounds_and_trailing_bytes_are_rejected(self):
+        data=(ROOT/'sd-payload/System/Assets/world.map').read_bytes()
+        for bad in (data[:-1],data+b'x',b'BAD!'+data[4:],data[:30]+bytes([data[30]^1])+data[31:]):
+            self.raw.write_bytes(bad);self.world(self.raw,ok=False)
+        asset=ROOT/'sd-payload/System/Assets/world.map'
+        for lat,lon,zoom in ((91,0,0),(0,181,0),('nan',0,0),(0,0,9)):
+            self.world(asset,lat,lon,zoom,ok=False)
+    def test_world_date_line_segment_never_draws_a_line_across_the_planet(self):
+        segment=struct.pack('<hhhh',17900,0,-17900,0)
+        self.raw.write_bytes(b'PWM1'+struct.pack('<II',1,zlib.crc32(segment))+segment)
+        pixels=self.world(self.raw,0,0,0)
+        self.assertLess(sum(b.bit_count() for b in pixels),5)
+        pixels=self.world(self.raw,0,180,0)
+        self.assertGreater(sum(b.bit_count() for b in pixels),0)
+
     def test_compile_preserves_portable_source_and_checksums_header_and_geometry(self):
         self.compile();self.assertEqual(self.raw.read_bytes(),osm());data=self.map.read_bytes()
         self.assertEqual(data[:4],b'PMP1');self.assertEqual(len(data),64+2*16)

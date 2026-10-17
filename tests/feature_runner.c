@@ -60,7 +60,7 @@ void pos_audio_stop(void) {
   ++audio_stops;
 }
 pos_expansion_status_t pos_expansion_status(void) { return fake_expansion; }
-pos_location_t pos_expansion_location(void) {return fake_expansion.location;}
+pos_location_t pos_expansion_location(void) { return fake_expansion.location; }
 int pos_expansion_configure(bool enabled, uint32_t hz, bool tx,
                             pos_error_t *e) {
   if (enabled && !fake_expansion.cap_detected) {
@@ -237,6 +237,14 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout) {
 }
 void pos_device_show(const pos_view_t *view) {
   assert(!display_hidden);
+  for (unsigned row = 0; row < POS_ROWS; ++row) {
+    assert(!strstr(view->lines[row], "Old vault passphrase"));
+    assert(!strstr(view->lines[row], "Import old saved networks"));
+  }
+  if (view->map_world && view->map_fix) {
+    assert(view->map_gps_x == 120 && view->map_gps_y == 44);
+    assert(pos_view_pixel(view, 123, 54) == 0xf911); /* Pink GPS pin head. */
+  }
   if (!strcmp(view->lines[0], "Recorder")) {
     if (view->visual == POS_VISUAL_MIC)
       assert(!microphone_backlog);
@@ -257,8 +265,10 @@ void pos_device_show(const pos_view_t *view) {
     assert(view->selected_row == 6); /* Turn display off remains selected. */
     display_wake_seen = true;
   }
-  if(view->map_route_pixels && view->map_turn==2)maps_turn_seen=true;
-  if (view->map_pixels && view->map_fix && view->map_waypoint && !view->map_route_pixels) {
+  if (view->map_route_pixels && view->map_turn == 2)
+    maps_turn_seen = true;
+  if (view->map_pixels && view->map_fix && view->map_waypoint &&
+      !view->map_route_pixels) {
     assert(strstr(view->lines[1], "deg"));
     maps_guidance_seen = true;
   }
@@ -400,16 +410,21 @@ int pos_network_https(const char *url, const char *method, const char *body,
   return -1;
 }
 int pos_network_https_limit(const char *u, const char *m, const char *b,
- const char *t, const char *r, const char *d, const char *h,
- pos_io_progress_t p, void *c, pos_error_t *e, uint32_t limit) {
- assert(limit == 2u * 1024u * 1024u);
- if (maps_download_test) {
-   assert(strstr(u, "https://maps.mail.ru/") == u && !strcmp(m, "GET"));
-   char full[POS_FS_PATH]; assert(!pos_fs_join(full,r,d));
-   const char *xml="<osm version=\"0.6\"><way id=\"1\"><nd ref=\"1\" lat=\"34.050\" lon=\"-118.248\"/><nd ref=\"2\" lat=\"34.051\" lon=\"-118.247\"/><tag k=\"highway\" v=\"residential\"/></way></osm>";
-   return pos_fs_write_new(full,xml,strlen(xml));
- }
- return pos_network_https(u,m,b,t,r,d,h,p,c,e);
+                            const char *t, const char *r, const char *d,
+                            const char *h, pos_io_progress_t p, void *c,
+                            pos_error_t *e, uint32_t limit) {
+  assert(limit == 2u * 1024u * 1024u);
+  if (maps_download_test) {
+    assert(strstr(u, "https://maps.mail.ru/") == u && !strcmp(m, "GET"));
+    char full[POS_FS_PATH];
+    assert(!pos_fs_join(full, r, d));
+    const char *xml =
+        "<osm version=\"0.6\"><way id=\"1\"><nd ref=\"1\" lat=\"34.050\" "
+        "lon=\"-118.248\"/><nd ref=\"2\" lat=\"34.051\" lon=\"-118.247\"/><tag "
+        "k=\"highway\" v=\"residential\"/></way></osm>";
+    return pos_fs_write_new(full, xml, strlen(xml));
+  }
+  return pos_network_https(u, m, b, t, r, d, h, p, c, e);
 }
 int pos_network_share_start(const char *root, const char *file, char key[17]) {
   (void)root;
@@ -541,7 +556,7 @@ static int wifi_ui_tests(const char *root, const char *mode) {
     push_key(POS_KEY_ENTER, 0); /* Forget */
     keys_down(1);
     push_key(POS_KEY_ENTER, 0); /* confirm */
-    keys_down(2);
+    keys_down(1);
     push_key(POS_KEY_ENTER, 0); /* empty known menu Back */
     keys_down(6);
     push_key(POS_KEY_ENTER, 0); /* Wi-Fi Back */
@@ -1307,9 +1322,31 @@ static int apps_ui(const char *root, const char *mode) {
     assert(ui_next == ui_count);
     return 0;
   }
+  if (!strcmp(mode, "maps-ui-world")) {
+    fake_expansion.gps_detected = fake_expansion.maps_available =
+        fake_expansion.location.fix = true;
+    fake_expansion.location.latitude = 34.05;
+    fake_expansion.location.longitude = -118.248;
+    push_key(POS_KEY_ENTER, 0);
+    idle_event();
+    push_key('+', 0);
+    idle_event();
+    push_key('-', 0);
+    idle_event();
+    push_key('0', 0);
+    idle_event();
+    push_key('c', 0);
+    idle_event();
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_maps(root);
+    assert(pos_home_pending() && ui_next == ui_count && !ui_last.map_pixels);
+    return 0;
+  }
   if (!strcmp(mode, "maps-ui-no-fix")) {
     fake_expansion.gps_detected = fake_expansion.maps_available = true;
-    choose(1); /* Download */
+    for (unsigned i = 0; i < 3; ++i)
+      push_key(POS_KEY_UP, 0);
+    push_key(POS_KEY_ENTER, 0); /* Download */
     push_key(POS_KEY_ENTER, 0); /* Around GPS */
     push_key(POS_KEY_ENTER, 0); /* No fix notice */
     push_key(POS_KEY_ESCAPE, 0);
@@ -1319,51 +1356,104 @@ static int apps_ui(const char *root, const char *mode) {
     return 0;
   }
   if (!strcmp(mode, "maps-ui-download")) {
-    maps_download_test = true;fake_network.connected = true;
-    fake_expansion.gps_detected = fake_expansion.maps_available = fake_expansion.location.fix = true;
-    fake_expansion.location.latitude = 34.0505;fake_expansion.location.longitude = -118.2475;
-    choose(1);choose(0);choose(0);push_key(POS_KEY_ENTER,0);choose(0);
-    push_key(POS_KEY_ESCAPE,0); /* Close review */
-    choose(0);idle_event(); /* Download and compile complete before later keys */
-    push_key(POS_KEY_ESCAPE,0);push_key(POS_KEY_HOME,0);
-    pos_ui_maps(root);assert(ui_next == ui_count && pos_home_pending());
-    return 0;
-  }
-  if (!strcmp(mode,"maps-ui-route") || !strcmp(mode,"maps-ui-search")) {
-    bool search=!strcmp(mode,"maps-ui-search");
-    fake_expansion.gps_detected=fake_expansion.maps_available=fake_expansion.location.fix=true;
-    fake_expansion.location.latitude=34.05;fake_expansion.location.longitude=-118.248;
-    char folder[POS_FS_PATH],raw[POS_FS_PATH],map[POS_FS_PATH];
-    assert(!pos_fs_join(folder,root,"POS/Maps")&&!pos_fs_mkdirs(folder));
-    assert(!pos_fs_join(raw,root,"POS/Maps/local.osm")&&!pos_fs_join(map,root,"POS/Maps/local.pmap"));
-    const char *xml="<osm version=\"0.6\"><way id=\"10\"><nd ref=\"1\" lat=\"34.05\" lon=\"-118.248\"/><nd ref=\"2\" lat=\"34.05\" lon=\"-118.247\"/><tag k=\"highway\" v=\"residential\"/><tag k=\"name\" v=\"First\"/></way><way id=\"20\"><nd ref=\"2\" lat=\"34.05\" lon=\"-118.247\"/><nd ref=\"3\" lat=\"34.051\" lon=\"-118.247\"/><tag k=\"highway\" v=\"residential\"/><tag k=\"name\" v=\"North\"/></way></osm>";
-    assert(!pos_fs_write_new(raw,xml,strlen(xml)));
-    pos_map_info_t m={.latitude=34.051,.longitude=-118.247,.width_m=1000};strcpy(m.name,"Local");pos_error_t e={0};
-    assert(!pos_map_compile(raw,map,&m,NULL,NULL,&e));assert(!pos_nav_compile(raw,map,NULL,NULL,&e));
-    choose(0);choose(0);idle_event();
-    push_key(POS_KEY_ENTER,0);choose(search?1:0);
-    if(search){push_text("North");push_key(POS_KEY_ENTER,0);idle_event();choose(0);choose(1);idle_event();}
-    else {push_key(POS_KEY_ESCAPE,0);choose(0);idle_event();push_key(POS_KEY_ENTER,0);choose(2);idle_event();}
-    push_key(POS_KEY_HOME,0);pos_ui_maps(root);
-    assert(ui_next==ui_count && pos_home_pending() && !ui_last.map_pixels && !ui_last.map_route_pixels);
-    assert(search?maps_guidance_seen:maps_turn_seen);return 0;
-  }
-  if (!strcmp(mode, "maps-ui-open")) {
-    fake_expansion.gps_detected = fake_expansion.maps_available = fake_expansion.location.fix = true;
+    maps_download_test = true;
+    fake_network.connected = true;
+    fake_expansion.gps_detected = fake_expansion.maps_available =
+        fake_expansion.location.fix = true;
     fake_expansion.location.latitude = 34.0505;
     fake_expansion.location.longitude = -118.2475;
+    for (unsigned i = 0; i < 3; ++i)
+      push_key(POS_KEY_UP, 0);
+    push_key(POS_KEY_ENTER, 0);
+    choose(0);
+    choose(0);
+    push_key(POS_KEY_ENTER, 0);
+    choose(0);
+    push_key(POS_KEY_ESCAPE, 0); /* Close review */
+    choose(0);
+    idle_event(); /* Download and compile complete before later keys */
+    push_key(POS_KEY_ESCAPE, 0);
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_maps(root);
+    assert(ui_next == ui_count && pos_home_pending());
+    return 0;
+  }
+  if (!strcmp(mode, "maps-ui-route") || !strcmp(mode, "maps-ui-search")) {
+    bool search = !strcmp(mode, "maps-ui-search");
+    fake_expansion.gps_detected = fake_expansion.maps_available =
+        fake_expansion.location.fix = true;
+    fake_expansion.location.latitude = 34.05;
+    fake_expansion.location.longitude = -118.248;
+    char folder[POS_FS_PATH], raw[POS_FS_PATH], map[POS_FS_PATH];
+    assert(!pos_fs_join(folder, root, "POS/Maps") && !pos_fs_mkdirs(folder));
+    assert(!pos_fs_join(raw, root, "POS/Maps/local.osm") &&
+           !pos_fs_join(map, root, "POS/Maps/local.pmap"));
+    const char *xml =
+        "<osm version=\"0.6\"><way id=\"10\"><nd ref=\"1\" lat=\"34.05\" "
+        "lon=\"-118.248\"/><nd ref=\"2\" lat=\"34.05\" lon=\"-118.247\"/><tag "
+        "k=\"highway\" v=\"residential\"/><tag k=\"name\" "
+        "v=\"First\"/></way><way id=\"20\"><nd ref=\"2\" lat=\"34.05\" "
+        "lon=\"-118.247\"/><nd ref=\"3\" lat=\"34.051\" lon=\"-118.247\"/><tag "
+        "k=\"highway\" v=\"residential\"/><tag k=\"name\" "
+        "v=\"North\"/></way></osm>";
+    assert(!pos_fs_write_new(raw, xml, strlen(xml)));
+    pos_map_info_t m = {
+        .latitude = 34.051, .longitude = -118.247, .width_m = 1000};
+    strcpy(m.name, "Local");
+    pos_error_t e = {0};
+    assert(!pos_map_compile(raw, map, &m, NULL, NULL, &e));
+    assert(!pos_nav_compile(raw, map, NULL, NULL, &e));
+    for (unsigned i = 0; i < 4; ++i)
+      push_key(POS_KEY_UP, 0);
+    choose(0);
+    choose(0);
+    idle_event();
+    push_key(POS_KEY_ENTER, 0);
+    choose(search ? 1 : 0);
+    if (search) {
+      push_text("North");
+      push_key(POS_KEY_ENTER, 0);
+      idle_event();
+      choose(0);
+      choose(1);
+      idle_event();
+    } else {
+      push_key(POS_KEY_ESCAPE, 0);
+      choose(0);
+      idle_event();
+      push_key(POS_KEY_ENTER, 0);
+      choose(2);
+      idle_event();
+    }
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_maps(root);
+    assert(ui_next == ui_count && pos_home_pending() && !ui_last.map_pixels &&
+           !ui_last.map_route_pixels);
+    assert(search ? maps_guidance_seen : maps_turn_seen);
+    return 0;
+  }
+  if (!strcmp(mode, "maps-ui-open")) {
+    fake_expansion.gps_detected = fake_expansion.maps_available =
+        fake_expansion.location.fix = true;
+    fake_expansion.location.latitude = 34.0505;
+    fake_expansion.location.longitude = -118.2475;
+    for (unsigned i = 0; i < 4; ++i)
+      push_key(POS_KEY_UP, 0);
     push_key(POS_KEY_ENTER, 0); /* Saved regions */
     push_key(POS_KEY_ENTER, 0); /* Local */
     idle_event(); /* Raster progress cannot consume later navigation. */
     push_key(POS_KEY_RIGHT, 0);
     idle_event();
-    push_key(POS_KEY_ENTER, 0);choose(6); /* Straight-line guide to panned crosshair */
+    push_key(POS_KEY_ENTER, 0);
+    choose(6); /* Straight-line guide to panned crosshair */
     idle_event();
-    push_key('c', 0);idle_event(); /* Follow live GPS */
+    push_key('c', 0);
+    idle_event(); /* Follow live GPS */
     push_key(POS_KEY_HOME, 0);
     pos_ui_maps(root);
     assert(ui_next == ui_count && pos_home_pending());
-    assert(!ui_last.map_pixels && maps_guidance_seen); /* Drop borrowed memory before freeing. */
+    assert(!ui_last.map_pixels &&
+           maps_guidance_seen); /* Drop borrowed memory before freeing. */
     return 0;
   }
   if (!strcmp(mode, "hardware-ui-missing")) {
@@ -1398,24 +1488,34 @@ static int apps_ui(const char *root, const char *mode) {
     assert(!strcmp(ui_last.lines[0], "Audio Player"));
     return 0;
   }
-  if (!strcmp(mode, "recorder-ui-gain")) {
+  if (!strcmp(mode, "recorder-ui-gain") ||
+      !strcmp(mode, "recorder-ui-custom")) {
+    bool custom = !strcmp(mode, "recorder-ui-custom");
+    unsigned expected = custom ? 1537 : 64;
     pos_settings_t settings;
     pos_settings_defaults(&settings);
     pos_ui_set_theme(&settings.background);
-    choose(1); /* Gain menu starts at saved default 8x. */
-    push_key('/', 0);
-    push_key('/', 0);
+    choose(1); /* Numeric gain, preserving punctuation as text input. */
+    push_key(21, 0);
+    if (custom) {
+      push_text("4097");
+      push_key(POS_KEY_ENTER, 0);
+      push_key(POS_KEY_ENTER, 0); /* Invalid gain notice */
+      push_key(21, 0);
+    }
+    push_text(custom ? "1537" : "32");
     push_key(POS_KEY_ENTER, 0); /* 32x */
     push_key(POS_KEY_ENTER, 0); /* Start */
     idle_event();
-    push_key('/', 0);
-    idle_event(); /* Live 64x */
+    if (!custom)
+      push_key('/', 0);
+    idle_event(); /* Live 64x, or retain arbitrary numeric gain. */
     push_key(POS_KEY_HOME, 0);
     pos_ui_recorder(root, &settings);
-    assert(settings.microphone_gain == 64 && fake_gain == 64);
+    assert(settings.microphone_gain == expected && fake_gain == expected);
     pos_settings_t loaded;
     assert(!pos_settings_load(root, &loaded));
-    assert(loaded.microphone_gain == 64 && loaded.brightness == 70);
+    assert(loaded.microphone_gain == expected && loaded.brightness == 70);
     assert(pos_home_pending() && microphone_stops);
     return 0;
   }

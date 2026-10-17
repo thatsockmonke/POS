@@ -80,8 +80,8 @@ static void record(const char *root, pos_settings_t *settings) {
       if (key == POS_KEY_LEFT || key == POS_KEY_RIGHT) {
         if (key == POS_KEY_LEFT && gain > 1)
           gain /= 2;
-        if (key == POS_KEY_RIGHT && gain < 64)
-          gain *= 2;
+        if (key == POS_KEY_RIGHT && gain < 4096)
+          gain = gain > 2048 ? 4096 : gain * 2;
         pos_microphone_set_gain(gain);
         redraw = true;
       }
@@ -184,14 +184,22 @@ void pos_ui_recorder(const char *root, pos_settings_t *settings) {
     if (choice == 0)
       record(root, settings);
     if (choice == 1) {
-      const char *gains[] = {"1x",  "2x",  "4x",  "8x (default)",
-                             "16x", "32x", "64x", "Back"};
-      int current = 0;
-      for (unsigned n = settings->microphone_gain; n > 1; n /= 2)
-        ++current;
-      int picked = pos_ui_menu_from("Microphone gain", gains, 8, current);
-      if (picked >= 0 && picked < 7)
-        save_gain(root, settings, 1u << picked);
+      char text[16];
+      snprintf(text, sizeof(text), "%u", settings->microphone_gain);
+      while (pos_ui_text("Microphone gain", "Gain: whole number 1-4096", text,
+                         sizeof(text), false)) {
+        char *end;
+        unsigned long gain = strtoul(text, &end, 10);
+        bool digits = *text != 0;
+        for (const char *p = text; *p; ++p)
+          if (*p < '0' || *p > '9')
+            digits = false;
+        if (digits && !*end && gain >= 1 && gain <= 4096) {
+          save_gain(root, settings, (unsigned)gain);
+          break;
+        }
+        pos_ui_notice("Invalid gain", "Enter a whole number from 1 to 4096.");
+      }
     }
     if (choice == 2)
       pos_ui_files_from(root, POS_RECORDINGS);
@@ -213,7 +221,8 @@ void pos_ui_recorder(const char *root, pos_settings_t *settings) {
       pos_ui_notice(
           "Recorder controls",
           "Enter starts recording. Left/Right changes microphone gain from 1x "
-          "to 64x. More gain makes quiet speech louder; lower it when Clipping "
+          "to 4096x. Enter any whole-number gain in Microphone gain. More gain "
+          "makes quiet speech louder; lower it when Clipping "
           "appears. Gain is saved after capture stops. Space pauses/resumes. "
           "Enter or Esc stops and saves. Fn+apostrophe or G0 saves and closes. "
           "The microphone and single level bar use your wallpaper colors. "

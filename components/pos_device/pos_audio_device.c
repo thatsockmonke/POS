@@ -272,7 +272,7 @@ size_t pos_microphone_pending(void) {
  * Keep the stock analog profile; saturate PCM instead of wrapping loud input.
  */
 int pos_microphone_set_gain(unsigned gain) {
-  if (!gain || gain > 64 || (gain & (gain - 1)))
+  if (!gain || gain > 4096)
     return -1;
   atomic_store_explicit(&mic_gain, gain, memory_order_relaxed);
   return 0;

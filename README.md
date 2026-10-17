@@ -4,7 +4,7 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.6.4-dev adds offline road search, routing and turn guidance.**
+**0.6.5-dev adds numeric microphone gain, a GPS-centered offline world map, and simpler Known Networks.**
 Choose a region in **Maps → Download a region**, then use **Saved regions → Enter**
 for **Travel mode**, **Search road name**, **Route to map crosshair**, and **Resume
 saved route**. Route calculation and cached turn guidance work without Internet;
@@ -14,7 +14,7 @@ its route, next maneuver/road name and remaining distance.
 **Download your regions again after updating from 0.6.3** to include access and
 restriction data. Existing road maps remain viewable. Routes cover the selected
 cached graph; unsupported conditional/via-way rules are blocked conservatively.
-See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.6.4-dev/maps.png).
+[World map preview](downloads/0.6.5-dev/world.png) · See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.6.5-dev/maps.png).
 
 Earlier Recorder playback, launcher, editor and Wi-Fi improvements remain:
 The launcher keeps its selection box fixed while crisp 32×32 icons slide on an
@@ -48,7 +48,7 @@ Upgrade through **0.6.0-dev** first if using an older installation. Active updat
 metadata stays at exactly seven fields; the old bridge feed remains frozen.
 Black-start flag/logo boot, microphone gain and themed app visuals remain.
 
-[Animated UI preview](downloads/0.6.4-dev/ui-animation.png) · [Recorder](downloads/0.6.4-dev/recorder.png) · [Files](downloads/0.6.4-dev/files.png) · [Background](downloads/0.6.4-dev/background.png) · [Counter](downloads/0.6.4-dev/counter.png)
+[Animated UI preview](downloads/0.6.5-dev/ui-animation.png) · [Recorder](downloads/0.6.5-dev/recorder.png) · [Files](downloads/0.6.5-dev/files.png) · [Background](downloads/0.6.5-dev/background.png) · [Counter](downloads/0.6.5-dev/counter.png)
 
 Previews use the actual portable renderer with example state; they are not
 hardware recordings or device frame-rate measurements.
@@ -163,14 +163,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.6.4-dev/launcher.png)
-![Color picker](downloads/0.6.4-dev/color-picker.png)
+![Launcher](downloads/0.6.5-dev/launcher.png)
+![Color picker](downloads/0.6.5-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.6.4-dev/boot-animation.png)
+![POS boot animation](downloads/0.6.5-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.6.4-dev/boot-splash.png)
+[Final splash frame](downloads/0.6.5-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -187,7 +187,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.4-dev --zip-output dist/pos-0.6.4-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.5-dev --zip-output dist/pos-0.6.5-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png

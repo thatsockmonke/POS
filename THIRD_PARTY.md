@@ -66,3 +66,9 @@ have this license independently of the POS code. Original OSM XML is retained
 beside the compact map. Attribution, provider details and sharing instructions
 are in `docs/MAPS.md` and visible in the Maps app. No third-party map dataset is
 bundled in the firmware; the Maps preview uses a generated example grid.
+
+**Bundled world overview:** `sd-payload/System/Assets/world.map` is derived from
+Natural Earth 1:110m land, public domain, with pinned source/checksum in
+`world-source.txt` beside it and `tools/build_world_map.py`. Terms:
+https://www.naturalearthdata.com/about/terms-of-use/ . This coastline dataset is
+on SD, is independent of OSM licensing and is not a global road database.

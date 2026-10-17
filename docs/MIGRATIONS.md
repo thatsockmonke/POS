@@ -83,3 +83,18 @@ successful import. No credentials are migrated onto SD or into ZIP backups.
 `POS/.History` is protected system storage, excluded from user filesystem backup.
 History rollback restores a firmware/System pair and leaves user data/preferences
 in place; format downgrades are not guessed. See FIRMWARE_HISTORY.md.
+
+## Settings format 5: numeric microphone gain (0.6.5)
+
+`microphone_gain` is now any integer from 1 to 4096 (default 8), stored as uint16
+in RAM and as a JSON number on SD. Formats 1–4 load without rewriting and keep
+their original gain validation; only intentional saving upgrades the alternate
+slot to format 5. Sound, wallpaper and profile preferences are retained. The same
+decoder protects backup/restore and migration. An older runtime preserves future
+format-5 settings rather than interpreting them; preferences may use defaults
+while rolled back to older firmware. Returning to 0.6.5 reads them again.
+Documents, maps and WAV files remain ordinary recoverable files.
+
+Known Networks stays unchanged in NVS. The old-passphrase import UI is removed;
+legacy `vault` bytes are preserved but no longer imported on the device. Save
+any missing connection again normally. No credentials are copied to SD.

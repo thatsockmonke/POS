@@ -340,7 +340,8 @@ static unsigned code(int x, int y) {
   return (x < 0 ? 1 : 0) | (x >= 240 ? 2 : 0) | (y < 0 ? 4 : 0) |
          (y >= POS_MAP_HEIGHT ? 8 : 0);
 }
-void pos_map_line(uint8_t pixels[POS_MAP_PIXELS], int x, int y, int xx, int yy) {
+void pos_map_line(uint8_t pixels[POS_MAP_PIXELS], int x, int y, int xx,
+                  int yy) {
   /* Clip first: a long rural road must not cause millions of pixel steps. */
   for (unsigned n = 0; n < 8; ++n) {
     unsigned a = code(x, y), b = code(xx, yy), o = a ? a : b;
@@ -444,4 +445,95 @@ double pos_map_bearing(double lat, double lon, double dest_lat,
   double result =
       atan2(sin(d) * cos(b), cos(a) * sin(b) - sin(a) * cos(b) * cos(d)) / RAD;
   return fmod(result + 360, 360);
+}
+
+static double world_delta(double lon) {
+  return lon - 360. * floor((lon + 180.) / 360.);
+}
+static double world_scale(double lat, unsigned zoom) {
+  return (86. / (180. + 2. * fabs(lat))) * (1u << zoom);
+}
+void pos_world_project(double lat, double lon, double clat, double clon,
+                       unsigned zoom, int *x, int *y) {
+  if (!isfinite(lat) || !isfinite(lon) || !isfinite(clat) || !isfinite(clon) ||
+      fabs(clon) > 180 || fabs(lon) > 180 || fabs(clat) > 90 ||
+      fabs(lat) > 90 || zoom > 8) {
+    *x = *y = -32760;
+    return;
+  }
+  double scale = world_scale(clat, zoom);
+  *x = (int)lround(120 + world_delta(lon - clon) * scale);
+  *y = (int)lround(44 + (clat - lat) * scale);
+}
+int pos_world_raster(const char *path, double lat, double lon, unsigned zoom,
+                     uint8_t pixels[POS_MAP_PIXELS], pos_error_t *e) {
+  if (!pixels)
+    return fail(e, "No world-map buffer.");
+  memset(pixels, 0, POS_MAP_PIXELS);
+  if (!isfinite(lat) || !isfinite(lon) || fabs(lat) > 90 || fabs(lon) > 180 ||
+      zoom > 8)
+    return fail(e, "Invalid world-map viewport.");
+  FILE *f = fopen(path, "rb");
+  uint8_t h[12], records[512];
+  int result = -1;
+  if (!f || fread(h, 1, 12, f) != 12 || memcmp(h, "PWM1", 4))
+    goto done;
+  uint32_t count = get(h + 4), expected = get(h + 8), crc = 0;
+  if (!count || count > 20000)
+    goto done;
+  double scale = world_scale(lat, zoom);
+  for (unsigned first = 0; first < count;) {
+    unsigned n = count - first;
+    if (n > 64)
+      n = 64;
+    if (fread(records, 8, n, f) != n)
+      goto done;
+    crc = pos_crc32(crc, records, n * 8);
+    for (unsigned i = 0; i < n; ++i) {
+      int coord[4];
+      for (unsigned j = 0; j < 4; ++j) {
+        unsigned k = i * 8 + j * 2;
+        unsigned value = records[k] | (unsigned)records[k + 1] << 8;
+        coord[j] = value >= 32768 ? (int)value - 65536 : (int)value;
+        if (abs(coord[j]) > (j % 2 ? 9000 : 18000))
+          goto done;
+      }
+      double a = world_delta(coord[0] / 100. - lon);
+      double b = a + world_delta((coord[2] - coord[0]) / 100.);
+      /* Draw the short segment on both sides when it crosses the camera seam;
+       * never connect the two date-line edges through the map interior. */
+      for (int copy = -1; copy <= 1; ++copy) {
+        double aa = a + copy * 360, bb = b + copy * 360;
+        if (fmin(aa, bb) > 180 || fmax(aa, bb) < -180)
+          continue;
+        double t0 = 0, t1 = 1, dx = bb - aa;
+        if (dx) {
+          double u = (-180 - aa) / dx, v = (180 - aa) / dx;
+          t0 = fmax(0, fmin(u, v));
+          t1 = fmin(1, fmax(u, v));
+        }
+        if (t0 > t1)
+          continue;
+        double y0 = coord[1] / 100., dy = (coord[3] - coord[1]) / 100.;
+        int x = (int)lround(120 + (aa + dx * t0) * scale);
+        int xx = (int)lround(120 + (aa + dx * t1) * scale);
+        int y = (int)lround(44 + (lat - y0 - dy * t0) * scale);
+        int yy = (int)lround(44 + (lat - y0 - dy * t1) * scale);
+        pos_map_line(pixels, x, y, xx, yy);
+      }
+    }
+    first += n;
+  }
+  if (crc != expected || fgetc(f) != EOF || ferror(f))
+    goto done;
+  result = 0;
+done:
+  if (f)
+    fclose(f);
+  if (result) {
+    memset(pixels, 0, POS_MAP_PIXELS);
+    return fail(e, "World map missing or damaged. Reinstall system assets; "
+                   "regional maps remain available.");
+  }
+  return 0;
 }

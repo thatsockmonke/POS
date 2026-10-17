@@ -6,7 +6,7 @@ physical signals, timing and calibration require bench checks. An initial user t
 confirmed USB backup/recovery, installer boot and SD detection, and initially reported an upside-down display. The user later reported working
 installation/display/keyboard on 0.5.6-dev. Buffered capture in 0.5.7-dev eliminated
 the reported overrun but produced silent recordings; the user confirms input works after the 0.5.8-dev right-channel correction.
-The new 1x–64x gain and visual layouts need usability checks.
+The new integer 1x–4096x gain and visual layouts need usability checks.
 
 | Function | GPIO / configuration | Source |
 | --- | --- | --- |
@@ -18,7 +18,7 @@ The new 1x–64x gain and visual layouts need usability checks.
 | System button | G0, active low | M5Unified ADV button configuration |
 | Battery | ADC1 GPIO 10, divider ratio 2; curve-fit calibration when available | M5Unified power profile |
 | USB | ESP32-S3 native USB Serial/JTAG console | ESP-IDF |
-| Microphone | ES8311 ADC data-in46, BCLK41/LRCK43; I2S1 16-bit stereo slots, right channel recorded as 16 kHz mono, saturated 1x–64x digital gain (8x default) | Official ADV pin map + pinned M5Unified ADV mic profile |
+| Microphone | ES8311 ADC data-in46, BCLK41/LRCK43; I2S1 16-bit stereo slots, right channel recorded as 16 kHz mono, saturated integer 1x–4096x digital gain (8x default) | Official ADV pin map + pinned M5Unified ADV mic profile |
 | IR | GPIO44, emitter only; RMT 38 kHz carrier, standard 8-bit NEC TX | Official ADV pin map |
 | IMU | BMI270 I2C0x69 (0x68 fallback), SDA8/SCL9; 8 KiB configuration, 100 Hz, +/-4 g, +/-1000 degrees/s | Pinned M5Unified + Bosch register definitions |
 | Audio codec / I2S | ES8311 0x18 on SDA8/SCL9; BCLK41, LRCK43, data-out42; I2S1, 16-bit stereo slots | M5Unified ADV speaker profile |
@@ -99,7 +99,7 @@ current IDF flash settings; validate them against the actual module before flash
 Both images are checked against these partitions during builds. Main task stack is
 16 KiB, FAT locks 32, file streaming buffers 8 KiB; metadata and app allocations are
 bounded. Available runtime heap still requires an actual device measurement.
-Optional Wi-Fi starts when requested or when saved Auto-connect is enabled. Session credentials stay in RAM; Known Networks uses authenticated encrypted NVS profiles with a device-generated key (not protection against physical unencrypted-flash extraction). The old vault is preserved for explicit import; HTTPS, time sync and file transfers are implemented. Wireless deployment is implemented through temporary developer sessions and the
+Optional Wi-Fi starts when requested or when saved Auto-connect is enabled. Session credentials stay in RAM; Known Networks uses authenticated encrypted NVS profiles with a device-generated key (not protection against physical unencrypted-flash extraction). Old encrypted vault bytes are preserved without an import prompt; HTTPS, time sync and file transfers are implemented. Wireless deployment is implemented through temporary developer sessions and the
 signed updater, gated on physical recovery/OTA evidence. Reopen a session after
 reboot for confirmation; no always-on service is enabled. New firmware still fits the
 existing slots, with limited runtime flash headroom; future growth must be
@@ -156,7 +156,7 @@ which could produce the reported silent WAV despite successful DMA transfers.
 
 The stock path's `magnification = 16`, `over_sampling = 1`, and
 `f_gain = magnification / (over_sampling * 2)` give effective 8x PCM gain. POS
-uses 8x by default and now offers 1x–64x with signed saturation, preserving the stock analog PGA and ADC
+uses 8x by default and now offers integer 1x–4096x with signed saturation, preserving the stock analog PGA and ADC
 volume. This does not copy M5Unified's software DC estimator/oversampling loop;
 the codec's digital DC cancellation remains enabled. No automatic channel
 selection or synthetic signal disguises a zero input. The normal Recorder UI shows one mono level; the internal raw L/R peak API

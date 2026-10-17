@@ -58,6 +58,24 @@ class FeatureTests(unittest.TestCase):
         result=subprocess.run([str(self.runner),str(card or self.card),command,*map(str,args)],capture_output=True,text=True)
         self.assertEqual(result.returncode,expected,result.stdout+result.stderr);return result
 
+    def test_world_map_ui_follows_current_fix_and_releases_bitmap(self):
+        self.write('POS/System/Assets/world.map',(ROOT/'sd-payload/System/Assets/world.map').read_bytes())
+        self.run_feature('maps-ui-world')
+
+    def test_custom_gain_entry_rejects_out_of_range_and_preserves_integer(self):
+        self.run_feature('recorder-ui-custom')
+        self.assertEqual(json.loads(self.run_feature('settings-read').stdout)['microphone_gain'],1537)
+
+    def test_numeric_gain_settings_accept_full_integer_range(self):
+        self.run_feature('settings-save')
+        p=self.card/'POS/Users/settings.1.json'
+        outer=json.loads(p.read_text());body=json.loads(outer['payload'])
+        for gain in (1,3,65,127,1537,4096):
+            body['microphone_gain']=gain
+            outer['payload']=json.dumps(body);outer['sha256']=hashlib.sha256(outer['payload'].encode()).hexdigest()
+            p.write_text(json.dumps(outer))
+            self.assertEqual(json.loads(self.run_feature('settings-read').stdout)['microphone_gain'],gain)
+
     def test_maps_missing_receiver_and_no_fix_have_distinct_guidance(self):
         self.run_feature("maps-ui-missing")
         self.run_feature("maps-ui-no-fix")
@@ -417,7 +435,7 @@ class FeatureTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(),before)
         self.run_feature("settings-save")
         upgraded=json.loads(json.loads((self.card/"POS/Users/settings.0.json").read_text())["payload"])
-        self.assertEqual(upgraded["format"],4)
+        self.assertEqual(upgraded["format"],5)
         self.assertEqual(upgraded["background"],["#FF218C","#FFD800","#21B1FF"])
 
     def test_invalid_background_settings_are_rejected_without_modification(self):
@@ -817,7 +835,7 @@ class FeatureTests(unittest.TestCase):
     def test_gain_schema_rejects_invalid_or_future_values_without_modifying_files(self):
         self.run_feature('settings-save')
         p=self.card/'POS/Users/settings.1.json';outer=json.loads(p.read_text());body=json.loads(outer['payload'])
-        for gain in (0,3,65,-1,8.5,'32'):
+        for gain in (0,4097,-1,8.5,'32'):
             with self.subTest(gain=gain):
                 body['microphone_gain']=gain
                 outer['payload']=json.dumps(body);outer['sha256']=hashlib.sha256(outer['payload'].encode()).hexdigest()

@@ -264,8 +264,9 @@ All working text and indexes remain ordinary readable files if POS stops working
 
 ## Recorder
 
-Recorder → **Microphone gain** offers saved 1x, 2x, 4x, 8x (default), 16x, 32x
-and 64x digital gain. During a recording, Left/Right changes it live; the setting
+Recorder → **Microphone gain** accepts any whole number from **1 to 4096**
+(default 8). Press Ctrl+U to clear the value, type e.g. 128 or 256, then Enter.
+During a recording, Left/Right halves/doubles it within that range; the setting
 is committed after stopping capture. Try 32x for quiet speech; reduce it when
 Clipping appears. The normal view has a wallpaper-colored microphone and one
 mono level bar, elapsed time, percentage and gain. It does not show raw channel
@@ -365,9 +366,9 @@ Launcher motion keeps the selection box stationary. Left/Right slides the icon r
   about every 30 seconds when offline and does not consume keyboard events.
   Manual Wi-Fi management pauses the background attempt; Disconnect disables
   auto-connect. Hidden SSIDs can still be connected manually.
-- Old passphrase-encrypted profiles remain untouched. Known Networks → Import old
-  saved networks asks for the old vault passphrase once per explicit import;
-  subsequently no vault prompt is needed. Existing capacity is four saved SSIDs.
+- Known Networks has only saved SSIDs, Auto-connect and Back. The legacy import
+  and old-passphrase prompts have been removed. Old encrypted bytes remain
+  untouched; re-save any network not already in Known Networks. Capacity is four SSIDs.
 - Settings → System → Firmware history: see [FIRMWARE_HISTORY.md](FIRMWARE_HISTORY.md).
 
 Credentials are authenticated encrypted NVS blobs with a random per-device key.
@@ -391,3 +392,13 @@ option. The map overlays a yellow route, large turn arrow, next road name and
 remaining distance. Download regions again after 0.6.3 to include restrictions;
 existing road maps remain viewable. See [MAPS.md](MAPS.md) for routing rules,
 caching, controls and exact limits.
+
+## World map (0.6.5-dev)
+
+Maps highlights **World map** by default. Enter opens its offline Natural Earth
+coastline overview, initially centered on your current GPS position. A pink pin
+marks the live fix; without a fix it shows the planet centered on 0,0 with no pin.
+A receiver is still required to enable Maps. Arrows pan, +/− zoom, **C** returns
+to GPS follow, **0** fits the planet, and Enter/Escape returns to the Maps menu.
+Saved regional roads, search, downloads and turn guidance remain available there.
+The global overview is coastlines, not a planet-sized road/routing database.

@@ -44,8 +44,7 @@ bool pos_settings_valid(const pos_settings_t *s) {
       !pos_settings_device_name_valid(s->device_name) ||
       !memchr(s->timezone, 0, sizeof(s->timezone)) || !*s->timezone ||
       s->brightness < 10 || s->brightness > 100 || !s->microphone_gain ||
-      s->microphone_gain > 64 || s->sounds_volume > 100 ||
-      (s->microphone_gain & (s->microphone_gain - 1)) ||
+      s->microphone_gain > 4096 || s->sounds_volume > 100 ||
       !pos_background_valid(&s->background))
     return false;
   for (const char *p = s->timezone; *p; ++p)
@@ -95,7 +94,8 @@ int pos_settings_decode(const char *buffer, size_t n, pos_settings_t *s) {
         *generation = cJSON_GetObjectItemCaseSensitive(j, "generation");
   if (!cJSON_IsNumber(format) ||
       (format->valuedouble != 1 && format->valuedouble != 2 &&
-       format->valuedouble != 3 && format->valuedouble != 4)) {
+       format->valuedouble != 3 && format->valuedouble != 4 &&
+       format->valuedouble != 5)) {
     result = -2;
     cJSON_Delete(j);
     goto done;
@@ -106,7 +106,7 @@ int pos_settings_decode(const char *buffer, size_t n, pos_settings_t *s) {
         *complete = cJSON_GetObjectItemCaseSensitive(j, "setup_complete");
   bool legacy = format->valuedouble == 1;
   bool gain_format = format->valuedouble >= 3;
-  bool sound_format = format->valuedouble == 4;
+  bool sound_format = format->valuedouble >= 4;
   if (cJSON_GetArraySize(j) != (legacy         ? 7
                                 : sound_format ? 13
                                 : gain_format  ? 9
@@ -134,7 +134,9 @@ int pos_settings_decode(const char *buffer, size_t n, pos_settings_t *s) {
   if (gain_format) {
     cJSON *gain = cJSON_GetObjectItemCaseSensitive(j, "microphone_gain");
     if (!cJSON_IsNumber(gain) || gain->valuedouble < 1 ||
-        gain->valuedouble > 64 || gain->valuedouble != gain->valueint) {
+        gain->valuedouble > (format->valueint >= 5 ? 4096 : 64) ||
+        gain->valuedouble != gain->valueint ||
+        (format->valueint < 5 && (gain->valueint & (gain->valueint - 1)))) {
       cJSON_Delete(j);
       goto done;
     }
@@ -209,7 +211,7 @@ int pos_settings_save(const char *root, pos_settings_t *s) {
   cJSON *j = cJSON_CreateObject();
   if (!j)
     return -1;
-  cJSON_AddNumberToObject(j, "format", 4);
+  cJSON_AddNumberToObject(j, "format", 5);
   cJSON_AddNumberToObject(j, "generation", generation);
   cJSON_AddStringToObject(j, "display_name", s->display_name);
   cJSON_AddStringToObject(j, "device_name", s->device_name);

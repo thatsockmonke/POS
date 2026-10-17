@@ -174,12 +174,20 @@ static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
               (ay <= -2 && ay >= -11 && abs(abs(ax) - (11 + ay)) <= 2);
       return ink ? 0xffff : 0;
     }
-    if (v->map_fix && abs(x - v->map_gps_x) + abs(my - v->map_gps_y) <= 4)
+    if (v->map_world && v->map_fix) {
+      int dx = x - v->map_gps_x, dy = my - v->map_gps_y;
+      int ring = dx * dx + (dy + 6) * (dy + 6);
+      if ((ring <= 16 && dy <= -3) || (dy >= -3 && dy <= 0 && abs(dx) <= -dy))
+        return ring <= 2 ? 0xffff : 0xf911;
+    }
+    if (!v->map_world && v->map_fix &&
+        abs(x - v->map_gps_x) + abs(my - v->map_gps_y) <= 4)
       return 0x259f;
     if (v->map_waypoint &&
         abs(x - v->map_target_x) + abs(my - v->map_target_y) == 5)
       return 0xf911;
-    if ((x == 120 && abs(my - 44) <= 3) || (my == 44 && abs(x - 120) <= 3))
+    if (!v->map_world &&
+        ((x == 120 && abs(my - 44) <= 3) || (my == 44 && abs(x - 120) <= 3)))
       return 0xfec0;
     unsigned p = (unsigned)(my * 240 + x);
     if (v->map_route_pixels && ((v->map_route_pixels[p / 8] >> (p % 8)) & 1))

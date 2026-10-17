@@ -1,4 +1,4 @@
-# POS feature status — 0.6.4-dev
+# POS feature status — 0.6.5-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -30,7 +30,7 @@ layouts and display-off still require physical validation; other peripherals ret
 | GPS/LoRa cap | Verified published pins, Semtech driver, shared SPI, UART NMEA location service, Settings detection/enablement panel and GPS-based Maps gate | Actual cap/revision/peripheral coexistence validation |
 | Range test / messaging | Radio messaging, IDs, bounded retries/duplicate suppression, verified SD outbox, opt-in location and range-test CSVs with packet IDs/GPS/RSSI/SNR | Physical range measurements; future coverage visualizations |
 | Maps/navigation | GPS-gated on-device region downloads; SD-backed road geometry/names/graph; offline mode-aware road search and shortest-distance A*; walking/cycling/driving access, barriers, one-way and node-via turn rules; conservative conditional/via-way blocking; saved/resumed routes, route overlay, next-turn arrow/road name, GPS progress/off-route/arrival, explicit recalculation | Physical GPS/SD/heap/TLS validation; cross-region routing, Unicode fonts/search, lane/exit guidance and richer OSM/vehicle constraints are further refinements. Old 0.6.3 maps need fresh downloads for routing. See [MAPS.md](MAPS.md) |
-| Recorder / IR / IMU | Dedicated streamed PCM WAV Recorder, interrupted WAV recovery, Files-only Audio Player; shared ES8311 microphone with a dedicated capture task and 64,000-byte/two-second mono buffer (32,000-byte fallback), pre-capture WAV creation, right-slot extraction, saturated 8x PCM gain, codec readback and saved live 1x–64x gain and a clean themed mono meter, BMI270 configuration/scaled readings and 38 kHz NEC IR transmit; Settings screens | User confirms the 0.5.8-dev microphone works; new gain/UI changes need retesting. Microphone channel/gain/timing, IMU orientation/calibration and IR waveform validation; no built-in IR receiver |
+| Recorder / IR / IMU | Dedicated streamed PCM WAV Recorder, interrupted WAV recovery, Files-only Audio Player; shared ES8311 microphone with a dedicated capture task and 64,000-byte/two-second mono buffer (32,000-byte fallback), pre-capture WAV creation, right-slot extraction, saturated 8x PCM gain, codec readback and saved live integer 1x–4096x gain and a clean themed mono meter, BMI270 configuration/scaled readings and 38 kHz NEC IR transmit; Settings screens | User confirms the 0.5.8-dev microphone works; new gain/UI changes need retesting. Microphone channel/gain/timing, IMU orientation/calibration and IR waveform validation; no built-in IR receiver |
 | Developer tools / wireless deploy | `posctl flash` with matching verified factory backup/readback; streamed `files`; temporary LAN `deploy` requests through the signed HTTPS updater, target/build-bound evidence checks and boot confirmation polling | Recovery/OTA physical tests must pass before firmware deployment; manually reopen a temporary session after reboot for verification. No always-on deployment server |
 
 No LoRa range, RAM size after networking, SD throughput, battery accuracy or
@@ -62,6 +62,12 @@ hardware limitations. This release does not reduce the safe internal OTA layout.
 TLS server handshakes are excluded to preserve the existing OTA slot/recovery
 layout; validated HTTPS clients and temporary LAN HTTP sharing remain.
 
-0.6.4-dev implements the requested road search, cached routes, turn-by-turn prompts
+0.6.5-dev implements the requested road search, cached routes, turn-by-turn prompts
 and fully offline regional routing. Unsupported rules fail conservatively; this
 is not universal OSM/vehicle coverage. No partition migration is required.
+
+0.6.5-dev adds numeric Recorder gain (1–4096), a streamed offline world coastline
+overview centered on a live GPS pin with pan/zoom/follow controls, and removes the
+legacy Wi-Fi import/old-passphrase UI. Current Known Networks remain encrypted.
+The global overview is not a full-world road database. Hardware validation of
+new gain levels, GPS pin/follow behavior and display readability is still pending.

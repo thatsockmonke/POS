@@ -8,7 +8,7 @@ manual flash addresses or an understanding of partitions.
 
 ## Start here
 
-1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.6.4-dev).
+1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.6.5-dev).
 2. Download **`pos-setup`**. This is the executable wizard, not the Source code ZIP.
    Its optional `pos-setup.sha256` checksum is beside it. The complete POS ZIP
    also includes a copy of the wizard.
@@ -214,7 +214,7 @@ If the card has only the old installer files and you have **not installed POS**:
    **pos-install-old** (or another unused name). Keep the old files; formatting
    is unnecessary. Preserve any `pos-install.copying` folder under another name too.
 3. Download this release's **pos-setup**, replace the old executable and run it
-   with `--release v0.6.4-dev`. Choose **2. Prepare the microSD only** and select
+   with `--release v0.6.5-dev`. Choose **2. Prepare the microSD only** and select
    the card's shared top-level folder. It copies and verifies the matching package.
 4. Eject the card, put it into the powered-off ADV, connect the ADV and share its
    USB connection with Linux. Run the same command and choose **3. Flash Cardputer
@@ -230,7 +230,7 @@ With the paths used in the reported Crostini session, run:
 
 ```sh
 chmod +x "/mnt/shared/MyFiles/Downloads/pos-setup"
-"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.6.4-dev --sd-folder "/mnt/shared/removable/POS Drive"
+"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.6.5-dev --sd-folder "/mnt/shared/removable/POS Drive"
 ```
 
 If the card already contains an installed **/POS** tree, keep it and your files.
@@ -242,8 +242,8 @@ Optional commands for troubleshooting:
 
 ```sh
 ~/pos-setup --download-only                 # Download/verify without device changes
-~/pos-setup --release v0.6.4-dev             # Use a specific published version
-~/pos-setup --bundle /path/pos-0.6.4-dev.zip # Use a ZIP and matching .sha256 offline
+~/pos-setup --release v0.6.5-dev             # Use a specific published version
+~/pos-setup --bundle /path/pos-0.6.5-dev.zip # Use a ZIP and matching .sha256 offline
 ~/pos-setup --sd-folder '/mnt/chromeos/removable/YOUR CARD'
 ```
 
@@ -306,8 +306,9 @@ cannot have missing speech reconstructed. The temporary raw L/R readout in
 ## Microphone gain and visual controls (since 0.5.9-dev)
 
 The user confirmed microphone input works in 0.5.8-dev. If normal speech is too
-quiet, open **Recorder → Microphone gain**. Choose 1x, 2x, 4x, 8x (the existing
-default), 16x, 32x or 64x. Try **32x** first. During recording, **Left/Right**
+quiet, open **Recorder → Microphone gain**. Enter any whole number from **1 to 4096**
+(Ctrl+U clears the value; the default is 8). Try **128** or **256** for quiet speech.
+During recording, **Left/Right**
 changes gain live. Higher gain amplifies both speech and background noise. Lower
 it if **Clipping - lower gain** appears. This is digital PCM gain; it does not
 change the analog codec profile. Your preference is saved after capture stops.
@@ -325,7 +326,7 @@ preset to the draft, **S** saves, and Escape cancels. The draft is visible direc
 there is no separate Preview button. Color picker controls remain arrows, Q/E for
 hue, Shift for fine steps, Enter to accept, Escape to cancel that color change.
 
-**Files:** the text browser is restored in 0.6.4-dev. Up/Down moves through
+**Files:** the text browser is restored in 0.6.5-dev. Up/Down moves through
 names, Parent, Previous/Next and Folder actions; Enter opens a selected entry's
 actions. Choose Open folder, Play in Audio Player, or Open file → Text Editor.
 Copy/cut/paste, rename, Trash and explicit permanent deletion remain available.
@@ -364,7 +365,7 @@ because of a version cutoff. Signatures, file hashes, hardware compatibility,
 package format, increasing signed sequences and downgrade prevention still apply.
 Use Settings → System → Software Update → Check for Updates as usual.
 
-## Sounds and recording (0.6.4-dev)
+## Sounds and recording (0.6.5-dev)
 
 Open Settings → **Sounds** for master On/Off, Volume (0–100%), Key presses,
 Apps / notifications and Preview sound. Preferences survive restarts and backups.
@@ -383,8 +384,8 @@ Use Settings → System → Software Update → Check for Updates. No SD formatt
 USB flashing is needed from a working 0.6.0/0.6.1 installation. Keep your ordinary
 user files and interrupted recordings.
 
-Wi-Fi now has Known Networks; save your connection once, or explicitly import the
-old vault. Toggle Auto-connect there if wanted. Sounds retain existing preferences;
+Wi-Fi has Known Networks; save your connection once. The old-passphrase/import
+option is removed; re-save missing networks. Toggle Auto-connect there if wanted. Sounds retain existing preferences;
 the startup tune follows master/volume/app feedback settings. Recorder playback
 now waits properly for interface sounds to release the speaker.
 
@@ -392,7 +393,7 @@ Text Editor: Esc → Delete document moves the saved original to Trash after
 confirmation. Files can restore it. Unsaved edits are discarded only on success.
 Firmware history and rollback instructions are in [FIRMWARE_HISTORY.md](FIRMWARE_HISTORY.md).
 
-## Maps (0.6.4-dev)
+## Maps (0.6.5-dev)
 
 After updating, open **Maps → Download a region**. Fit/detect the GPS cap first;
 a current fix is needed for "Around my GPS position", or enter decimal coordinates.
@@ -406,3 +407,16 @@ set **Travel mode**, then **Search road name** or **Route to map crosshair**.
 Routes calculate on the SD card and **Resume saved route** works without Wi-Fi.
 The yellow route, next-turn arrow, road name and remaining distance replace
 straight-line guidance. See [MAPS.md](MAPS.md) for snapping and access-rule limits.
+
+### World overview and numeric microphone gain (0.6.5-dev)
+
+Update through Settings → System → Software Update. No SD formatting or USB
+reflash is needed. Recorder → Microphone gain → Ctrl+U → type a whole number
+from 1 to 4096 → Enter. The saved value affects both WAV audio and the mono meter.
+Clipping still shows when samples reach the PCM limit; reduce gain then.
+
+Maps → World map → Enter opens the global coastline map. A current GPS fix
+automatically centers the map with a pink location pin. Arrows pan; +/− zoom;
+C resumes GPS follow; 0 zooms out to the whole planet. Enter returns to the
+Maps menu for regional downloads, roads and navigation. The overview works
+without Internet; a fresh satellite fix is needed for a truthful live pin.

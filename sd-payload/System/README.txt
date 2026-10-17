@@ -1,4 +1,4 @@
-POS 0.6.4-dev - Pan Operating System
+POS 0.6.5-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -62,7 +62,7 @@ Real storage errors keep recoverable partial WAVs. Do not delete your only copy.
 0.6.2: fixed speaker/capture handoff on the 100-Hz scheduler; varied UI tones and startup jingle.
 Native 32x32 icons, optimized partial/pipelined ribbon rendering and responsive arrow navigation.
 Editor nearby-text cache, idle redraw suppression, queued typing batches and confirmed Trash deletion.
-Known Networks has Connect, Forget, Auto-connect and explicit old-vault import; no repeated vault password.
+Known Networks has Connect, Forget and Auto-connect, without vault password prompts.
 Settings > System > Firmware history: up to 15 signed firmware/System pairs in POS/.History.
 Updates from this version archive the current pair; Import previous installation can recover a matching prior OTA/System.
 Factory recovery and both OTA runtime slots are retained. Flash images never execute from SD.
@@ -76,3 +76,8 @@ Enter on a map: select travel mode, search or route to the crosshair.
 Yellow route, next-turn arrow/road name, remaining distance and off-route guidance.
 Redownload old 0.6.3 regions for routing restrictions. Cached old road views remain.
 Conditional/via-way rules are blocked conservatively; real signs take priority.
+
+0.6.5: Recorder gain accepts whole numbers 1-4096. Ctrl+U clears for typing.
+Maps highlights World map: Enter opens offline global coastlines, centered on
+fresh GPS with a pink pin. Arrows pan, +/- zoom, C follows GPS, 0 fits planet.
+Known Networks no longer has the old-passphrase/import option.

@@ -4,6 +4,7 @@
 #include "audio_test_port.h"
 #include "pos_peripherals.h"
 #include <assert.h>
+#include <limits.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -386,7 +387,9 @@ int main(void) {
   fail_readback = false;
   assert(!allocated && !channels && !enabled);
   /* Gain changes alter captured PCM, including at quiet levels and limits. */
-  for (unsigned gain = 1; gain <= 64; gain *= 2) {
+  const unsigned gains[] = {1, 3, 8, 64, 127, 256, 1537, 4096};
+  for (unsigned i = 0; i < sizeof(gains) / sizeof(gains[0]); ++i) {
+    unsigned gain = gains[i];
     reference_gain = gain;
     assert(!pos_microphone_set_gain(gain));
     signal_mode = EXTREMES;
@@ -423,8 +426,8 @@ int main(void) {
   assert(amplified);
   pos_microphone_stop();
   assert(!allocated && !channels && !enabled);
-  assert(pos_microphone_set_gain(0) && pos_microphone_set_gain(3) &&
-         pos_microphone_set_gain(65));
+  assert(pos_microphone_set_gain(0) && pos_microphone_set_gain(4097) &&
+         pos_microphone_set_gain(UINT_MAX));
   assert(!pos_microphone_set_gain(8));
   reference_gain = 8;
   signal_mode = RIGHT_SIGNAL;

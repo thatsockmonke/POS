@@ -19,6 +19,30 @@ int main(int argc, char **argv) {
   pos_map_info_t m = {
       .latitude = 34.0505, .longitude = -118.2475, .width_m = 1000};
   strcpy(m.name, "Test region");
+  if (!strcmp(argv[1], "world") && argc >= 6) {
+    uint8_t pixels[POS_MAP_PIXELS];
+    double lat = strtod(argv[3], NULL), lon = strtod(argv[4], NULL);
+    unsigned zoom = (unsigned)atoi(argv[5]);
+    result = pos_world_raster(argv[2], lat, lon, zoom, pixels, &e);
+    if (!result) {
+      int x, y;
+      pos_world_project(lat, lon, lat, lon, zoom, &x, &y);
+      assert(x == 120 && y == 44);
+      fwrite(pixels, 1, sizeof(pixels), stdout);
+    }
+  }
+  if (!strcmp(argv[1], "world-geometry")) {
+    int x, y;
+    pos_world_project(0, -179, 0, 179, 0, &x, &y);
+    assert(x == 121 && y == 44);
+    pos_world_project(90, 180, 90, 180, 0, &x, &y);
+    assert(x == 120 && y == 44);
+    pos_world_project(-90, 180, 90, 180, 0, &x, &y);
+    assert(y == 87);
+    pos_world_project(NAN, 0, 0, 0, 0, &x, &y);
+    assert(x == -32760);
+    result = 0;
+  }
   if (!strcmp(argv[1], "query")) {
     char url[512];
     if (argc > 2)

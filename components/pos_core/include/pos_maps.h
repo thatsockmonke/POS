@@ -36,3 +36,12 @@ double pos_map_bearing(double latitude, double longitude, double dest_lat,
 extern const char *const pos_map_providers[3];
 
 void pos_map_line(uint8_t pixels[POS_MAP_PIXELS], int x, int y, int xx, int yy);
+
+/* Global north-up equirectangular overview. Zoom 0 fits the entire planet
+ * around the camera latitude; 1..8 double scale. Longitude wraps at the date
+ * line, latitude never wraps. Asset is streamed with a fixed-size buffer. */
+void pos_world_project(double latitude, double longitude, double center_lat,
+                       double center_lon, unsigned zoom, int *x, int *y);
+int pos_world_raster(const char *path, double latitude, double longitude,
+                     unsigned zoom, uint8_t pixels[POS_MAP_PIXELS],
+                     pos_error_t *error);

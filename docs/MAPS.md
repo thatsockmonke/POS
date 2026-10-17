@@ -1,4 +1,4 @@
-# Offline maps and navigation — POS 0.6.4-dev
+# Offline maps and navigation — POS 0.6.5-dev
 
 POS can search downloaded road names, calculate routes entirely on Panputer,
 save/resume routes, and show GPS turn guidance without Internet. Region choice,
@@ -132,8 +132,8 @@ without POS. CRC protects against accidental damage, not malicious map providers
 Original and derived map databases use **ODbL 1.0**:
 https://opendatacommons.org/licenses/odbl/1-0/. Retain attribution and source XML
 when sharing them. Map-data licensing is independent of POS source-code licensing.
-No third-party map dataset is bundled in the firmware; previews use generated
-example state.
+No road database is bundled in firmware; the world coastlines below ship on SD.
+Regional-map previews use generated example state.
 
 Providers: VK Maps (`maps.mail.ru`, Russia), Private.coffee (Austria) and Overpass
 API (Germany), listed in https://wiki.openstreetmap.org/wiki/Overpass_API.
@@ -154,3 +154,30 @@ existing factory/two-slot OTA layout. No exposed POS hotspot feature was removed
 No physical Cardputer tests are claimed. GPS matching on real streets, ambiguous
 intersections, actual signs, SD performance, heap with radios active, TLS and
 turn-arrow readability require hardware validation.
+
+## Offline whole-planet overview (0.6.5-dev)
+
+Choose **World map**, highlighted when Maps opens. North is up. A fresh GPS fix
+centers the camera and supplies a pink location pin. Without a fix, 0,0 is the
+initial map center and no location is asserted. Arrows pan (suspending follow),
++/− zoom, C resumes GPS follow, 0 fits the entire planet around the current
+camera, and Enter/Escape returns to the regional tools. No network request or
+location broadcast is made by this view. Dateline wrapping and both poles are
+supported; small unused margins let the entire globe fit while keeping your
+position centered. This is an equirectangular coastline overview, not road detail
+or global route coverage. For those, download regional OSM maps as before.
+
+`POS/System/Assets/world.map` is a 39,612-byte streamed **PWM1** asset: magic,
+little-endian uint32 segment count, CRC32 of records, then pairs of signed
+little-endian 0.01-degree lon/lat coordinates (8 bytes/segment). Maximum 20,000
+segments; malformed bounds, missing/truncated/trailing records and bad CRCs are
+rejected. A fixed 512-byte read buffer and a 2,640-byte raster keep it bounded.
+The signed installer/update manifest also authenticates this asset.
+
+Source: **Natural Earth 1:110m land**, public domain. Terms:
+https://www.naturalearthdata.com/about/terms-of-use/ . Pinned source:
+https://github.com/nvkelso/natural-earth-vector/blob/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_110m_land.geojson
+
+Rebuild with `python tools/build_world_map.py ne_110m_land.geojson world.map`.
+The compiler verifies its pinned SHA-256 before generating the asset.
+Full provenance travels in `System/Assets/world-source.txt`.

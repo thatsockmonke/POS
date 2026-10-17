@@ -25,7 +25,24 @@ static int preview(const char *root, const char *output, unsigned screen,
                    unsigned frame) {
   pos_view_t v;
   static uint8_t map_pixels[POS_MAP_PIXELS], route_pixels[POS_MAP_PIXELS];
-  if (screen == 8) {
+  if (screen == 9) {
+    char path[POS_FS_PATH];
+    pos_error_t e = {0};
+    if (pos_fs_join(path, root, "System/Assets/world.map") ||
+        pos_world_raster(path, 34.05, -118.248, 0, map_pixels, &e))
+      return 1;
+    pos_view_clear(&v, "World / North up");
+    v.black_background = true;
+    v.map_world = true;
+    v.map_pixels = map_pixels;
+    v.map_fix = true;
+    v.map_gps_x = 120;
+    v.map_gps_y = 44;
+    pos_view_line(&v, 1, "GPS  follow  1x");
+    pos_view_line(&v, 13, "34.0500 -118.2480");
+    pos_view_line(&v, 14, "Arrows: pan +/-: zoom C: GPS");
+    pos_view_line(&v, 15, "0: whole planet Enter: menu");
+  } else if (screen == 8) {
     /* Deterministic example roads, rendered with the actual device compositor.
      */
     memset(map_pixels, 0, sizeof(map_pixels));
@@ -197,6 +214,8 @@ int main(int argc, char **argv) {
     }
     return 0;
   }
+  if (!strcmp(command, "world-preview"))
+    return argc == 4 ? preview(root, argv[3], 9, 0) : 2;
   if (!strcmp(command, "maps-preview"))
     return argc == 4 ? preview(root, argv[3], 8, 0) : 2;
   const char *visuals[] = {"recorder-preview", "files-preview",

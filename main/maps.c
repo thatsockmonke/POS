@@ -597,6 +597,109 @@ static void saved(const char *root) {
   }
   closedir(d);
 }
+static void world(const char *root) {
+  struct world_view {
+    pos_view_t view;
+    uint8_t pixels[POS_MAP_PIXELS];
+  };
+  struct world_view *s = calloc(1, sizeof(*s));
+  if (!s) {
+    pos_ui_notice("World map", "Not enough free memory.");
+    return;
+  }
+  char path[POS_FS_PATH];
+  if (pos_fs_join(path, root, "POS/System/Assets/world.map")) {
+    free(s);
+    return;
+  }
+  pos_location_t gps = pos_expansion_location();
+  double lat = gps.fix ? gps.latitude : 0, lon = gps.fix ? gps.longitude : 0;
+  bool follow = true, redraw = true;
+  unsigned zoom = 0;
+  uint32_t generation = 0;
+  int64_t refreshed = 0;
+  while (!pos_home_pending()) {
+    gps = pos_expansion_location();
+    int gx, gy;
+    pos_world_project(gps.latitude, gps.longitude, lat, lon, zoom, &gx, &gy);
+    if (follow && gps.fix && (abs(gx - 120) >= 1 || abs(gy - 44) >= 1)) {
+      lat = gps.latitude;
+      lon = gps.longitude;
+      redraw = true;
+    }
+    if (redraw) {
+      pos_error_t e = {0};
+      if (pos_world_raster(path, lat, lon, zoom, s->pixels, &e)) {
+        pos_ui_notice("World map unavailable", e.message);
+        break;
+      }
+      ++generation;
+      redraw = false;
+      refreshed = 0;
+    }
+    int64_t now = esp_timer_get_time();
+    if (!refreshed || now - refreshed >= 500000) {
+      pos_view_t *v = &s->view;
+      pos_view_clear(v, "World / North up");
+      pos_ui_style(v);
+      v->map_pixels = s->pixels;
+      v->map_world = true;
+      v->map_generation = generation;
+      v->map_fix = gps.fix;
+      int x, y;
+      pos_world_project(gps.latitude, gps.longitude, lat, lon, zoom, &x, &y);
+      v->map_gps_x = x;
+      v->map_gps_y = y;
+      pos_view_line(v, 1, "%s  %s  %ux", gps.fix ? "GPS" : "Waiting for fix",
+                    follow ? "follow" : "pan", 1u << zoom);
+      pos_view_line(v, 13, "%.4f %.4f", lat, lon);
+      pos_view_line(v, 14, "Arrows: pan +/-: zoom C: GPS");
+      pos_view_line(v, 15, "0: whole planet Enter: menu");
+      pos_device_show(v);
+      refreshed = now;
+    }
+    pos_event_t event;
+    if (!pos_device_event(&event, 50) || !event.pressed)
+      continue;
+    int key = pos_navigation(&event);
+    if (key == POS_KEY_HOME || key == POS_KEY_ESCAPE || key == POS_KEY_ENTER)
+      break;
+    double step = 30. / (1u << zoom);
+    if (key == POS_KEY_LEFT || key == POS_KEY_RIGHT) {
+      lon += key == POS_KEY_LEFT ? -step : step;
+      lon = fmod(lon + 540., 360.) - 180.;
+      follow = false;
+      redraw = true;
+    }
+    if (key == POS_KEY_UP || key == POS_KEY_DOWN) {
+      lat = fmax(-90, fmin(90, lat + (key == POS_KEY_UP ? step : -step)));
+      follow = false;
+      redraw = true;
+    }
+    if ((key == '+' || key == '=') && zoom < 8) {
+      ++zoom;
+      redraw = true;
+    }
+    if (key == '-' && zoom) {
+      --zoom;
+      redraw = true;
+    }
+    if (key == '0') {
+      zoom = 0;
+      redraw = true;
+    }
+    if (key == 'c' || key == 'C') {
+      follow = true;
+      redraw = true;
+    }
+  }
+  /* Device retains borrowed bitmap pointers until a non-map view is shown. */
+  pos_view_clear(&s->view, "Maps");
+  pos_ui_style(&s->view);
+  pos_device_show(&s->view);
+  free(s);
+}
+
 void pos_ui_maps(const char *root) {
   if (!pos_expansion_maps_available()) {
     pos_ui_notice("Maps need the GPS cap",
@@ -605,14 +708,17 @@ void pos_ui_maps(const char *root) {
                   "only needed for your live position.");
     return;
   }
-  int selected = 0;
+  int selected = 4;
   while (!pos_home_pending()) {
-    const char *items[] = {"Saved regions (offline)", "Download a region",
-                           "GPS status", "About map data", "Back"};
-    int choice = pos_ui_menu_from("Maps", items, 5, selected);
-    if (choice < 0 || choice == 4)
+    const char *items[] = {
+        "Saved regions (offline)", "Download a region", "GPS status",
+        "About map data",          "World map",         "Back"};
+    int choice = pos_ui_menu_from("Maps", items, 6, selected);
+    if (choice < 0 || choice == 5)
       return;
     selected = choice;
+    if (choice == 4)
+      world(root);
     if (choice == 0)
       saved(root);
     if (choice == 1)
@@ -620,8 +726,9 @@ void pos_ui_maps(const char *root) {
     if (choice == 2)
       pos_ui_location(root);
     if (choice == 3)
-      pos_ui_notice("OpenStreetMap / ODbL",
-                    "Map data: (c) OpenStreetMap contributors. "
+      pos_ui_notice("Map data & credits",
+                    "World overview: Natural Earth, public domain. Regional "
+                    "roads: (c) OpenStreetMap contributors. "
                     "https://www.openstreetmap.org/copyright. ODbL 1.0. "
                     "Downloads use a public Overpass service; availability is "
                     "not guaranteed. Raw .osm files remain in POS/Maps. Small "

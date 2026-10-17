@@ -33,11 +33,10 @@ static void remember(const pos_wifi_profile_t *profile) {
   profiles.networks[slot] = *profile;
   if (slot == profiles.count)
     ++profiles.count;
-  pos_ui_notice(
-      "Known Networks",
-      pos_network_known_save(&profiles)
-          ? "Could not save. Previous networks retained."
-          : "Network saved on this device. No vault passphrase is needed.");
+  pos_ui_notice("Known Networks",
+                pos_network_known_save(&profiles)
+                    ? "Could not save. Previous networks retained."
+                    : "Network saved on this device.");
   pos_secure_zero(&profiles, sizeof(profiles));
 }
 static void connect_network(const char *ssid, bool secured, bool manual) {
@@ -81,52 +80,21 @@ static void saved_networks(void) {
     return;
   }
   for (;;) {
-    const char *items[POS_WIFI_PROFILES + 3];
+    const char *items[POS_WIFI_PROFILES + 2];
     char automatic[40];
     snprintf(automatic, sizeof(automatic), "Auto-connect: %s",
              pos_network_auto_enabled() ? "On" : "Off");
     for (unsigned i = 0; i < profiles.count; ++i)
       items[i] = profiles.networks[i].ssid;
     items[profiles.count] = automatic;
-    items[profiles.count + 1] = "Import old saved networks";
-    items[profiles.count + 2] = "Back";
-    int selected = pos_ui_menu("Known Networks", items, profiles.count + 3);
-    if (selected < 0 || selected == profiles.count + 2)
+    items[profiles.count + 1] = "Back";
+    int selected = pos_ui_menu("Known Networks", items, profiles.count + 2);
+    if (selected < 0 || selected == profiles.count + 1)
       break;
     if (selected == profiles.count) {
       if (pos_network_auto_set(!pos_network_auto_enabled()))
         pos_ui_notice("Preference not saved",
                       "Previous auto-connect preference retained.");
-      continue;
-    }
-    if (selected == profiles.count + 1) {
-      char pass[65] = "";
-      pos_wifi_profiles_t old = {0};
-      if (pos_ui_text("Import old networks once", "Old vault passphrase", pass,
-                      sizeof(pass), true)) {
-        int result = pos_network_profiles(pass, &old);
-        if (!result) {
-          for (unsigned i = 0; i < old.count; ++i) {
-            unsigned j = 0;
-            while (j < profiles.count &&
-                   strcmp(profiles.networks[j].ssid, old.networks[i].ssid))
-              ++j;
-            if (j < POS_WIFI_PROFILES) {
-              profiles.networks[j] = old.networks[i];
-              if (j == profiles.count)
-                ++profiles.count;
-            }
-          }
-          result = pos_network_known_save(&profiles);
-        }
-        pos_ui_notice(
-            "Import networks",
-            result ? "Could not import. Old encrypted vault is preserved."
-                   : "Imported. Future connections do not need that "
-                     "passphrase. Old encrypted vault retained.");
-      }
-      pos_secure_zero(pass, sizeof(pass));
-      pos_secure_zero(&old, sizeof(old));
       continue;
     }
     const char *actions[] = {"Connect", "Forget network", "Back"};
