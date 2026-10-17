@@ -67,7 +67,14 @@ class FeatureTests(unittest.TestCase):
         self.assertTrue((self.card/"POS/Maps/region-13572468.osm").exists())
         self.assertEqual((self.card/"POS/Maps/region-13572468.pmap").read_bytes()[:4],b"PMP1")
         self.assertIn("Open Database License",(self.card/"POS/Maps/Map-data-license.txt").read_text())
+        self.assertEqual((self.card/"POS/Maps/region-13572468.pmap.pnav").read_bytes()[:4],b"PNV1")
 
+    def test_maps_can_plan_resume_and_close_a_real_offline_route(self):
+        self.run_feature("maps-ui-route")
+        routes=list((self.card/"POS/Maps").glob("*.route-*"));self.assertEqual(len(routes),1)
+        self.assertEqual(routes[0].read_bytes()[:4],b"PRT1")
+    def test_maps_road_search_selects_a_result_with_arrow_key_ui(self):
+        self.run_feature("maps-ui-search")
     def test_map_view_exits_home_and_releases_borrowed_framebuffer(self):
         import struct,zlib
         header=bytearray(64);header[:4]=b"PMP1"

@@ -49,7 +49,8 @@ int pos_map_query(const pos_map_info_t *m, unsigned provider, char url[512]) {
   snprintf(
       query, sizeof(query),
       "[out:xml][timeout:25][maxsize:67108864];way[\"highway\"](%.6f,%.6f,%"
-      ".6f,%.6f);out geom;",
+      ".6f,%.6f)->.r;rel(bw.r)[type=restriction];out body;.r out "
+      "geom;node(w.r)[~\".\"~\".\"];out tags;",
       m->latitude - dy, m->longitude - dx, m->latitude + dy, m->longitude + dx);
   const char *base = pos_map_providers[provider];
   size_t n = strlen(base);
@@ -339,7 +340,7 @@ static unsigned code(int x, int y) {
   return (x < 0 ? 1 : 0) | (x >= 240 ? 2 : 0) | (y < 0 ? 4 : 0) |
          (y >= POS_MAP_HEIGHT ? 8 : 0);
 }
-static void line(uint8_t *pixels, int x, int y, int xx, int yy) {
+void pos_map_line(uint8_t pixels[POS_MAP_PIXELS], int x, int y, int xx, int yy) {
   /* Clip first: a long rural road must not cause millions of pixel steps. */
   for (unsigned n = 0; n < 8; ++n) {
     unsigned a = code(x, y), b = code(xx, yy), o = a ? a : b;
@@ -420,7 +421,7 @@ int pos_map_raster(const char *path, double lat, double lon, unsigned width,
     int x, y, xx, yy;
     pos_map_project(a, b, lat, lon, width, &x, &y);
     pos_map_project(c, d, lat, lon, width, &xx, &yy);
-    line(pixels, x, y, xx, yy);
+    pos_map_line(pixels, x, y, xx, yy);
     if (!(i % 256) && progress && progress(ctx, "Drawing map", i, m.segments))
       goto done;
   }

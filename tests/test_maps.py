@@ -62,7 +62,7 @@ class MapTests(unittest.TestCase):
     def test_query_is_bounded_encoded_and_contains_no_personal_identifiers(self):
         url=self.run_map('query').strip();self.assertLess(len(url),512)
         q=urllib.parse.parse_qs(urllib.parse.urlparse(url).query)['data'][0]
-        self.assertIn('[maxsize:67108864]',q);self.assertIn('way["highway"]',q);self.assertTrue(q.endswith('out geom;'))
+        self.assertIn('[maxsize:67108864]',q);self.assertIn('way["highway"]',q);self.assertIn('rel(bw.r)[type=restriction]',q);self.assertTrue(q.endswith('out tags;'))
         for provider in (1,2):self.run_map("query",34,0,1000,provider)
         self.run_map("query",34,0,1000,3,ok=False)
         for args in [('nan',0,1000),(81,0,1000),(0,180,1000),(0,0,5000),(0,0,0)]:self.run_map('query',*args,ok=False)

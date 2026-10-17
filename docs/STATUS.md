@@ -1,4 +1,4 @@
-# POS feature status — 0.6.3-dev
+# POS feature status — 0.6.4-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -29,7 +29,7 @@ layouts and display-off still require physical validation; other peripherals ret
 | BLE/shared transfer | POS peer discovery, encrypted numeric-comparison pairing, accept/reject, chunk ACK/retry, resume, SHA-256 and lost-final-ACK recovery; common local/Wi-Fi/BLE Share entry point | Physical peer interoperability/throughput validation; third-party clients |
 | GPS/LoRa cap | Verified published pins, Semtech driver, shared SPI, UART NMEA location service, Settings detection/enablement panel and GPS-based Maps gate | Actual cap/revision/peripheral coexistence validation |
 | Range test / messaging | Radio messaging, IDs, bounded retries/duplicate suppression, verified SD outbox, opt-in location and range-test CSVs with packet IDs/GPS/RSSI/SNR | Physical range measurements; future coverage visualizations |
-| Maps/navigation | GPS-gated Maps app; on-device GPS/coordinate region selection, explicit provider choice, bounded verified HTTPS downloads, streamed on-device compilation, paged SD catalog, offline road/path maps, pan/zoom, GPS follow and session waypoint distance/bearing; no separate computer required | Road names/search, route caching, turn-by-turn routing and a fully offline routing graph; physical GPS/TLS/SD/UI validation. See [MAPS.md](MAPS.md) |
+| Maps/navigation | GPS-gated on-device region downloads; SD-backed road geometry/names/graph; offline mode-aware road search and shortest-distance A*; walking/cycling/driving access, barriers, one-way and node-via turn rules; conservative conditional/via-way blocking; saved/resumed routes, route overlay, next-turn arrow/road name, GPS progress/off-route/arrival, explicit recalculation | Physical GPS/SD/heap/TLS validation; cross-region routing, Unicode fonts/search, lane/exit guidance and richer OSM/vehicle constraints are further refinements. Old 0.6.3 maps need fresh downloads for routing. See [MAPS.md](MAPS.md) |
 | Recorder / IR / IMU | Dedicated streamed PCM WAV Recorder, interrupted WAV recovery, Files-only Audio Player; shared ES8311 microphone with a dedicated capture task and 64,000-byte/two-second mono buffer (32,000-byte fallback), pre-capture WAV creation, right-slot extraction, saturated 8x PCM gain, codec readback and saved live 1x–64x gain and a clean themed mono meter, BMI270 configuration/scaled readings and 38 kHz NEC IR transmit; Settings screens | User confirms the 0.5.8-dev microphone works; new gain/UI changes need retesting. Microphone channel/gain/timing, IMU orientation/calibration and IR waveform validation; no built-in IR receiver |
 | Developer tools / wireless deploy | `posctl flash` with matching verified factory backup/readback; streamed `files`; temporary LAN `deploy` requests through the signed HTTPS updater, target/build-bound evidence checks and boot confirmation polling | Recovery/OTA physical tests must pass before firmware deployment; manually reopen a temporary session after reboot for verification. No always-on deployment server |
 
@@ -51,7 +51,6 @@ save migrations are implemented and removed below. Hardware validation remains s
 installable app/package management and automatic power management are removed from
 scope; existing legacy user folders are never erased.
 
-- Further maps/navigation: road names and search, cached routes, turn-by-turn directions and fully offline routing. On-device region downloads, offline road maps and straight-line GPS waypoint guidance are implemented in 0.6.3-dev.
 - Meshtastic compatibility: messaging, encrypted channels, mesh routing and voluntarily shared locations.
 
 0.6.2-dev fixes zero-tick audio handoff, adds randomized cues/startup melody,
@@ -62,3 +61,7 @@ hardware limitations. This release does not reduce the safe internal OTA layout.
 0.6.3-dev begins the Maps roadmap; it does not claim complete navigation. Unused
 TLS server handshakes are excluded to preserve the existing OTA slot/recovery
 layout; validated HTTPS clients and temporary LAN HTTP sharing remain.
+
+0.6.4-dev implements the requested road search, cached routes, turn-by-turn prompts
+and fully offline regional routing. Unsupported rules fail conservatively; this
+is not universal OSM/vehicle coverage. No partition migration is required.

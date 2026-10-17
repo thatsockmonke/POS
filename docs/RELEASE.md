@@ -1,36 +1,39 @@
-POS 0.6.3-dev — first on-device offline Maps milestone.
+POS 0.6.4-dev — offline road search, route calculation and turn guidance.
 
-- New GPS-gated Maps app, with a matching 32×32 launcher icon.
-- Choose a region around your current GPS fix or enter decimal coordinates;
-  select a 500 m / 1 km / 2 km / 4 km square and a public Overpass provider.
-  Review the service/area, then download directly over Wi-Fi. No computer needed.
-- Original OSM XML and a verified compact map remain in POS/Maps. Bounded streaming
-  compilation, completion checks, CRC, new-file publication and cancellation keep
-  incomplete maps out of the catalog and preserve existing maps.
-- Saved regions work offline: arrow-key pan, +/- zoom, C for GPS follow, Enter
-  to guide toward the center crosshair. Blue = GPS, pink = waypoint. North up;
-  distance/cardinal direction/bearing use a current fix. No location broadcast.
-- Paged catalog and a 2,640-byte raster keep map size out of RAM. Unused TLS server
-  support and unused legacy/static TLS suites/curve tables are removed to keep
-  the existing factory/two-slot OTA layout. Validated
-  HTTPS clients, encrypted saved networks and explicit LAN HTTP sharing remain.
-- Source/derived map data: © OpenStreetMap contributors, ODbL 1.0. Attribution,
-  provider choice, controls and limits: docs/MAPS.md (also inside the install ZIP).
+- Maps → Enter → Travel mode: Walking / Cycling / Driving. Search part of a road
+  name offline, choose a result, or route to the map crosshair. Routes calculate
+  on Panputer from a current GPS fix, or the region center for no-fix planning.
+- SD-backed graph and A*: directed roads, OSM node-ID connectivity, profile access,
+  barriers, one-way/reverse-one-way rules, bicycle exceptions, and incoming-edge
+  node-via no/only turn restrictions. Unsupported conditional/via-way rules block
+  the affected way/profile rather than guessing permission.
+- Yellow route overlay, large maneuver arrow, next road name, distance to the
+  maneuver and remaining distance. Fresh GPS matching reports off-route/arrival;
+  explicit Recalculate uses the current fix. Straight-line guidance stays separate.
+- New route caches never replace a known-good route. Resume saved route works
+  after reboot without Wi-Fi. Whole-file CRCs and map/graph binding reject corrupt,
+  incomplete or mismatched data. Cancellation/SD failure preserve completed files.
+- Bounded external sorting and sequential endpoint joins build graphs on SD;
+  indexed A* heap/labels use SD pages instead of loading a region into RAM.
+- Unused SDK Wi-Fi hotspot support is excluded. Existing station networking,
+  sharing, validated HTTPS, factory recovery and both OTA slots remain.
 
-This starts the roadmap item. It does not implement turn-by-turn routing, routing
-restrictions, road-name/address search, terrain, cached routes or a routing graph.
-Waypoints are session-only; straight-line guidance may cross impassable terrain.
-Downloads are capped at 2 MiB XML / 30,000 segments. Public services can be busy;
-try later, a different selected provider, or a smaller region. No silent fallback.
+Update normally from 0.6.3: Settings → System → Software Update → Check for Updates.
+No SD format, repartition or USB reflash. Keep the card inserted through reboot.
+Download regions again afterward: 0.6.3 did not request restriction/barrier data.
+Existing road maps remain viewable. Older-than-0.6.0 installations must pass
+through the 0.6.0 transition first. Signed update metadata remains seven fields.
 
-From 0.6.2-dev: Settings → System → Software Update → Check for Updates.
-Keep the SD inserted; no format or USB reinstall needed. If older than 0.6.0-dev,
-upgrade through 0.6.0-dev first. Signed update metadata remains seven fields.
+Scope: routing stays inside the cached regional graph; endpoints snap to eligible
+road nodes within 75m. No road/address geocoder, cross-region stitching, lane/exit
+counts or special-vehicle constraints. Road names use the ASCII display font.
+OSM data is © OpenStreetMap contributors / ODbL 1.0. See docs/MAPS.md for controls,
+formats, unsupported-rule behavior, provider privacy and full limits.
 
-Validation: 332 host tests passed and both ESP-IDF firmware roles built locally
-within their unchanged flash partitions. Maps has enforced stack-frame guards;
-the largest Maps UI frame is 2,640 bytes. The tag workflow repeats builds and
-tests. A live public Overpass road download was compiled and rendered by
-the actual portable map engine. No physical Cardputer testing is claimed: GPS
-outdoors, heap with networking, device TLS, SD speed and map readability need
-hardware verification. Existing audio/editor/update regressions remain covered.
+Validation: 361 host tests passed, including route/search/turn/UI regressions and an independent shortest-
+path comparison, multi-page routing state, corruption, cancellation, pre-existing
+scratch preservation and SD exhaustion. A real public OSM query was compiled,
+searched and routed by this engine. Both pinned ESP-IDF firmware roles and stack
+frame guards are checked before publication. No physical Cardputer tests claimed:
+real GPS matching, SD latency, radio/heap coexistence, TLS and readability need
+hardware verification. User data and existing signed-update/history checks remain.

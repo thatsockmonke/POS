@@ -382,3 +382,12 @@ SD-backed offline road maps and north-up GPS waypoint guidance. Arrows pan, +/-
 zooms, C follows GPS, Enter chooses a destination at the crosshair. Global Home
 releases the viewport. See [MAPS.md](MAPS.md) for exact controls, attribution,
 provider choice and the remaining routing limitations.
+
+## Maps routing (0.6.4-dev)
+
+Enter on a saved map offers Travel mode, offline road-name search, route to the
+crosshair, saved-route resume, clear/recalculate and an explicit straight-line
+option. The map overlays a yellow route, large turn arrow, next road name and
+remaining distance. Download regions again after 0.6.3 to include restrictions;
+existing road maps remain viewable. See [MAPS.md](MAPS.md) for routing rules,
+caching, controls and exact limits.

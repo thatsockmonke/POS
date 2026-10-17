@@ -24,7 +24,7 @@ static int progress(void *ctx, const char *phase, const char *name,
 static int preview(const char *root, const char *output, unsigned screen,
                    unsigned frame) {
   pos_view_t v;
-  static uint8_t map_pixels[POS_MAP_PIXELS];
+  static uint8_t map_pixels[POS_MAP_PIXELS], route_pixels[POS_MAP_PIXELS];
   if (screen == 8) {
     /* Deterministic example roads, rendered with the actual device compositor.
      */
@@ -37,15 +37,20 @@ static int preview(const char *root, const char *output, unsigned screen,
         }
     pos_view_clear(&v, "Maps / North up");
     v.black_background = true;
+    memset(route_pixels, 0, sizeof(route_pixels));
+    pos_map_line(route_pixels, 94, 85, 94, 44);
+    pos_map_line(route_pixels, 94, 44, 180, 44);
     v.map_pixels = map_pixels;
+    v.map_route_pixels = route_pixels;
+    v.map_turn = 3;
     v.map_fix = v.map_waypoint = true;
-    v.map_gps_x = 105;
-    v.map_gps_y = 60;
-    v.map_target_x = 164;
-    v.map_target_y = 26;
-    pos_view_line(&v, 1, "283m NE 60 deg");
-    pos_view_line(&v, 13, "34.05220 -118.24370");
-    pos_view_line(&v, 14, "+/- zoom C:GPS Enter:menu");
+    v.map_gps_x = 94;
+    v.map_gps_y = 68;
+    v.map_target_x = 180;
+    v.map_target_y = 44;
+    pos_view_line(&v, 1, "Turn right in 40m");
+    pos_view_line(&v, 13, "Example Road");
+    pos_view_line(&v, 14, "286m left   Enter: menu");
     pos_view_line(&v, 15, "(c) OpenStreetMap contributors");
   } else if (screen == 1) {
     uint32_t hold;

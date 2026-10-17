@@ -74,6 +74,26 @@ int main(int argc, char **argv) {
     v.map_target_y = 20;
     assert(pos_view_pixel(&v, 25, 36) == 0xf911);
     assert(pos_view_pixel(&v, 120, 60) == 0xfec0);
+    uint8_t route_pixels[POS_MAP_PIXELS] = {0};
+    v.map_route_pixels = route_pixels;
+    route_pixels[(20 * 240 + 40) / 8] |= 1u << ((20 * 240 + 40) % 8);
+    assert(pos_view_pixel(&v, 40, 36) == 0xfec0);
+    uint32_t hashes[5];
+    for (unsigned direction = 1; direction <= 5; ++direction) {
+      v.map_turn = direction;
+      uint32_t hash = 2166136261u;
+      unsigned white = 0;
+      for (int y = 20; y < 50; ++y)
+        for (int x = 4; x < 37; ++x) {
+          uint16_t color = pos_view_pixel(&v, x, y);
+          white += color == 0xffff;
+          hash = (hash ^ color) * 16777619u;
+        }
+      assert(white > 20);
+      hashes[direction - 1] = hash;
+      for (unsigned i = 0; i + 1 < direction; ++i)
+        assert(hashes[i] != hash);
+    }
     result = 0;
   }
   if (result)

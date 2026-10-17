@@ -154,6 +154,26 @@ static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
     return picker;
   if (v->map_pixels && y >= 16 && y < 104) {
     int my = y - 16;
+    if (v->map_turn && x >= 4 && x < 37 && my >= 4 && my < 34) {
+      int ax = x - 20, ay = my - 19;
+      bool ink = false;
+      if (v->map_turn == 2 || v->map_turn == 3) {
+        if (v->map_turn == 2)
+          ax = -ax;
+        ink = (abs(ay) <= 2 && ax >= -10 && ax <= 10) ||
+              (ax >= 2 && ax <= 11 && abs(abs(ay) - (11 - ax)) <= 2);
+      } else if (v->map_turn == 4)
+        ink = (abs(ax) <= 2 && ay >= -8 && ay <= 9) ||
+              (ay <= -6 && ay >= -10 && ax >= -9 && ax <= 2) ||
+              (abs(ax + 9) <= 2 && ay >= -8 && ay <= 2) ||
+              (ay >= 0 && ay <= 7 && abs(abs(ax + 9) - (7 - ay)) <= 2);
+      else if (v->map_turn == 5)
+        ink = abs(ax) <= 7 && abs(ay) <= 7;
+      else
+        ink = (abs(ax) <= 2 && ay >= -10 && ay <= 10) ||
+              (ay <= -2 && ay >= -11 && abs(abs(ax) - (11 + ay)) <= 2);
+      return ink ? 0xffff : 0;
+    }
     if (v->map_fix && abs(x - v->map_gps_x) + abs(my - v->map_gps_y) <= 4)
       return 0x259f;
     if (v->map_waypoint &&
@@ -162,6 +182,8 @@ static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
     if ((x == 120 && abs(my - 44) <= 3) || (my == 44 && abs(x - 120) <= 3))
       return 0xfec0;
     unsigned p = (unsigned)(my * 240 + x);
+    if (v->map_route_pixels && ((v->map_route_pixels[p / 8] >> (p % 8)) & 1))
+      return 0xfec0;
     return (v->map_pixels[p / 8] >> (p % 8)) & 1 ? 0xce79 : 0x0842;
   }
   uint16_t visual;

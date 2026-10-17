@@ -1,4 +1,4 @@
-POS 0.6.3-dev - Pan Operating System
+POS 0.6.4-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -47,7 +47,7 @@ migrate without deleting originals. Future schemas are preserved and refused.
 Settings > Developer deployment: temporary trusted-LAN session, signed HTTPS
 updates only, on-device approval and physical recovery/OTA evidence required.
 After firmware reboot reopen the session to verify; no always-on deployment service.
-Turn-by-turn/offline routing, map search/names and Meshtastic remain future work.
+Meshtastic compatibility remains future work. Maps supports regional offline routing.
 
 Computer installation: download pos-setup and follow EASY_INSTALL.md.
 Crostini shared folders support copy only; raw formatting/USB need OS access.
@@ -68,5 +68,11 @@ Updates from this version archive the current pair; Import previous installation
 Factory recovery and both OTA runtime slots are retained. Flash images never execute from SD.
 
 0.6.3: Maps app, GPS/coordinate regions, Wi-Fi downloads, offline pan/zoom/follow.
-Enter sets a session waypoint: straight-line guidance only, not road routing.
+0.6.3 introduced straight-line guidance; 0.6.4 adds offline road routes below.
 Map data: (c) OpenStreetMap contributors / ODbL 1.0; keep original .osm files.
+
+0.6.4: road-name search; walking/cycling/driving offline routes; saved route resume.
+Enter on a map: select travel mode, search or route to the crosshair.
+Yellow route, next-turn arrow/road name, remaining distance and off-route guidance.
+Redownload old 0.6.3 regions for routing restrictions. Cached old road views remain.
+Conditional/via-way rules are blocked conservatively; real signs take priority.

@@ -2,6 +2,7 @@
 #include "esp_timer.h"
 #include "pos_device.h"
 #include "pos_maps.h"
+#include "pos_navigation.h"
 #include "pos_network_service.h"
 #include "pos_peripherals.h"
 #include "ui.h"
@@ -120,6 +121,10 @@ static void download_run(const char *root, char raw[POS_FS_PATH],
   if (pos_map_compile(raw, map, &m, progress, NULL, &e))
     pos_ui_notice("Map not installed", e.message);
   else {
+    if (pos_nav_compile(raw, map, progress, NULL, &e)) {
+      pos_ui_notice("Road view saved", e.message);
+      return;
+    }
     const char *notice =
         "Map data: (c) OpenStreetMap "
         "contributors.\nhttps://www.openstreetmap.org/copyright\nOriginal .osm "
@@ -130,8 +135,8 @@ static void download_run(const char *root, char raw[POS_FS_PATH],
       (void)pos_fs_write_new(folder, notice, strlen(notice));
     pos_ui_notice("Map saved",
                   "Available in Saved regions without Internet. Original OSM "
-                  "data stays in POS/Maps. Enter on a map sets a waypoint; "
-                  "guidance is straight-line, not turn-by-turn.");
+                  "data stays in POS/Maps. Enter opens road search and offline "
+                  "route planning. Choose a travel mode before routing.");
   }
 }
 
@@ -147,9 +152,141 @@ static void download(const char *root) {
 
 typedef struct {
   pos_view_t view;
-  uint8_t pixels[POS_MAP_PIXELS];
+  uint8_t pixels[POS_MAP_PIXELS], route_pixels[POS_MAP_PIXELS];
+  pos_nav_route_t *route;
+  unsigned mode, segment;
 } workspace_t;
-static void open_map(const char *path) {
+static bool plan_route(const char *map, workspace_t *s, double start_lat,
+                       double start_lon, double target_lat, double target_lon) {
+  char *path = malloc(POS_FS_PATH);
+  pos_error_t e = {0};
+  if (!path)
+    return false;
+  if (snprintf(path, POS_FS_PATH, "%s.route-%08x", map,
+               (unsigned)esp_random()) >= POS_FS_PATH) {
+    free(path);
+    return false;
+  }
+  pos_ui_notice("Offline route",
+                "Start: current GPS fix, or saved region center when no fix is "
+                "available. End: the nearest usable road point within 75m of "
+                "your selection. Routes stay inside the cached graph. Check "
+                "real signs and conditions.");
+  const char *confirm[] = {"Calculate route", "Cancel"};
+  if (pos_ui_menu(s->mode == POS_NAV_WALK    ? "Calculate walking route?"
+                  : s->mode == POS_NAV_CYCLE ? "Calculate cycling route?"
+                                             : "Calculate driving route?",
+                  confirm, 2) != 0) {
+    free(path);
+    return false;
+  }
+  pos_ui_message("Offline routing",
+                 "Calculating on microSD...\nEsc cancels safely.");
+  if (pos_nav_calculate(map, path, start_lat, start_lon, target_lat, target_lon,
+                        s->mode, progress, NULL, &e)) {
+    pos_ui_notice("No route", e.message);
+    free(path);
+    return false;
+  }
+  pos_nav_route_t *next = pos_nav_open(path, map, progress, NULL, &e);
+  free(path);
+  if (!next) {
+    pos_ui_notice("Route unavailable", e.message);
+    return false;
+  }
+  pos_nav_close(s->route);
+  s->route = next;
+  s->segment = UINT32_MAX;
+  return true;
+}
+static bool resume_route(const char *map, workspace_t *s) {
+  char (*paths)[POS_FS_PATH] = calloc(3, POS_FS_PATH);
+  if (!paths)
+    return false;
+  snprintf(paths[0], POS_FS_PATH, "%s", map);
+  char *base = strrchr(paths[0], '/');
+  if (!base) {
+    free(paths);
+    return false;
+  }
+  *base++ = 0;
+  char prefix[128];
+  if (snprintf(prefix, sizeof(prefix), "%s.route-", base) >=
+      (int)sizeof(prefix)) {
+    free(paths);
+    return false;
+  }
+  DIR *d = opendir(paths[0]);
+  struct dirent *entry;
+  time_t latest = 0;
+  bool found = false;
+  if (d) {
+    while ((entry = readdir(d))) {
+      size_t n = strlen(prefix);
+      if (strncmp(entry->d_name, prefix, n) || strlen(entry->d_name) != n + 8 ||
+          strspn(entry->d_name + n, "0123456789abcdef") != 8)
+        continue;
+      if (pos_fs_join(paths[1], paths[0], entry->d_name))
+        continue;
+      struct stat st;
+      if (!stat(paths[1], &st) && (!found || st.st_mtime >= latest)) {
+        latest = st.st_mtime;
+        strcpy(paths[2], paths[1]);
+        found = true;
+      }
+    }
+    closedir(d);
+  }
+  pos_error_t e = {0};
+  pos_nav_route_t *next =
+      found ? pos_nav_open(paths[2], map, progress, NULL, &e) : NULL;
+  if (next) {
+    pos_nav_close(s->route);
+    s->route = next;
+    s->mode = pos_nav_mode(next);
+    s->segment = UINT32_MAX;
+  } else
+    pos_ui_notice("Saved route",
+                  found ? e.message : "No saved route for this region yet.");
+  free(paths);
+  return next != NULL;
+}
+static bool road_search(const char *map, workspace_t *s, double *lat,
+                        double *lon) {
+  char query[64] = "";
+  if (!pos_ui_text("Find a road", "Road name (part is OK)", query,
+                   sizeof(query), false) ||
+      !*query)
+    return false;
+  pos_nav_place_t *results = calloc(POS_NAV_RESULTS, sizeof(*results));
+  if (!results)
+    return false;
+  unsigned count = 0;
+  pos_error_t e = {0};
+  bool selected = false;
+  if (pos_nav_search(map, query, *lat, *lon, s->mode, results, &count, progress,
+                     NULL, &e))
+    pos_ui_notice("Search unavailable", e.message);
+  else if (!count)
+    pos_ui_notice(
+        "No matching roads",
+        "Try fewer letters, check the travel mode, or download a larger "
+        "region. Search is offline and limited to this region.");
+  else {
+    const char *items[POS_NAV_RESULTS];
+    for (unsigned i = 0; i < count; ++i)
+      items[i] = results[i].name;
+    int choice = pos_ui_menu("Nearby matching road names", items, count);
+    if (choice >= 0) {
+      *lat = results[choice].latitude;
+      *lon = results[choice].longitude;
+      selected = true;
+    }
+  }
+  free(results);
+  return selected;
+}
+static __attribute__((noinline)) void open_map(const char *path) {
   pos_map_info_t m;
   pos_error_t e = {0};
   if (pos_map_inspect(path, &m, &e)) {
@@ -161,6 +298,8 @@ static void open_map(const char *path) {
     pos_ui_notice("Maps", "Not enough memory to open this map.");
     return;
   }
+  s->mode = POS_NAV_WALK;
+  s->segment = UINT32_MAX;
   double lat = m.latitude, lon = m.longitude, target_lat = 0, target_lon = 0;
   unsigned width = m.width_m, generation = 0;
   bool redraw = true, follow = false, target = false;
@@ -183,6 +322,12 @@ static void open_map(const char *path) {
         pos_ui_notice("Map unavailable", e.message);
         break;
       }
+      if (s->route &&
+          pos_nav_raster(s->route, lat, lon, width, s->route_pixels, &e)) {
+        pos_ui_notice("Guidance stopped", e.message);
+        pos_nav_close(s->route);
+        s->route = NULL;
+      }
       ++generation;
       redraw = false;
       refreshed = 0;
@@ -194,6 +339,8 @@ static void open_map(const char *path) {
       pos_ui_style(v);
       v->map_pixels = s->pixels;
       v->map_generation = generation;
+      if (s->route)
+        v->map_route_pixels = s->route_pixels;
       v->map_fix = gps.fix;
       v->map_waypoint = target;
       int x, y;
@@ -217,7 +364,34 @@ static void open_map(const char *path) {
         pos_view_line(v, 1, "%s %um %s", gps.fix ? "GPS" : "No fix", width,
                       follow ? "follow" : "pan");
       pos_view_line(v, 13, "%.5f %.5f", lat, lon);
-      pos_view_line(v, 14, "+/- zoom C:GPS Enter:menu");
+      if (s->route) {
+        if (gps.fix) {
+          pos_nav_guidance_t g;
+          if (pos_nav_guide(s->route, gps.latitude, gps.longitude, s->segment,
+                            &g, &e)) {
+            pos_nav_close(s->route);
+            s->route = NULL;
+            v->map_route_pixels = NULL;
+            pos_view_line(v, 1, "Route read failed; reopen");
+          } else {
+            s->segment = g.segment;
+            v->map_turn = g.off_route ? 0 : (uint8_t)(g.turn + 1);
+            static const char *turns[] = {"Continue", "Turn left", "Turn right",
+                                          "U-turn", "Arrived"};
+            if (g.off_route)
+              pos_view_line(v, 1, "Off route - Enter: recalc");
+            else if (g.arrived)
+              pos_view_line(v, 1, "Arrived at route end");
+            else
+              pos_view_line(v, 1, "%s in %um", turns[g.turn], g.next_m);
+            pos_view_line(v, 13, "%s", *g.road ? g.road : "Unnamed road");
+            pos_view_line(v, 14, "%um left   Enter: menu", g.remaining_m);
+          }
+        } else
+          pos_view_line(v, 1, "No GPS fix - route saved");
+      }
+      if (!s->route)
+        pos_view_line(v, 14, "+/- zoom C:GPS Enter:menu");
       pos_view_line(v, 15, "(c) OpenStreetMap contributors");
       pos_device_show(v);
       refreshed = now;
@@ -266,30 +440,83 @@ static void open_map(const char *path) {
       }
     }
     if (key == POS_KEY_ENTER) {
-      const char *items[] = {"Guide to map crosshair", "Clear waypoint",
-                             "Center saved region", "Map help", "Back to map"};
-      int c = pos_ui_menu("Map options", items, 5);
-      if (c == 0) {
-        target_lat = lat;
-        target_lon = lon;
-        target = true;
+      char mode_label[40];
+      snprintf(mode_label, sizeof(mode_label), "Travel mode: %s",
+               s->mode == 1   ? "Walking"
+               : s->mode == 2 ? "Cycling"
+                              : "Driving");
+      const char *items[] = {"Route to map crosshair", "Search road name",
+                             "Resume saved route",     mode_label,
+                             "Clear guidance",         "Center saved region",
+                             "Straight-line guide",    "Map help",
+                             "Recalculate route",      "Back to map"};
+      int c = pos_ui_menu("Map options", items, 10);
+      if (c == 1) {
+        if (road_search(path, s, &lat, &lon)) {
+          follow = false;
+          target_lat = lat;
+          target_lon = lon;
+          target = true;
+          const char *choices[] = {"Route to this road", "Show on map"};
+          if (pos_ui_menu("Road found", choices, 2) == 0)
+            c = 0;
+        }
       }
-      if (c == 1)
+      if (c == 0 || c == 8) {
+        double tolat = c == 8 ? target_lat : lat,
+               tolon = c == 8 ? target_lon : lon;
+        if (c == 8 && !target)
+          pos_ui_notice("No destination", "Choose a road or map point first.");
+        else if (c == 8 && !gps.fix)
+          pos_ui_notice("GPS fix needed",
+                        "Wait for a fresh position before recalculating. Your "
+                        "saved route is retained.");
+        else if (plan_route(path, s, gps.fix ? gps.latitude : m.latitude,
+                            gps.fix ? gps.longitude : m.longitude, tolat,
+                            tolon)) {
+          pos_nav_destination(s->route, &target_lat, &target_lon);
+          target = true;
+          follow = gps.fix;
+        }
+      }
+      if (c == 2 && resume_route(path, s)) {
+        pos_nav_destination(s->route, &target_lat, &target_lon);
+        target = true;
+        follow = gps.fix;
+      }
+      if (c == 3) {
+        const char *modes[] = {"Walking", "Cycling", "Driving"};
+        int mode = pos_ui_menu("Travel mode (next route)", modes, 3);
+        if (mode >= 0)
+          s->mode = 1u << mode;
+      }
+      if (c == 4) {
         target = false;
-      if (c == 2) {
+        pos_nav_close(s->route);
+        s->route = NULL;
+      }
+      if (c == 5) {
         lat = m.latitude;
         lon = m.longitude;
         width = m.width_m;
         follow = false;
       }
-      if (c == 3)
+      if (c == 6) {
+        target_lat = lat;
+        target_lon = lon;
+        target = true;
+        pos_nav_close(s->route);
+        s->route = NULL;
+      }
+      if (c == 7)
         pos_ui_notice(
             "Offline map controls",
-            "Arrows pan. + / - zoom. C follows GPS. Enter sets the center "
-            "crosshair as your destination. Blue = you; pink = waypoint. "
-            "Guidance is straight-line, not a safe walking/driving route. No "
-            "turn instructions, terrain or road names yet. Outside the "
-            "downloaded area the map can be blank.");
+            "Arrows pan; +/- zoom; C follows GPS. Enter: road search, travel "
+            "mode, offline route planning and resume. Yellow line = route; "
+            "arrow = next maneuver. Off route? Recalculate from a fresh fix. "
+            "Route limits follow the downloaded graph and selected mode. Old "
+            "0.6.3 maps need a fresh download for routing. Real signs and "
+            "access rules take priority.");
       redraw = true;
     }
   }
@@ -298,6 +525,7 @@ static void open_map(const char *path) {
    */
   pos_view_clear(&s->view, "Maps");
   pos_device_show(&s->view);
+  pos_nav_close(s->route);
   free(s);
 }
 static void saved(const char *root) {
@@ -397,7 +625,8 @@ void pos_ui_maps(const char *root) {
                     "https://www.openstreetmap.org/copyright. ODbL 1.0. "
                     "Downloads use a public Overpass service; availability is "
                     "not guaranteed. Raw .osm files remain in POS/Maps. Small "
-                    "areas only; no turn-by-turn routing yet.");
+                    "areas only. Offline routing uses the selected travel mode "
+                    "and downloaded restrictions.");
   }
 }
 #else

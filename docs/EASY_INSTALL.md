@@ -8,7 +8,7 @@ manual flash addresses or an understanding of partitions.
 
 ## Start here
 
-1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.6.3-dev).
+1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.6.4-dev).
 2. Download **`pos-setup`**. This is the executable wizard, not the Source code ZIP.
    Its optional `pos-setup.sha256` checksum is beside it. The complete POS ZIP
    also includes a copy of the wizard.
@@ -214,7 +214,7 @@ If the card has only the old installer files and you have **not installed POS**:
    **pos-install-old** (or another unused name). Keep the old files; formatting
    is unnecessary. Preserve any `pos-install.copying` folder under another name too.
 3. Download this release's **pos-setup**, replace the old executable and run it
-   with `--release v0.6.3-dev`. Choose **2. Prepare the microSD only** and select
+   with `--release v0.6.4-dev`. Choose **2. Prepare the microSD only** and select
    the card's shared top-level folder. It copies and verifies the matching package.
 4. Eject the card, put it into the powered-off ADV, connect the ADV and share its
    USB connection with Linux. Run the same command and choose **3. Flash Cardputer
@@ -230,7 +230,7 @@ With the paths used in the reported Crostini session, run:
 
 ```sh
 chmod +x "/mnt/shared/MyFiles/Downloads/pos-setup"
-"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.6.3-dev --sd-folder "/mnt/shared/removable/POS Drive"
+"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.6.4-dev --sd-folder "/mnt/shared/removable/POS Drive"
 ```
 
 If the card already contains an installed **/POS** tree, keep it and your files.
@@ -242,8 +242,8 @@ Optional commands for troubleshooting:
 
 ```sh
 ~/pos-setup --download-only                 # Download/verify without device changes
-~/pos-setup --release v0.6.3-dev             # Use a specific published version
-~/pos-setup --bundle /path/pos-0.6.3-dev.zip # Use a ZIP and matching .sha256 offline
+~/pos-setup --release v0.6.4-dev             # Use a specific published version
+~/pos-setup --bundle /path/pos-0.6.4-dev.zip # Use a ZIP and matching .sha256 offline
 ~/pos-setup --sd-folder '/mnt/chromeos/removable/YOUR CARD'
 ```
 
@@ -325,7 +325,7 @@ preset to the draft, **S** saves, and Escape cancels. The draft is visible direc
 there is no separate Preview button. Color picker controls remain arrows, Q/E for
 hue, Shift for fine steps, Enter to accept, Escape to cancel that color change.
 
-**Files:** the text browser is restored in 0.6.3-dev. Up/Down moves through
+**Files:** the text browser is restored in 0.6.4-dev. Up/Down moves through
 names, Parent, Previous/Next and Folder actions; Enter opens a selected entry's
 actions. Choose Open folder, Play in Audio Player, or Open file → Text Editor.
 Copy/cut/paste, rename, Trash and explicit permanent deletion remain available.
@@ -364,7 +364,7 @@ because of a version cutoff. Signatures, file hashes, hardware compatibility,
 package format, increasing signed sequences and downgrade prevention still apply.
 Use Settings → System → Software Update → Check for Updates as usual.
 
-## Sounds and recording (0.6.3-dev)
+## Sounds and recording (0.6.4-dev)
 
 Open Settings → **Sounds** for master On/Off, Volume (0–100%), Key presses,
 Apps / notifications and Preview sound. Preferences survive restarts and backups.
@@ -392,11 +392,17 @@ Text Editor: Esc → Delete document moves the saved original to Trash after
 confirmation. Files can restore it. Unsaved edits are discarded only on success.
 Firmware history and rollback instructions are in [FIRMWARE_HISTORY.md](FIRMWARE_HISTORY.md).
 
-## Maps (0.6.3-dev)
+## Maps (0.6.4-dev)
 
 After updating, open **Maps → Download a region**. Fit/detect the GPS cap first;
 a current fix is needed for "Around my GPS position", or enter decimal coordinates.
 Choose a small area, provider and Wi-Fi download. Open **Saved regions** offline.
 Arrows pan, +/- zoom, C follows GPS, Enter sets the crosshair as a destination.
-This milestone gives straight-line distance/bearing, not turn-by-turn routes.
+Enter opens road search, travel mode, cached offline routes and turn guidance.
 See [MAPS.md](MAPS.md) for complete instructions and limits.
+
+In 0.6.4, download the region again to add routing data. On its map press Enter,
+set **Travel mode**, then **Search road name** or **Route to map crosshair**.
+Routes calculate on the SD card and **Resume saved route** works without Wi-Fi.
+The yellow route, next-turn arrow, road name and remaining distance replace
+straight-line guidance. See [MAPS.md](MAPS.md) for snapping and access-rule limits.

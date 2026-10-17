@@ -34,3 +34,5 @@ double pos_map_bearing(double latitude, double longitude, double dest_lat,
 /* Explicit provider choice; downloads never fall back to another host silently.
  */
 extern const char *const pos_map_providers[3];
+
+void pos_map_line(uint8_t pixels[POS_MAP_PIXELS], int x, int y, int xx, int yy);

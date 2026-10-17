@@ -11,6 +11,7 @@
 #include "pos_editor.h"
 #include "pos_fs.h"
 #include "pos_launcher.h"
+#include "pos_navigation.h"
 #include "pos_network_service.h"
 #include "pos_peripherals.h"
 #include "pos_recovery.h"
@@ -26,7 +27,7 @@
 #include <time.h>
 
 uint32_t esp_random(void) { return 0x13572468u; }
-static bool maps_download_test, maps_guidance_seen;
+static bool maps_download_test, maps_guidance_seen, maps_turn_seen;
 static pos_event_t ui_events[512];
 static unsigned ui_next, ui_count, ui_frames;
 static bool secret_leaked, notice_tail_seen, selection_seen;
@@ -256,7 +257,8 @@ void pos_device_show(const pos_view_t *view) {
     assert(view->selected_row == 6); /* Turn display off remains selected. */
     display_wake_seen = true;
   }
-  if (view->map_pixels && view->map_fix && view->map_waypoint) {
+  if(view->map_route_pixels && view->map_turn==2)maps_turn_seen=true;
+  if (view->map_pixels && view->map_fix && view->map_waypoint && !view->map_route_pixels) {
     assert(strstr(view->lines[1], "deg"));
     maps_guidance_seen = true;
   }
@@ -404,7 +406,7 @@ int pos_network_https_limit(const char *u, const char *m, const char *b,
  if (maps_download_test) {
    assert(strstr(u, "https://maps.mail.ru/") == u && !strcmp(m, "GET"));
    char full[POS_FS_PATH]; assert(!pos_fs_join(full,r,d));
-   const char *xml="<osm version=\"0.6\"><way id=\"1\"><nd lat=\"34.050\" lon=\"-118.248\"/><nd lat=\"34.051\" lon=\"-118.247\"/></way></osm>";
+   const char *xml="<osm version=\"0.6\"><way id=\"1\"><nd ref=\"1\" lat=\"34.050\" lon=\"-118.248\"/><nd ref=\"2\" lat=\"34.051\" lon=\"-118.247\"/><tag k=\"highway\" v=\"residential\"/></way></osm>";
    return pos_fs_write_new(full,xml,strlen(xml));
  }
  return pos_network_https(u,m,b,t,r,d,h,p,c,e);
@@ -1327,6 +1329,25 @@ static int apps_ui(const char *root, const char *mode) {
     pos_ui_maps(root);assert(ui_next == ui_count && pos_home_pending());
     return 0;
   }
+  if (!strcmp(mode,"maps-ui-route") || !strcmp(mode,"maps-ui-search")) {
+    bool search=!strcmp(mode,"maps-ui-search");
+    fake_expansion.gps_detected=fake_expansion.maps_available=fake_expansion.location.fix=true;
+    fake_expansion.location.latitude=34.05;fake_expansion.location.longitude=-118.248;
+    char folder[POS_FS_PATH],raw[POS_FS_PATH],map[POS_FS_PATH];
+    assert(!pos_fs_join(folder,root,"POS/Maps")&&!pos_fs_mkdirs(folder));
+    assert(!pos_fs_join(raw,root,"POS/Maps/local.osm")&&!pos_fs_join(map,root,"POS/Maps/local.pmap"));
+    const char *xml="<osm version=\"0.6\"><way id=\"10\"><nd ref=\"1\" lat=\"34.05\" lon=\"-118.248\"/><nd ref=\"2\" lat=\"34.05\" lon=\"-118.247\"/><tag k=\"highway\" v=\"residential\"/><tag k=\"name\" v=\"First\"/></way><way id=\"20\"><nd ref=\"2\" lat=\"34.05\" lon=\"-118.247\"/><nd ref=\"3\" lat=\"34.051\" lon=\"-118.247\"/><tag k=\"highway\" v=\"residential\"/><tag k=\"name\" v=\"North\"/></way></osm>";
+    assert(!pos_fs_write_new(raw,xml,strlen(xml)));
+    pos_map_info_t m={.latitude=34.051,.longitude=-118.247,.width_m=1000};strcpy(m.name,"Local");pos_error_t e={0};
+    assert(!pos_map_compile(raw,map,&m,NULL,NULL,&e));assert(!pos_nav_compile(raw,map,NULL,NULL,&e));
+    choose(0);choose(0);idle_event();
+    push_key(POS_KEY_ENTER,0);choose(search?1:0);
+    if(search){push_text("North");push_key(POS_KEY_ENTER,0);idle_event();choose(0);choose(1);idle_event();}
+    else {push_key(POS_KEY_ESCAPE,0);choose(0);idle_event();push_key(POS_KEY_ENTER,0);choose(2);idle_event();}
+    push_key(POS_KEY_HOME,0);pos_ui_maps(root);
+    assert(ui_next==ui_count && pos_home_pending() && !ui_last.map_pixels && !ui_last.map_route_pixels);
+    assert(search?maps_guidance_seen:maps_turn_seen);return 0;
+  }
   if (!strcmp(mode, "maps-ui-open")) {
     fake_expansion.gps_detected = fake_expansion.maps_available = fake_expansion.location.fix = true;
     fake_expansion.location.latitude = 34.0505;
@@ -1336,7 +1357,7 @@ static int apps_ui(const char *root, const char *mode) {
     idle_event(); /* Raster progress cannot consume later navigation. */
     push_key(POS_KEY_RIGHT, 0);
     idle_event();
-    push_key(POS_KEY_ENTER, 0);choose(0); /* Guide to panned crosshair */
+    push_key(POS_KEY_ENTER, 0);choose(6); /* Straight-line guide to panned crosshair */
     idle_event();
     push_key('c', 0);idle_event(); /* Follow live GPS */
     push_key(POS_KEY_HOME, 0);

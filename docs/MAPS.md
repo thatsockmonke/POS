@@ -1,111 +1,156 @@
-# Maps in POS 0.6.3-dev
+# Offline maps and navigation — POS 0.6.4-dev
 
-This is the first Maps milestone: small offline road/path maps and straight-line
-GPS waypoint guidance. Region choice, HTTPS download and map preparation all run
-on Panputer. No separate map compiler, computer or account is needed.
+POS can search downloaded road names, calculate routes entirely on Panputer,
+save/resume routes, and show GPS turn guidance without Internet. Region choice,
+map download and graph compilation all run on the device. GPS receiver detection
+is required to open Maps; a satellite fix is needed for live guidance, not for
+browsing or planning from the saved region center.
 
-## Use it
+## Download and use
 
-1. With power off, fit the official LoRa/GPS cap. Start POS and check **Settings →
-   Expansion hardware → GPS detected**. Maps refuses to open without a detected
-   receiver, independently of the LoRa enable/transmit switches. A satellite fix
-   is only necessary for your current position and live guidance.
-2. Open **Maps → Download a region**. Choose **Around my GPS position**, or
-   **Enter coordinates** in decimal degrees. For example, latitude `34.0522`,
-   longitude `-118.2437`. There is no address/place-name search yet.
-3. Choose a square area: **500 m, 1 km, 2 km or 4 km** across. Start small in dense
-   cities. Give it a name and select a public Overpass provider. The review screen
-   shows the exact service URL and area. This sends that bounding box to the
-   chosen service; there is no automatic background location sharing or silent
-   fallback to another provider.
-4. Confirm **Download region over Wi-Fi**. POS opens Wi-Fi if needed and syncs time
-   when required for HTTPS. Certificate validation stays enabled. Download and
-   preparation show progress; **Esc / Home** cancels safely. Public servers may
-   be busy or unavailable: retry later, choose a different provider, or shrink
-   the area. A successful transfer is compiled and checked before appearing in
-   **Saved regions**.
-5. Open **Saved regions (offline)**. **Arrow keys** pan; **+ / -** zoom. Press **C**
-   to center on and follow a current GPS fix. The screen is north up. Blue marks
-   your position, the yellow center crosshair selects a point, and pink marks
-   the destination. **Enter → Guide to map crosshair** sets that destination.
-   Distance, cardinal direction and bearing appear at the top when GPS has a fix.
-   **Enter → Clear waypoint** ends guidance; **Center saved region** returns to
-   the download center. **Fn+' / G0** closes Maps as with other apps.
+1. Fit the official GPS/LoRa cap with power off. Check **Settings → Expansion
+   hardware → GPS detected**, then open **Maps → Download a region**.
+2. Choose your GPS position or decimal coordinates, a 500 m / 1 km / 2 km / 4 km
+   square, and a name. Choose a provider and review the area and exact service
+   URL before confirming. POS connects Wi-Fi and syncs time if necessary; HTTPS
+   certificate validation stays enabled. Public services can be busy: try later,
+   another selected provider, or a smaller region. There is no silent fallback
+   or background location upload.
+3. POS saves the original XML, a compact road map, and a routing graph after
+   checking them. Keep roughly 32 MiB free for larger downloads, temporary sort
+   runs and route calculation. Files stream through reusable buffers.
+4. Open **Saved regions (offline)**. Arrows pan, **+/-** zoom, **C** follows GPS.
+   Blue is your current position; pink is the selected destination. The screen
+   is north up. **Enter** opens map options.
+5. Set **Travel mode: Walking / Cycling / Driving** before searching or calculating.
+   **Search road name** accepts part of a name, case-insensitively, and shows up to
+   eight distinct nearby matches usable in that mode. Choose a result, then
+   **Route to this road**, or show it on the map first. Refine broad searches to
+   find other matches. Text currently uses the display's ASCII font; unsupported
+   characters appear as `?`. This is road-name search, not an address/geocoder.
+6. Alternatively, pan the yellow crosshair to a destination and choose **Route to
+   map crosshair**. The start is your current GPS fix, or the saved region center
+   if no fix is available. Review the selected travel mode and confirm calculation.
+   Start/end positions must be within 75 m of an eligible road node. The result
+   ends at that snapped road point; it is not a promised route to a building door.
+7. The yellow line shows the calculated route. A large arrow and text show the
+   next maneuver, distance to it, next road name and remaining route distance.
+   With no fix, the route remains available for offline viewing. If GPS moves
+   more than 40 m away, POS shows **Off route**; **Enter → Recalculate route**
+   calculates again from a current fix. It does not silently reroute or invent a
+   connector across missing data. Arrival means within 20 m of the cached route
+   end with less than 15 m remaining along the route.
+8. **Resume saved route** restores the newest cached route for this exact map,
+   including after reboot, without Wi-Fi. **Clear guidance** stops it. Files can
+   remove unwanted caches. **Straight-line guide** is retained as an explicit
+   separate option. Close Maps with **Fn+' / G0** as with other apps.
 
-Guidance points directly toward the destination. It does **not** calculate a road
-route, obey one-way/access restrictions, avoid obstacles or give turn instructions.
-The waypoint is session-only. Road names, search, terrain, route caching and a
-fully offline routing graph remain future work. A blank area can mean that you
-panned outside the downloaded coverage; it does not establish that no roads exist.
-No destination is broadcast over LoRa or BLE.
+**Existing 0.6.3 maps remain viewable. Download the region again after updating**
+to add routing data: the earlier downloads did not request restriction relations
+or tagged access/barrier nodes. POS does not silently treat an incomplete old
+cache as a routing graph. Old maps and user data are preserved.
 
-## SD files and limits
+## Routing rules and scope
 
-Maps live in ordinary `POS/Maps` user storage, preserved by normal updates and
-backups. Each download has a random filename pair:
+The graph connects roads using **OSM node IDs**, never coordinate coincidence.
+A bridge crossing a road without a shared node therefore does not become a turn.
+Shortest-distance A* uses directed edges, independent walking/cycling/driving
+permissions, one-way and reverse-one-way rules, roundabout direction, bicycle
+exceptions, mode-specific/directional access and tagged node barriers. More
+specific mode permissions take priority independently of XML tag ordering.
+Generic `access=yes` does not make motorways walkable or footways driveable.
 
-- `region-XXXXXXXX.osm`: original, readable OpenStreetMap XML, including its source
-  attribution. Keep this with the derived map if sharing it.
-- `region-XXXXXXXX.pmap`: compact geometry for the device. The map name is stored
-  inside. Files lists both; removing both through Files removes the download.
-- `Map-data-license.txt`: attribution and ODbL link, written without replacing an
-  existing file. Retain this notice when sharing map data.
-- An interrupted `.part` is never listed as a usable map. Existing maps are never
-  overwritten. A failed compile can leave the original `.osm` and a partial file
-  for inspection; remove them through Files if no longer needed.
+Node-via `no_*` / `only_*` turn restrictions, profile-specific restrictions and
+exceptions are evaluated using the incoming edge. Same-way no-U-turn restrictions
+do not forbid continuing forward. Unsupported via-way or conditional restrictions
+conservatively block the affected way/profile. Conditional access/one-way rules
+are blocked rather than guessing whether their conditions apply. Unsupported
+ambiguous multi-from/to restrictions can refuse graph preparation. Unknown road
+classes, private/destination-only access, construction/proposed ways and area
+polygons are excluded conservatively unless supported explicit mode permissions
+apply. This can yield **No route** even where a person with local knowledge could
+legally travel. Different downloaded regions are not stitched together.
 
-The current limits are 2 MiB of downloaded XML, 30,000 line segments, latitude
-between -80 and +80 degrees, and no regions crossing the date line. Larger/dense
-responses fail clearly; download a smaller area. RAM holds reusable I/O buffers
-and a 2,640-byte monochrome viewport, never the whole region. The catalog is
-paged eight regions at a time. Pan/zoom streams the compact file; GPS marker-only
-changes reuse the cached raster. Actual SD/GPS/LCD performance requires hardware
-validation. The firmware retains validated TLS 1.2 ECDHE-RSA/ECDHE-ECDSA
-clients with P-256/P-384/P-521/X25519 curves. Unused TLS server support, static
-RSA/ECDH suites and legacy/Brainpool curves are omitted to fit the existing
-OTA slots. Unusual custom HTTPS endpoints needing those suites are unsupported.
+Routes are limited to the downloaded graph and its available OSM data. A larger
+area may be needed to connect two nearby points; disconnected roads do not get
+fabricated links. Turn prompts use road changes and geometry; they do not include
+lane guidance, spoken directions or roundabout exit counts. Driving means an
+ordinary motorcar, without vehicle-height/weight or specialist-vehicle routing.
+Road signs, closures and real conditions take priority over cached map data.
+These are regional offline routes, not continent-scale navigation.
 
-The `PMP1` format is deliberately simple: 64-byte little-endian header (magic,
-center latitude/longitude in signed microdegrees, width in meters, segment count,
-CRC32, 33-byte NUL-terminated ASCII name and reserved zero bytes), followed by
-16-byte records containing two signed microdegree latitude/longitude pairs.
-CRC32 covers the entire file with the CRC field (bytes 20–23) zeroed. Length,
-limits, coordinates, completion and CRC are checked before publication/opening.
-CRC detects accidental damage; map data is not authenticated like signed firmware.
-A small token parser streams the OSM response instead of constructing a DOM.
+## Storage, memory and interruption safety
 
-## Map data and service terms
+All map data lives in ordinary **POS/Maps** user storage and survives normal
+updates, backups and firmware rollback:
+
+- `region-XXXXXXXX.osm`: original readable OpenStreetMap XML, including attribution.
+- `region-XXXXXXXX.pmap`: `PMP1` road geometry, still readable by 0.6.3 firmware.
+- `region-XXXXXXXX.pmap.pnav`: `PNV1` node/edge/name/restriction graph bound to that
+  exact `.pmap` CRC. Compilation uses 256-record sort batches and sequential
+  endpoint joins; the region graph never needs to fit in RAM.
+- `region-XXXXXXXX.pmap.route-XXXXXXXX`: a completed `PRT1` route bound to the graph
+  CRC. New routes have new names and never overwrite an existing known-good one.
+- `Map-data-license.txt`: attribution and ODbL URL; keep this and the source XML
+  when sharing derived map data.
+
+Downloads remain capped at 2 MiB XML / 30,000 geometry segments, latitude between
+-80 and +80 degrees, and no date-line crossing. The catalog is paged. Road and
+route viewports each use 2,640 bytes. A* labels and an indexed priority queue live
+on SD with two 4-KiB RAM cache pages per mutable table; read-only graph tables use
+five 1-KiB cache pages. RAM remains bounded as graph/route size grows. Actual
+latency and available heap depend on the physical card and networking state.
+
+Graph and route files include counts, version magic, length checks and whole-file
+CRC32. They are synced and checked before new-file publication, then checked when
+opened. Corrupt, incomplete and wrong-map routes are rejected. Cancellation or
+SD failure preserves previously completed files. Temporary work directories are
+exclusively created; existing work directories are never erased by a retry. A
+power cut can leave `.part` / `.work-*` files; these are not usable route caches
+and can be removed through Files after verifying the completed files. Do not
+remove original data or your only backup to make space.
+
+`PMP1` has a 64-byte little-endian header: center latitude/longitude in signed
+microdegrees at bytes 4/8, width at 12, segment count at 16, CRC at 20 and a
+33-byte NUL-terminated ASCII name at 24. Its 16-byte records contain endpoint
+latitude/longitude pairs in signed microdegrees. `PNV1` has a 64-byte header: map CRC at byte 4; node/edge/way/rule counts
+at 8/12/16/20; format flag 1 at 28; whole-file CRC at 32 (zeroed for calculation).
+Tables follow: 24-byte sorted nodes (OSM ID, microdegree coordinates, first edge,
+mode mask and 16-bit edge count); 20-byte directed edges (from/to/way indices,
+centimeter length, mode mask); 80-byte roads (OSM ID, 64-byte ASCII name, representative
+coordinates); and 32-byte restrictions (from/to/via OSM IDs, modes and rule flags).
+`PRT1` has a 64-byte header: graph CRC, point count, total centimeters, mode and
+whole-file CRC at bytes 4/8/12/16/20. Its 80-byte points contain microdegree
+coordinates, cumulative centimeters, node/way indices, a reserved word and a
+56-byte outgoing-road name. CRC calculation zeroes its own field. These are data
+formats, not executable app packages; the original XML remains recoverable
+without POS. CRC protects against accidental damage, not malicious map providers.
+
+## Data license, providers and validation
 
 **© OpenStreetMap contributors**, https://www.openstreetmap.org/copyright.
-The original OSM data and derived map databases are available under the
-**Open Database License (ODbL) 1.0**:
-https://opendatacommons.org/licenses/odbl/1-0/.
-Map data has this license independently of the POS source-code license.
-The source XML remains available beside its derived map. Attribution is visible
-in Maps and on the map screen; it must be retained when sharing map data.
+Original and derived map databases use **ODbL 1.0**:
+https://opendatacommons.org/licenses/odbl/1-0/. Retain attribution and source XML
+when sharing them. Map-data licensing is independent of POS source-code licensing.
+No third-party map dataset is bundled in the firmware; previews use generated
+example state.
 
-Provider choices are VK Maps (`maps.mail.ru`, Russia), Private.coffee (Austria),
-and Overpass API (Germany), listed by the OpenStreetMap Overpass API documentation:
-https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances.
-They are third-party public services, not POS servers. Availability and their
-terms may change. POS makes one bounded query per explicit download, with no
-bulk tile scraping, retry loop or automatic region prefetch.
+Providers: VK Maps (`maps.mail.ru`, Russia), Private.coffee (Austria) and Overpass
+API (Germany), listed in https://wiki.openstreetmap.org/wiki/Overpass_API.
+A download sends the selected bounding box to the explicitly chosen provider.
+Queries request road geometry, restriction relations and tagged highway nodes,
+with a 64 MiB **server-side** working-memory cap; the device accepts at most
+2 MiB of response bytes. There is no bulk tile scraping or automatic retry loop.
 
-## Verification
+Host tests cover an independent shortest-path reference, multiple external-sort
+runs and routing cache pages, restrictions/access/one-way/barrier edge cases,
+corruption, wrong-map binding, cancellation, pre-existing scratch preservation,
+SD exhaustion, and the actual Maps search/plan/resume/Home UI. Real public OSM
+data was downloaded, compiled, searched and routed by the same portable engine.
+Both firmware roles and stack-frame guards are checked before release. POS joins
+existing Wi-Fi networks; unused SDK SoftAP support is omitted to preserve the
+existing factory/two-slot OTA layout. No exposed POS hotspot feature was removed.
 
-Host regressions exercise streamed compilation, independent CRC verification,
-no joining of separate ways, corrupt/truncated/oversized input, cancellation,
-existing-file preservation, extreme-segment clipping, projection, bearing,
-marker rendering, missing receiver/no-fix UI and Home cleanup. A real public
-Overpass road response was downloaded in the cloud and processed by this code.
-These are not physical Cardputer tests. GPS detection/fix outdoors, heap while
-Wi-Fi is active, TLS interoperability, microSD speed and on-device readability
-still require validation.
-
-Local verification for this release: 332 host tests passed; both firmware roles
-built with the pinned ESP-IDF. Runtime image: 1,503,767 bytes before image padding;
-installer: 948,887 bytes. The unchanged OTA slot is 1,507,328 bytes. Maps' largest
-reported UI stack frame is 2,640 bytes (the download frame is 2,160 bytes), below its enforced 3,072-byte guard. These
-are compiler/cloud results, not measured device heap or performance. The server
-query has a separate 64 MiB server-side working-memory cap; the device still
-accepts at most 2 MiB of response bytes.
+No physical Cardputer tests are claimed. GPS matching on real streets, ambiguous
+intersections, actual signs, SD performance, heap with radios active, TLS and
+turn-arrow readability require hardware validation.
