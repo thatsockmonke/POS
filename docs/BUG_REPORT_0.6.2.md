@@ -64,3 +64,26 @@ and CI run; this report does not represent unexecuted checks as measurements.
   Older apps may refuse newer saved formats; unknown files remain recoverable.
   The accepted-sequence watermark never decreases. Use History for an already
   archived newer release, or install a future higher-sequence online update.
+
+## Published verification results
+
+[Tagged build](https://github.com/thatsockmonke/POS/actions/runs/39017328810)
+passed **319 tests** and both ESP-IDF firmware builds.
+[Automatic signing](https://github.com/thatsockmonke/POS/actions/runs/39017646587)
+succeeded. The public installation ZIP and standalone installer passed anonymous
+HTTPS/checksum verification, including 44 internal bundle hashes. The live feed
+has exactly seven signed fields and sequence **11**; its pinned P-256 signature,
+firmware and every System resource were independently downloaded and verified.
+The old bridge remains signed 0.6.0-dev, sequence 9.
+
+The unmodified 0.6.1 updater accepted the published 0.6.2 files in a native
+transaction/recovery simulation. Actual signed 0.6.1/0.6.2 files also passed
+archive → upgrade → rollback → forward-restore checks, retaining user data. These
+use simulated flash/boot hooks, not physical device tests or a test of old UI.
+
+**Pre-history-version return limitation:** firmware older than 0.6.2 lacks the
+History menu. Rolling back to it removes that UI, too. Use the verified USB
+installer to return to 0.6.2, or a future higher-sequence OTA release. A native
+simulation's ability to call the new history API does not give an older binary
+that API/menu. Firmware 0.6.2 and newer can use History to restore an archived
+newer pair. The accepted online sequence watermark remains protected.

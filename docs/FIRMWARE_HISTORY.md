@@ -47,7 +47,13 @@ Documents, recordings and other user files stay in place. Their settings/save
 formats are **not** rolled back; older apps may not understand newer formats.
 Unknown formats remain preserved. Rollback does not lower the accepted signed
 sequence. Return to an archived newer release through History, or wait for a
-higher-sequence online update. Signing-key changes can make older archives
+higher-sequence online update. Releases **older than 0.6.2 do not contain the History menu**. If you restore one
+of those, returning to the current release requires the verified USB installer
+(or a future online release with a higher signed sequence). Do not assume a new
+menu remains present after restoring an older runtime. For 0.6.2 and newer, the
+History menu can restore an archived newer pair.
+
+Signing-key changes can make older archives
 untrusted; POS does not silently trust the key stored beside an archive.
 
 Only authenticated paths owned by a completed entry are pruned, after a new

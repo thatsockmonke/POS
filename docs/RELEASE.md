@@ -34,3 +34,11 @@ history/update interruptions. No hardware tests are claimed: real animation FPS,
 SD throughput, radio behavior, audio loudness and power-cut recovery need checking
 on a physical ADV. User files stay in place; rollback does not downgrade their
 settings/save formats or lower the accepted signed-sequence watermark.
+
+Verification: tag CI passed 319 tests and both builds; automatic signing succeeded.
+Anonymous public downloads, signature/hash checks, the unmodified 0.6.1 updater
+and real signed-file history round-trips passed host simulations.
+
+History caveat: restoring firmware older than 0.6.2 also removes the History menu.
+Use the verified USB installer to return to 0.6.2, or a future higher-sequence OTA
+release. Restore an archived newer pair through History when running 0.6.2+.
