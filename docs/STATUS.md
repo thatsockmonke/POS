@@ -1,4 +1,4 @@
-# POS feature status — 0.6.5-dev
+# POS development status — 0.6.7-dev (UNRELEASED)
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -71,3 +71,20 @@ overview centered on a live GPS pin with pan/zoom/follow controls, and removes t
 legacy Wi-Fi import/old-passphrase UI. Current Known Networks remain encrypted.
 The global overview is not a full-world road database. Hardware validation of
 new gain levels, GPS pin/follow behavior and display readability is still pending.
+
+## Required release hold
+
+Newest public version: **0.6.6-dev**, a focused updater-memory backport based on
+0.6.4-dev. The user explicitly requires it to remain newest until they confirm
+installing the updater fix. Do not create/publish the following full-release tag
+(or remove `.github/release-hold.json`) before their explicit confirmation.
+
+The development source has the heap fix plus existing full numeric gain/world-map
+features. Map-provider/TLS investigation is pending for that full follow-up:
+VK answered a desktop HTTPS test, Private.coffee returned HTTP 500, Overpass DE
+timed out, and direct api.openstreetmap.org returned OSM XML. These desktop
+checks do not establish on-device certificate or heap behavior. Direct OSM XML
+uses node references, so its compiler path must be verified/adapted before it is
+advertised as a working provider. Do not weaken certificate validation.
+
+See [UPDATER_HEAP.md](UPDATER_HEAP.md) for the bridge recovery route and exact scope.

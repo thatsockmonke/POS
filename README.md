@@ -4,7 +4,16 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.6.5-dev adds numeric microphone gain, a GPS-centered offline world map, and simpler Known Networks.**
+**Development: 0.6.7-dev, unreleased and held.**
+
+The focused [0.6.6-dev updater-fix bridge](https://github.com/thatsockmonke/POS/releases/tag/v0.6.6-dev)
+is based on 0.6.4-dev. It remains the newest release until the user explicitly
+confirms installing it. Read [the file-preserving recovery guide](docs/UPDATER_HEAP.md)
+if the installed updater reports insufficient manifest heap. The larger feature/
+map-provider update will not be published before that confirmation.
+
+The development source retains numeric microphone gain and the offline world
+map from 0.6.5, and now contains the updater memory fix.
 Choose a region in **Maps → Download a region**, then use **Saved regions → Enter**
 for **Travel mode**, **Search road name**, **Route to map crosshair**, and **Resume
 saved route**. Route calculation and cached turn guidance work without Internet;

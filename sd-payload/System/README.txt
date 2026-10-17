@@ -1,4 +1,4 @@
-POS 0.6.5-dev - Pan Operating System
+POS 0.6.7-dev (unreleased) - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -81,3 +81,6 @@ Conditional/via-way rules are blocked conservatively; real signs take priority.
 Maps highlights World map: Enter opens offline global coastlines, centered on
 fresh GPS with a pink pin. Arrows pan, +/- zoom, C follows GPS, 0 fits planet.
 Known Networks no longer has the old-passphrase/import option.
+
+Development combines the updater heap fix with the full numeric-gain/world-map changes.
+Do not publish until the user confirms installing the 0.6.6-dev bridge.

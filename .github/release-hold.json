@@ -1,0 +1,4 @@
+{
+  "allowed_tag": "v0.6.6-dev",
+  "reason": "The user requires the updater-fix bridge to remain the newest release until they explicitly confirm installing it. Do not publish the larger update before that confirmation."
+}

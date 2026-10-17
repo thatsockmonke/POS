@@ -1,5 +1,11 @@
 # Download POS
 
+**Current public bridge: [0.6.6-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.6.6-dev).**
+[Bridge installer](https://github.com/thatsockmonke/POS/releases/download/v0.6.6-dev/pos-setup) ·
+[Heap-error recovery instructions](UPDATER_HEAP.md).
+The larger 0.6.7 development build is held until the user confirms the updater fix.
+The 0.6.5 links below are historical full-feature artifacts, not the bridge.
+
 The complete package contains the matching USB installer, SD installation files,
 USB helper scripts, checksums, feature status and full installation instructions.
 You do not need to compile the OS to use a prebuilt package.
