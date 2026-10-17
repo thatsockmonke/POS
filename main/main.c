@@ -386,10 +386,17 @@ static int archive_system(const char *root, const char *system,
   }
   if (!u || !pos_package_equivalent(u->package, p))
     bad = -1;
-  if (!bad)
+  if (!bad) {
+    /* History reauthenticates from disk. Drop discovery metadata before its
+     * nested verification; keep only paths and the caller's target update. */
+    pos_update_free(u);
+    u = NULL;
+    pos_package_free(p);
+    p = NULL;
     bad = pos_history_capture_from(root, system, work->metadata,
                                    work->source.key, read_running,
                                    (void *)running, platform, pin, e);
+  }
 done:
   pos_update_free(u);
   pos_package_free(p);
@@ -490,9 +497,14 @@ int pos_device_install_update(const char *root, const pos_update_t *u,
                    .write_firmware = write_firmware,
                    .select_firmware = select_firmware,
                    .progress = pos_ui_progress}};
+  ESP_LOGI(TAG, "Update: before history/archive verification");
+  heap_report();
   if (archive_current(root, &hooks.platform, NULL, error) ||
-      pos_update_apply(root, u, &hooks, error))
+      pos_update_apply(root, u, &hooks, error)) {
+    ESP_LOGE(TAG, "Update stopped: %s", error->message);
+    heap_report();
     return -1;
+  }
   if (u->firmware) {
     pos_ui_notice("Firmware update ready",
                   "System and inactive firmware are verified. Restarting to "

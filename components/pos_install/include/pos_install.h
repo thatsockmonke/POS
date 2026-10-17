@@ -19,11 +19,12 @@ typedef struct {
 typedef struct {
     char version[32];
     pos_file_t firmware;
-    pos_file_t files[POS_MAX_FILES];
     size_t count;
     char id[65];
     char *manifest;
     size_t manifest_size;
+    /* Allocated for count records, never the full catalog capacity. */
+    pos_file_t files[];
 } pos_package_t;
 
 typedef struct {
@@ -63,3 +64,8 @@ int pos_parse_manifest(const char *,size_t,pos_package_t **,pos_error_t *);
 
 /* Compare authenticated package content independently of JSON whitespace/order. */
 int pos_package_equivalent(const pos_package_t *,const pos_package_t *);
+
+/* Read one bounded regular manifest into an exact-size owned buffer. Closes the
+ * file before returning; rejects changes in size and never allocates the limit. */
+int pos_manifest_read_text(const char *path, size_t limit, char **text,
+                           size_t *size, pos_error_t *error);
