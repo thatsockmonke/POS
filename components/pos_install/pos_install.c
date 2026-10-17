@@ -125,72 +125,105 @@ static bool file_record(const cJSON *object, pos_file_t *file, bool firmware)
     return true;
 }
 
-int pos_parse_manifest(const char *text, size_t size, pos_package_t **out, pos_error_t *error)
+/* Consume an exact-size text buffer so file loading needs no second copy. */
+static int parse_owned(char *text, size_t size, pos_package_t **out,
+                       pos_error_t *error)
 {
     *out = NULL;
+    pos_package_t *p = NULL;
+    cJSON *json = NULL;
     if (!text || !size || size > POS_MANIFEST_MAX || memchr(text, 0, size))
-        return fail(error, "Invalid manifest length");
-    pos_package_t *p = calloc(1, sizeof(*p));
-    if (p) p->manifest = malloc(size + 1);
-    if (!p || !p->manifest) { pos_package_free(p); return fail(error, "Not enough heap for manifest"); }
-    memcpy(p->manifest, text, size);
-    p->manifest[size] = 0;
-    p->manifest_size = size;
-    if (strstr(p->manifest, "\\u0000")) goto invalid;
-    /* Reject deeply nested input before cJSON can consume the embedded task stack. */
+        goto invalid;
+    if (strstr(text, "\\u0000")) goto invalid;
     bool quoted = false, escaped = false;
     int depth = 0;
-    for (size_t i = 0; i < p->manifest_size; ++i) {
-        char c = p->manifest[i];
+    for (size_t i = 0; i < size; ++i) {
+        char c = text[i];
         if (escaped) { escaped = false; continue; }
         if (quoted && c == '\\') { escaped = true; continue; }
         if (c == '"') quoted = !quoted;
         if (!quoted && (c == '{' || c == '[') && ++depth > 8) goto invalid;
         if (!quoted && (c == '}' || c == ']')) --depth;
     }
-    cJSON *json = cJSON_ParseWithLengthOpts(p->manifest, p->manifest_size + 1, NULL, true);
+    json = cJSON_ParseWithLengthOpts(text, size + 1, NULL, true);
     const char *const fields[] = {"format", "model", "version", "firmware", "files"};
-    if (!keys(json, fields, 5)) { cJSON_Delete(json); goto invalid; }
+    if (!keys(json, fields, 5)) goto invalid;
     const cJSON *format = cJSON_GetObjectItemCaseSensitive(json, "format");
     const char *model = string_field(json, "model"), *version = string_field(json, "version");
     const cJSON *files = cJSON_GetObjectItemCaseSensitive(json, "files");
+    int count = cJSON_GetArraySize(files);
     if (!cJSON_IsNumber(format) || format->valuedouble != 1 || !model || strcmp(model, POS_MODEL) ||
-        !safe_version(version) || !cJSON_IsArray(files) || cJSON_GetArraySize(files) < 1 ||
-        cJSON_GetArraySize(files) > POS_MAX_FILES ||
-        !file_record(cJSON_GetObjectItemCaseSensitive(json, "firmware"), &p->firmware, true)) {
-        cJSON_Delete(json); goto invalid;
+        !safe_version(version) || !cJSON_IsArray(files) || count < 1 || count > POS_MAX_FILES)
+        goto invalid;
+    p = calloc(1, sizeof(*p) + (size_t)count * sizeof(p->files[0]));
+    if (!p) {
+        cJSON_Delete(json); free(text);
+        return fail(error, "Not enough heap for %d manifest file records", count);
     }
+    p->manifest = text; text = NULL;
+    p->manifest_size = size;
+    p->count = (size_t)count;
     strcpy(p->version, version);
-    p->count = (size_t)cJSON_GetArraySize(files);
+    if (!file_record(cJSON_GetObjectItemCaseSensitive(json, "firmware"), &p->firmware, true))
+        goto invalid;
     for (size_t i = 0; i < p->count; ++i) {
         if (!file_record(cJSON_GetArrayItem(files, (int)i), &p->files[i], false) ||
-            conflicts(p->files[i].path, INSTALLED) || conflicts(p->files[i].path, BOOT_OK)) {
-            cJSON_Delete(json); goto invalid;
-        }
+            conflicts(p->files[i].path, INSTALLED) || conflicts(p->files[i].path, BOOT_OK))
+            goto invalid;
         for (size_t j = 0; j < i; ++j)
-            if (conflicts(p->files[i].path, p->files[j].path)) { cJSON_Delete(json); goto invalid; }
+            if (conflicts(p->files[i].path, p->files[j].path)) goto invalid;
     }
     cJSON_Delete(json);
-    if (pos_hash_data(p->manifest, p->manifest_size, p->id)) goto invalid;
+    if (pos_hash_data(p->manifest, p->manifest_size, p->id)) {
+        pos_package_free(p);
+        return fail(error, "Cannot hash POS manifest");
+    }
     *out = p;
     return 0;
 invalid:
+    cJSON_Delete(json);
+    free(text);
     pos_package_free(p);
     return fail(error, "Invalid POS package: format, model, version, paths, sizes or hashes");
+}
+int pos_parse_manifest(const char *text, size_t size, pos_package_t **out, pos_error_t *error)
+{
+    *out = NULL;
+    if (!text || !size || size > POS_MANIFEST_MAX || memchr(text, 0, size))
+        return fail(error, "Invalid manifest length");
+    char *owned = malloc(size + 1);
+    if (!owned) return fail(error, "Not enough heap for manifest text (%zu bytes)", size + 1);
+    memcpy(owned, text, size); owned[size] = 0;
+    return parse_owned(owned, size, out, error);
+}
+int pos_manifest_read_text(const char *path, size_t limit, char **out,
+                           size_t *size, pos_error_t *error)
+{
+    *out = NULL; *size = 0;
+    FILE *f = fopen(path, "rb");
+    if (!f) return fail(error, "Missing or unreadable POS manifest: %s", path);
+    struct stat st;
+    if (fstat(fileno(f), &st) || !S_ISREG(st.st_mode) || st.st_size <= 0 ||
+        (uint64_t)st.st_size > limit) {
+        fclose(f); return fail(error, "Invalid manifest length");
+    }
+    size_t n = (size_t)st.st_size;
+    char *text = malloc(n + 1);
+    if (!text) {
+        fclose(f); return fail(error, "Not enough heap for manifest text (%zu bytes)", n + 1);
+    }
+    int bad = fread(text, 1, n, f) != n || fgetc(f) != EOF || ferror(f);
+    if (fclose(f)) bad = 1;
+    if (bad) { free(text); return fail(error, "Cannot read complete POS manifest"); }
+    text[n] = 0; *out = text; *size = n;
+    return 0;
 }
 int pos_load_manifest(const char *path, pos_package_t **out, pos_error_t *error)
 {
     *out = NULL;
-    FILE *f = fopen(path, "rb");
-    if (!f) return fail(error, "Missing or unreadable POS manifest: %s", path);
-    char *text = malloc(POS_MANIFEST_MAX + 1);
-    if (!text) { fclose(f); return fail(error, "Not enough heap for manifest"); }
-    size_t size = fread(text, 1, POS_MANIFEST_MAX + 1, f);
-    int bad = ferror(f);
-    if (fclose(f)) bad = 1;
-    int result = bad ? fail(error, "Cannot read POS manifest") : pos_parse_manifest(text, size, out, error);
-    free(text);
-    return result;
+    char *text; size_t size;
+    if (pos_manifest_read_text(path, POS_MANIFEST_MAX, &text, &size, error)) return -1;
+    return parse_owned(text, size, out, error);
 }
 
 

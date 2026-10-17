@@ -190,21 +190,14 @@ void pos_update_free(pos_update_t *u) {
 static int load(const char *file, const char *key, const char *current,
                 uint32_t floor, pos_update_t **out, pos_error_t *error) {
   *out = NULL;
-  FILE *f = fopen(file, "rb");
-  if (!f)
-    return fail(error, "No readable update manifest.");
-  char *text = malloc(POS_UPDATE_MAX + 1);
-  if (!text) {
-    fclose(f);
-    return fail(error, "Not enough memory for update manifest.");
-  }
-  size_t n = fread(text, 1, POS_UPDATE_MAX + 1, f);
-  int bad = ferror(f);
-  fclose(f);
+  char *text = NULL;
+  size_t n = 0;
+  if (pos_manifest_read_text(file, POS_UPDATE_MAX, &text, &n, error))
+    return -1;
   cJSON *envelope = NULL, *j = NULL;
   pos_update_t *u = NULL;
   int result = -1;
-  if (bad || !n || n > POS_UPDATE_MAX || !pos_fs_json_safe(text, n))
+  if (!pos_fs_json_safe(text, n))
     goto invalid;
   text[n] = 0;
   envelope = cJSON_ParseWithOpts(text, NULL, true);
@@ -266,13 +259,21 @@ static int load(const char *file, const char *key, const char *current,
   char *manifest = cJSON_PrintUnformatted(package);
   if (!manifest)
     goto invalid;
+  u->signed_manifest = cJSON_PrintUnformatted(envelope);
+  /* No longer retain both JSON trees while allocating/parsing the package. */
+  cJSON_Delete(j);
+  j = NULL;
+  cJSON_Delete(envelope);
+  envelope = NULL;
+  if (!u->signed_manifest) {
+    free(manifest);
+    fail(error, "Not enough memory for signed update metadata.");
+    goto done;
+  }
   int parsed =
       pos_parse_manifest(manifest, strlen(manifest), &u->package, error);
   free(manifest);
   if (parsed)
-    goto done;
-  u->signed_manifest = cJSON_PrintUnformatted(envelope);
-  if (!u->signed_manifest)
     goto done;
   if (u->firmware && strcmp(u->release, u->package->version))
     goto invalid;

@@ -250,6 +250,8 @@ int pos_history_capture_from(const char *root, const char *system,
     bad = fail(e, "Signed history metadata does not match the running System.");
     goto done;
   }
+  pos_package_free(installed);
+  installed = NULL;
   char relative[100];
   snprintf(relative, sizeof(relative), POS_HISTORY_ROOT "/%s", u->package->id);
   if (pos_fs_join(final, root, relative)) {
