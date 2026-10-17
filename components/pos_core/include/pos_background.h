@@ -9,6 +9,11 @@ typedef struct {
 } pos_background_t;
 
 void pos_background_defaults(pos_background_t *background);
+typedef enum {
+  POS_BACKGROUND_PANSEXUAL,
+  POS_BACKGROUND_NONBINARY
+} pos_background_preset_t;
+bool pos_background_preset(pos_background_t *, pos_background_preset_t);
 bool pos_background_valid(const pos_background_t *background);
 bool pos_background_resize(pos_background_t *background, unsigned count);
 bool pos_color_parse(const char *text, uint32_t *rgb);

@@ -1,4 +1,4 @@
-# Offline maps and navigation — POS 0.6.5-dev
+# Offline maps and navigation — POS 0.6.7-dev
 
 POS can search downloaded road names, calculate routes entirely on Panputer,
 save/resume routes, and show GPS turn guidance without Internet. Region choice,
@@ -16,8 +16,15 @@ browsing or planning from the saved region center.
    certificate validation stays enabled. Public services can be busy: try later,
    another selected provider, or a smaller region. There is no silent fallback
    or background location upload.
+   **OpenStreetMap (500 m)** uses the official OSM map API for a single 500 m
+   square. Larger areas use the explicitly selected VK or Germany Overpass
+   service. The consistently failing Private.coffee endpoint has been removed.
+   Direct OSM responses include buildings and other objects: POS builds a
+   sorted node index on SD, resolves road references, retains access/barrier
+   nodes and restriction relations, and filters non-road ways/relations.
+   It does not bulk-download the editing API or fetch regions in the background.
 3. POS saves the original XML, a compact road map, and a routing graph after
-   checking them. Keep roughly 32 MiB free for larger downloads, temporary sort
+   checking them. Keep roughly 64 MiB free for downloads, temporary sort
    runs and route calculation. Files stream through reusable buffers.
 4. Open **Saved regions (offline)**. Arrows pan, **+/-** zoom, **C** follows GPS.
    Blue is your current position; pink is the selected destination. The screen
@@ -85,6 +92,8 @@ All map data lives in ordinary **POS/Maps** user storage and survives normal
 updates, backups and firmware rollback:
 
 - `region-XXXXXXXX.osm`: original readable OpenStreetMap XML, including attribution.
+- `region-XXXXXXXX-roads.osm`: direct-OSM import with resolved coordinates,
+  road ways and restriction relations. The original download remains untouched.
 - `region-XXXXXXXX.pmap`: `PMP1` road geometry, still readable by 0.6.3 firmware.
 - `region-XXXXXXXX.pmap.pnav`: `PNV1` node/edge/name/restriction graph bound to that
   exact `.pmap` CRC. Compilation uses 256-record sort batches and sequential
@@ -94,12 +103,28 @@ updates, backups and firmware rollback:
 - `Map-data-license.txt`: attribution and ODbL URL; keep this and the source XML
   when sharing derived map data.
 
-Downloads remain capped at 2 MiB XML / 30,000 geometry segments, latitude between
+Downloads remain capped at 8 MiB XML / 30,000 geometry segments, latitude between
 -80 and +80 degrees, and no date-line crossing. The catalog is paged. Road and
 route viewports each use 2,640 bytes. A* labels and an indexed priority queue live
 on SD with two 4-KiB RAM cache pages per mutable table; read-only graph tables use
 five 1-KiB cache pages. RAM remains bounded as graph/route size grows. Actual
 latency and available heap depend on the physical card and networking state.
+
+Direct-OSM import accepts up to 60,000 node definitions/references and uses
+256-record external-sort batches plus on-SD binary lookup; no whole-region
+dictionary is allocated. Conflicting/duplicate IDs, missing references, invalid
+coordinates, incomplete XML and existing destinations are refused. Cancellation
+removes only its own work directory and preserves originals and completed maps.
+Very dense 500 m regions may exceed these limits; choose another area or an
+Overpass service. These public services have no availability guarantee.
+
+HTTP failures display the actual status (including rate limiting/server errors).
+TLS failures display verification flags, socket/TLS codes and available/largest
+heap; USB logs retain the same diagnostics. Check UTC time first. HTTP buffers
+are smaller and ESP-IDF dynamic TLS record buffers are enabled, retaining 16-KiB
+receive records and certificate/hostname validation. Desktop HTTPS and real OSM
+compilation have been tested; ESP32 certificate/TLS heap behavior still needs
+hardware verification. No certificate-validation bypass is provided.
 
 Graph and route files include counts, version magic, length checks and whole-file
 CRC32. They are synced and checked before new-file publication, then checked when
@@ -135,12 +160,14 @@ when sharing them. Map-data licensing is independent of POS source-code licensin
 No road database is bundled in firmware; the world coastlines below ship on SD.
 Regional-map previews use generated example state.
 
-Providers: VK Maps (`maps.mail.ru`, Russia), Private.coffee (Austria) and Overpass
-API (Germany), listed in https://wiki.openstreetmap.org/wiki/Overpass_API.
+Providers: OpenStreetMap's official `api.openstreetmap.org` map endpoint (explicit
+500 m squares), VK Maps (`maps.mail.ru`, Russia) and Overpass API (Germany).
+The Overpass instances are listed at https://wiki.openstreetmap.org/wiki/Overpass_API.
 A download sends the selected bounding box to the explicitly chosen provider.
-Queries request road geometry, restriction relations and tagged highway nodes,
-with a 64 MiB **server-side** working-memory cap; the device accepts at most
-2 MiB of response bytes. There is no bulk tile scraping or automatic retry loop.
+Overpass queries request road geometry, restriction relations and tagged highway
+nodes with a 64 MiB **server-side** working-memory cap. Direct OSM downloads
+include other objects that are filtered on SD. The device accepts at most
+8 MiB of response bytes. There is no bulk tile scraping or automatic retry loop.
 
 Host tests cover an independent shortest-path reference, multiple external-sort
 runs and routing cache pages, restrictions/access/one-way/barrier edge cases,

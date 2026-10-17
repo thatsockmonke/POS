@@ -1,10 +1,9 @@
 # Download POS
 
-**Current public bridge: [0.6.6-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.6.6-dev).**
-[Bridge installer](https://github.com/thatsockmonke/POS/releases/download/v0.6.6-dev/pos-setup) ·
-[Heap-error recovery instructions](UPDATER_HEAP.md).
-The larger 0.6.7 development build is held until the user confirms the updater fix.
-The 0.6.5 links below are historical full-feature artifacts, not the bridge.
+**Current release: [0.6.7-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.6.7-dev).**
+The full release includes the updater fix; installing 0.6.6-dev first is not
+required for a fresh install. The [bridge recovery guide](UPDATER_HEAP.md)
+remains available for preserving an existing installation.
 
 The complete package contains the matching USB installer, SD installation files,
 USB helper scripts, checksums, feature status and full installation instructions.
@@ -12,24 +11,24 @@ You do not need to compile the OS to use a prebuilt package.
 
 ## Current development package
 
-**POS 0.6.5-dev — experimental; numeric microphone gain, GPS-centered world map and simpler Known Networks. Upgrade through 0.6.0-dev first.**
+**POS 0.6.7-dev — experimental; flag presets, updater heap fix, direct OSM downloads, numeric gain and world map. Upgrade through 0.6.0-dev first.**
 
-- **Beginner installer:** [download pos-setup](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/pos-setup) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/pos-setup.sha256) · [easy instructions](EASY_INSTALL.md)
-- [POS 0.6.5-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.6.5-dev)
-- [Download pos-0.6.5-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/pos-0.6.5-dev.zip)
-- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/pos-0.6.5-dev.zip.sha256)
-- [Signed OTA package](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/pos-update-0.6.5-dev.zip) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/pos-update-0.6.5-dev.zip.sha256) · [on-device update instructions](UPDATES.md)
-- [World overview preview](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/world.png)
-- [Maps preview (generated example state)](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/maps.png)
-- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/boot-animation.png)
-- [Animated launcher/app transitions](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/ui-animation.png)
-- App previews: [Recorder](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/recorder.png), [Files](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/files.png), [Background](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/background.png), [Counter](https://github.com/thatsockmonke/POS/releases/download/v0.6.5-dev/counter.png)
+- **Beginner installer:** [download pos-setup](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/pos-setup) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/pos-setup.sha256) · [easy instructions](EASY_INSTALL.md)
+- [POS 0.6.7-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.6.7-dev)
+- [Download pos-0.6.7-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/pos-0.6.7-dev.zip)
+- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/pos-0.6.7-dev.zip.sha256)
+- [Signed OTA package](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/pos-update-0.6.7-dev.zip) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/pos-update-0.6.7-dev.zip.sha256) · [on-device update instructions](UPDATES.md)
+- [World overview preview](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/world.png)
+- [Maps preview (generated example state)](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/maps.png)
+- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/boot-animation.png)
+- [Animated launcher/app transitions](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/ui-animation.png)
+- App previews: [Recorder](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/recorder.png), [Files](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/files.png), [Background](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/background.png), [Counter](https://github.com/thatsockmonke/POS/releases/download/v0.6.7-dev/counter.png)
 - [Browse versioned downloads](https://github.com/thatsockmonke/POS/tree/main/downloads)
 - [Full installation guide](INSTALL.md)
 - [Implemented / partial / planned features](STATUS.md)
 
 The 0.3.6-dev candidate was withdrawn before release after an ESP32 stack audit.
-Use 0.6.5-dev, which includes the bounded-buffer fix and a compiler frame-size guard.
+Use 0.6.7-dev, which includes the bounded-buffer fix and a compiler frame-size guard.
 
 Every new POS version is published as a versioned GitHub Release with its matching
 installation ZIP and checksum. Development versions are marked **prerelease**.
@@ -65,7 +64,7 @@ From the source checkout with ESP-IDF v5.5.5 activated:
 ```sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.5-dev --zip-output dist/pos-0.6.5-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.7-dev --zip-output dist/pos-0.6.7-dev.zip
 ```
 
 Choose a fresh output name if one already exists. `bundle` verifies images and

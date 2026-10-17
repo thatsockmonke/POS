@@ -1,4 +1,4 @@
-# POS development status — 0.6.7-dev (UNRELEASED)
+# POS development status — 0.6.7-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -11,7 +11,7 @@ layouts and display-off still require physical validation; other peripherals ret
 | Boot appearance | Black start; pink, yellow and blue slide in with each starting halfway through the previous stripe; large POS fades in after the flag completes, holds 1 second, then normal boot | Observe orientation/color on actual ADV |
 | Display/input | ST7789 output, TCA8418 decode, arrow-key/context routing, global Home, held recovery shortcut, nonblocking USB fallback | Verify all 56 positions, wiring, timing and stalled-app recovery physically |
 | Core/UI/apps | Central event loop, native 32×32 icons, sixteen-app ribbon, one foreground app, lifecycle/cleanup, stationary focus with an elapsed-time spring ribbon, optimized scanlines and partial/pipelined LCD transfers, zoom/fade entry/return, shared wallpaper accents and paginated menus; launcher workspace is heap-owned | Additional scoped apps; physical stack/heap measurements |
-| Background app | 1-12 horizontal stripes, visual arrow-key picker, Q/E hue, Shift fine steps, live striped canvas, white selection pulse, S to save and protected persistence | Optional richer styling later |
+| Background app | 1-12 horizontal stripes, visual arrow-key picker, Q/E hue, Shift fine steps, live striped canvas, white selection pulse, editable pansexual/nonbinary presets (P), S to save and protected persistence | Optional richer styling later |
 | Setup/settings | Direct profile/brightness/date-time/background controls, regional/custom POSIX timezones, manual validated UTC, SNTP, preference reset confirmation and remembered menu selection and manual LCD/backlight-off with consumed wake input; checksummed redundant settings | Physical UX/time-sync validation; preset rule changes when legislation changes |
 | SD/files | Safe file manager, previews/editor/music, restored text list/actions, create/rename, copy/cut/paste, streamed verified folder copies, Trash/restore and confirmed permanent deletion | Optional sorting/search refinements; real-card performance |
 | Installer | USB factory installer, package validation, SD staging/readback, inactive runtime write/readback and boot selection | Physical flashing/SD/OTA rollback/power-cut validation |
@@ -19,7 +19,7 @@ layouts and display-off still require physical validation; other peripherals ret
 | Backup/restore | Standard small ZIPs, scalable readable folder backups, owned folder resume, full verification, conflict preservation and reports | Measure large real-card performance; archives/settings from unknown formats remain preserved, not guessed compatible |
 | Settings migration | Strict current schema, latest valid generation, format-1/2 settings compatibility, format-3 gain preferences and format-4 sound preferences and legacy format-0 migration, current destination takes priority | Versioned app-save envelopes, stepwise migrations and concrete Counter migrations implemented; future app-specific converters are added when formats exist |
 | Diagnostics | Heap/stack, firmware/flash/SD, boot/frame metrics, battery ADC, raw keyboard coverage, SD test, app cycles, evidence tooling | Actual measured hardware baseline and battery calibration |
-| Wi-Fi | Shared scan/connect/status, device-key encrypted Known Networks, optional background auto-connect, explicit old-vault import, SNTP, verified HTTPS GET/POST/downloads, temporary authenticated LAN file transfer | Physical radio/TLS interoperability validation, broader Share integration |
+| Wi-Fi | Shared scan/connect/status, device-key encrypted Known Networks, optional background auto-connect, SNTP, verified HTTPS GET/POST/downloads, temporary authenticated LAN file transfer | Physical radio/TLS interoperability validation, broader Share integration |
 | Firmware updates | Settings Software Update, built-in official feed/public key, trusted P-256 signatures, HTTPS, semantic versions, signed sequences, no minimum-version cutoff/display, strict seven-field metadata after the mandatory 0.6.0 transition, archived bridge feed, up to 15 signed firmware/System history pairs on SD and deliberate journaled rollback, bounded downloads, asset-only updates, previous-System journal recovery and inactive-slot write/readback; online OTA waits for a healthy 60-second UI interval | Official feed and pinned key included; physical TLS/OTA/rollback/power-cut validation |
 | Guided installer | Executable `pos-setup`: latest/private GitHub download, streamed checksum verification, card detection/FAT32 with exact erase confirmation, shared-folder route, factory backup/restore guidance, checked USB flash/readback and recovery menu | Crostini backup/restore and 0.5.6-dev installation/display/keyboard reported working. Exhaustive keys, power-loss/SD/OTA reliability remain to validate; shared folders cannot format a physical card |
 | USB developer tools | Build/package, checksum/backup-checked flash/readback, probe, detected-capacity double-read factory backup with bounded ROM fallback, matching-device restore/readback, logs and evidence reports | Factory restore/readback and observed boot reported; repeat with corrected verify-before-boot ordering |
@@ -29,7 +29,7 @@ layouts and display-off still require physical validation; other peripherals ret
 | BLE/shared transfer | POS peer discovery, encrypted numeric-comparison pairing, accept/reject, chunk ACK/retry, resume, SHA-256 and lost-final-ACK recovery; common local/Wi-Fi/BLE Share entry point | Physical peer interoperability/throughput validation; third-party clients |
 | GPS/LoRa cap | Verified published pins, Semtech driver, shared SPI, UART NMEA location service, Settings detection/enablement panel and GPS-based Maps gate | Actual cap/revision/peripheral coexistence validation |
 | Range test / messaging | Radio messaging, IDs, bounded retries/duplicate suppression, verified SD outbox, opt-in location and range-test CSVs with packet IDs/GPS/RSSI/SNR | Physical range measurements; future coverage visualizations |
-| Maps/navigation | GPS-gated on-device region downloads; SD-backed road geometry/names/graph; offline mode-aware road search and shortest-distance A*; walking/cycling/driving access, barriers, one-way and node-via turn rules; conservative conditional/via-way blocking; saved/resumed routes, route overlay, next-turn arrow/road name, GPS progress/off-route/arrival, explicit recalculation | Physical GPS/SD/heap/TLS validation; cross-region routing, Unicode fonts/search, lane/exit guidance and richer OSM/vehicle constraints are further refinements. Old 0.6.3 maps need fresh downloads for routing. See [MAPS.md](MAPS.md) |
+| Maps/navigation | GPS-gated on-device region downloads, direct OSM (500 m) plus selected Overpass services, bounded SD node-reference conversion and explicit HTTP/TLS diagnostics; SD-backed road geometry/names/graph; offline mode-aware road search and shortest-distance A*; walking/cycling/driving access, barriers, one-way and node-via turn rules; conservative conditional/via-way blocking; saved/resumed routes, route overlay, next-turn arrow/road name, GPS progress/off-route/arrival, explicit recalculation | Physical GPS/SD/heap/TLS validation; cross-region routing, Unicode fonts/search, lane/exit guidance and richer OSM/vehicle constraints are further refinements. Old 0.6.3 maps need fresh downloads for routing. See [MAPS.md](MAPS.md) |
 | Recorder / IR / IMU | Dedicated streamed PCM WAV Recorder, interrupted WAV recovery, Files-only Audio Player; shared ES8311 microphone with a dedicated capture task and 64,000-byte/two-second mono buffer (32,000-byte fallback), pre-capture WAV creation, right-slot extraction, saturated 8x PCM gain, codec readback and saved live integer 1x–4096x gain and a clean themed mono meter, BMI270 configuration/scaled readings and 38 kHz NEC IR transmit; Settings screens | User confirms the 0.5.8-dev microphone works; new gain/UI changes need retesting. Microphone channel/gain/timing, IMU orientation/calibration and IR waveform validation; no built-in IR receiver |
 | Developer tools / wireless deploy | `posctl flash` with matching verified factory backup/readback; streamed `files`; temporary LAN `deploy` requests through the signed HTTPS updater, target/build-bound evidence checks and boot confirmation polling | Recovery/OTA physical tests must pass before firmware deployment; manually reopen a temporary session after reboot for verification. No always-on deployment server |
 
@@ -72,19 +72,17 @@ legacy Wi-Fi import/old-passphrase UI. Current Known Networks remain encrypted.
 The global overview is not a full-world road database. Hardware validation of
 new gain levels, GPS pin/follow behavior and display readability is still pending.
 
-## Required release hold
+## 0.6.7-dev full follow-up
 
-Newest public version: **0.6.6-dev**, a focused updater-memory backport based on
-0.6.4-dev. The user explicitly requires it to remain newest until they confirm
-installing the updater fix. Do not create/publish the following full-release tag
-(or remove `.github/release-hold.json`) before their explicit confirmation.
+The user explicitly lifted the bridge release hold and chose a fresh installation
+instead of installing 0.6.6-dev first. The full release includes its manifest-memory
+fix and retains signed updates, inactive-slot OTA and the independently bootable
+factory installer. Partition sizes are unchanged.
 
-The development source has the heap fix plus existing full numeric gain/world-map
-features. Map-provider/TLS investigation is pending for that full follow-up:
-VK answered a desktop HTTPS test, Private.coffee returned HTTP 500, Overpass DE
-timed out, and direct api.openstreetmap.org returned OSM XML. These desktop
-checks do not establish on-device certificate or heap behavior. Direct OSM XML
-uses node references, so its compiler path must be verified/adapted before it is
-advertised as a working provider. Do not weaken certificate validation.
-
-See [UPDATER_HEAP.md](UPDATER_HEAP.md) for the bridge recovery route and exact scope.
+Adds editable pansexual/nonbinary wallpaper presets, direct OpenStreetMap downloads
+for explicit 500 m regions, SD-backed node-reference import and useful HTTP/TLS
+failure diagnostics. Removes the failing Private.coffee endpoint. It also includes
+numeric microphone gain, the streamed GPS-centered world overview and removal of
+the old Wi-Fi passphrase/import UI. These software checks do not replace physical
+Cardputer/TLS/GPS/SD or interruption validation. See [MAPS.md](MAPS.md),
+[release notes](RELEASE.md) and [bug report](BUG_REPORT_0.6.7.md).

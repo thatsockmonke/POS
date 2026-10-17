@@ -36,13 +36,24 @@ bool pos_map_region_valid(const pos_map_info_t *m) {
   return true;
 }
 const char *const pos_map_providers[3] = {
+    "https://api.openstreetmap.org/api/0.6/map",
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter",
     "https://overpass-api.de/api/interpreter"};
 int pos_map_query(const pos_map_info_t *m, unsigned provider, char url[512]) {
   if (!pos_map_region_valid(m) || provider >= 3)
     return -1;
   double dy = m->width_m / (2 * METERS), dx = dy / cos(m->latitude * RAD);
+  if (!provider) {
+    /* The editing API is for explicit small areas, never bulk region scraping.
+     * It includes non-road objects: resolve/filter them on SD before compiling.
+     */
+    if (m->width_m != 500)
+      return -1;
+    int n = snprintf(url, 512, "%s?bbox=%.6f,%.6f,%.6f,%.6f",
+                     pos_map_providers[0], m->longitude - dx, m->latitude - dy,
+                     m->longitude + dx, m->latitude + dy);
+    return n < 0 || n >= 512 ? -1 : 0;
+  }
   /* Explicitly bounded vector query; no bulk tile scraping or location upload
    * in the background. Percent-encode every non-unreserved query byte. */
   char query[256];
@@ -183,7 +194,7 @@ int pos_map_compile(const char *source, const char *destination,
        way = false, have = false;
   int32_t lastlat = 0, lastlon = 0;
   uint32_t read = 0;
-  int c;
+  int c, quote = 0;
   while ((c = fgetc(in)) != EOF) {
     ++read;
     if (!(read % 4096) && progress &&
@@ -191,7 +202,7 @@ int pos_map_compile(const char *source, const char *destination,
       fail(e, "Map preparation cancelled; existing maps preserved.");
       goto done;
     }
-    if (c == '<') {
+    if (c == '<' && !quote) {
       if (inside)
         goto invalid;
       inside = true;
@@ -204,7 +215,13 @@ int pos_map_compile(const char *source, const char *destination,
         goto invalid;
       continue;
     }
-    if (c != '>') {
+    if (inside && (c == '\'' || c == '"')) {
+      if (quote == c)
+        quote = 0;
+      else if (!quote)
+        quote = c;
+    }
+    if (c != '>' || quote) {
       if (used < sizeof(tag) - 1)
         tag[used++] = (char)c;
       else

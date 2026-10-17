@@ -525,6 +525,234 @@ static bool routing_key(const char *key, bool relation) {
   }
   return false;
 }
+typedef struct {
+  char dir[POS_FS_PATH], raw[POS_FS_PATH], sorted[POS_FS_PATH];
+  char staged[POS_FS_PATH], object[POS_FS_PATH], tag[768];
+  FILE *input, *nodes, *output, *spool;
+} import_t;
+/* Binary searches hit the SD index, not an unbounded RAM node dictionary. */
+static int import_node(FILE *f, unsigned count, uint64_t id, uint8_t out[16]) {
+  unsigned low = 0, high = count;
+  while (low < high) {
+    unsigned middle = low + (high - low) / 2;
+    if (at(f, middle * 16, out, 16))
+      return -1;
+    uint64_t found = u64(out);
+    if (found == id)
+      return 0;
+    if (found < id)
+      low = middle + 1;
+    else
+      high = middle;
+  }
+  return -1;
+}
+static int import_copy(FILE *in, FILE *out) {
+  uint8_t buffer[512];
+  rewind(in);
+  size_t n;
+  while ((n = fread(buffer, 1, sizeof(buffer), in)))
+    if (fwrite(buffer, 1, n, out) != n)
+      return -1;
+  return ferror(in) ? -1 : 0;
+}
+int pos_nav_import_osm(const char *source, const char *destination,
+                       pos_io_progress_t progress, void *ctx, pos_error_t *e) {
+  import_t *s = calloc(1, sizeof(*s));
+  int result = -1, status;
+  unsigned count = 0, points = 0;
+  uint32_t size, bytes = 0, last = 0;
+  const char *why =
+      "OSM preparation failed: invalid/missing node data, SD space "
+      "or memory. Existing maps and source preserved.";
+  if (!s || pos_fs_file_size(source, &size) || !size ||
+      size > POS_MAP_DOWNLOAD_LIMIT || !access(destination, F_OK) ||
+      workspace(destination, s->dir))
+    goto done;
+  if (simple_path(s->raw, s->dir, "nodes.raw") ||
+      simple_path(s->sorted, s->dir, "nodes.sorted") ||
+      simple_path(s->staged, s->dir, "roads.osm") ||
+      simple_path(s->object, s->dir, "object"))
+    goto done;
+  s->input = file(source, "rb");
+  s->nodes = file(s->raw, "wbx");
+  if (!s->input || !s->nodes)
+    goto done;
+  /* First pass accepts arbitrary node ordering and 64-bit OSM identifiers. */
+  while ((status = token(s->input, s->tag, &bytes)) > 0 || status == -2) {
+    if (!strncmp(s->tag, "node ", 5)) {
+      uint64_t id;
+      int32_t lat, lon;
+      uint8_t b[16];
+      if (status == -2 || ident(s->tag, "id", &id) ||
+          coord(s->tag, "lat", &lat) || coord(s->tag, "lon", &lon) ||
+          ++count > LIMIT)
+        goto done;
+      w64(b, id);
+      w32(b + 8, (uint32_t)lat);
+      w32(b + 12, (uint32_t)lon);
+      if (fwrite(b, 1, 16, s->nodes) != 16)
+        goto done;
+    }
+    if (bytes - last >= 4096) {
+      last = bytes;
+      if (tick(progress, ctx, "Indexing OSM nodes", bytes, size)) {
+        why = "Map preparation cancelled; original data preserved.";
+        goto done;
+      }
+    }
+  }
+  if (status < 0 || sync_close(&s->nodes) ||
+      sort_file(s->raw, s->sorted, s->dir, "import", 16, true, progress, ctx))
+    goto done;
+  s->nodes = file(s->sorted, "rb");
+  if (!s->nodes)
+    goto done;
+  uint8_t b[16];
+  uint64_t previous = 0;
+  for (unsigned i = 0; i < count; ++i) {
+    if (fread(b, 1, 16, s->nodes) != 16 || u64(b) <= previous)
+      goto done;
+    previous = u64(b);
+  }
+  rewind(s->input);
+  bytes = last = 0;
+  s->output = file(s->staged, "wbx");
+  if (!s->output || fputs("<osm version=\"0.6\">\n", s->output) == EOF)
+    goto done;
+  bool osm = false, closed = false, keep = false;
+  unsigned object = 0, roads = 0; /* 1=node, 2=way, 3=relation */
+  while ((status = token(s->input, s->tag, &bytes)) > 0 || status == -2) {
+    char *t = s->tag;
+    char key[80], value[80];
+    if (closed)
+      goto done;
+    if (bytes - last >= 4096) {
+      last = bytes;
+      if (ftell(s->output) > POS_MAP_DOWNLOAD_LIMIT ||
+          (s->spool && ftell(s->spool) > POS_MAP_DOWNLOAD_LIMIT))
+        goto done;
+      if (tick(progress, ctx, "Resolving OSM roads", bytes, size)) {
+        why = "Map preparation cancelled; original data preserved.";
+        goto done;
+      }
+    }
+    if (status == -2) {
+      if (!strncmp(t, "tag ", 4) && !attr(t, "k", key, sizeof(key)) &&
+          strcmp(key, "type") && !routing_key(key, object == 3))
+        continue;
+      goto done;
+    }
+    if (!strncmp(t, "osm ", 4)) {
+      if (osm || object)
+        goto done;
+      osm = true;
+      continue;
+    }
+    if (!strcmp(t, "/osm")) {
+      if (!osm || object)
+        goto done;
+      closed = true;
+      int c;
+      while ((c = fgetc(s->input)) != EOF)
+        if (!isspace((unsigned char)c))
+          goto done;
+      if (ferror(s->input))
+        goto done;
+      status = 0;
+      break;
+    }
+    if (!strncmp(t, "!DOCTYPE", 8) || !strncmp(t, "remark", 6) ||
+        !strncmp(t, "error", 5))
+      goto done;
+    unsigned opening = !strncmp(t, "node ", 5)       ? 1
+                       : !strncmp(t, "way ", 4)      ? 2
+                       : !strncmp(t, "relation ", 9) ? 3
+                                                     : 0;
+    if (opening) {
+      uint64_t id;
+      if (!osm || object || ident(t, "id", &id))
+        goto done;
+      object = opening;
+      keep = object == 1;
+      /* Coordinate-only nodes already live in the index. Avoid creating tens
+       * of thousands of tiny SD spool files for nodes with no routing tags. */
+      if (object == 1 && t[strlen(t) - 1] == '/') {
+        object = 0;
+        continue;
+      }
+      if (object != 1) {
+        s->spool = file(s->object, "w+bx");
+        if (!s->spool)
+          goto done;
+      }
+    }
+    if (!strncmp(t, "nd ", 3)) {
+      uint64_t id;
+      int32_t lat, lon;
+      if (object != 2 || ++points > LIMIT || ident(t, "ref", &id))
+        goto done;
+      if (coord(t, "lat", &lat) || coord(t, "lon", &lon)) {
+        if (import_node(s->nodes, count, id, b))
+          goto done;
+        lat = (int32_t)u32(b + 8);
+        lon = (int32_t)u32(b + 12);
+      }
+      if (fprintf(s->spool, "<nd ref=\"%llu\" lat=\"%.6f\" lon=\"%.6f\"/>\n",
+                  (unsigned long long)id, lat / 1e6, lon / 1e6) < 0)
+        goto done;
+    } else if (object) {
+      if (!strncmp(t, "tag ", 4) && !attr(t, "k", key, sizeof(key))) {
+        if ((object == 2 && !strcmp(key, "highway")) ||
+            (object == 3 && !strcmp(key, "type") &&
+             !attr(t, "v", value, sizeof(value)) &&
+             !strcmp(value, "restriction")))
+          keep = true;
+      }
+      if (fprintf(object == 1 ? s->output : s->spool, "<%s>\n", t) < 0)
+        goto done;
+    }
+    bool end =
+        !strcmp(t, "/node") || !strcmp(t, "/way") || !strcmp(t, "/relation");
+    if (end && ((!strcmp(t, "/node") && object != 1) ||
+                (!strcmp(t, "/way") && object != 2) ||
+                (!strcmp(t, "/relation") && object != 3)))
+      goto done;
+    if (end || (opening && t[strlen(t) - 1] == '/')) {
+      if (object != 1 && keep && import_copy(s->spool, s->output))
+        goto done;
+      if (keep && object == 2)
+        ++roads;
+      if (s->spool) {
+        if (fclose(s->spool)) {
+          s->spool = NULL;
+          goto done;
+        }
+        s->spool = NULL;
+        if (unlink(s->object))
+          goto done;
+      }
+      object = 0;
+    }
+  }
+  if (status < 0 || !closed || !roads || object ||
+      fputs("</osm>\n", s->output) == EOF || sync_close(&s->output) ||
+      pos_fs_file_size(s->staged, &size) || size > POS_MAP_DOWNLOAD_LIMIT ||
+      !access(destination, F_OK) || rename(s->staged, destination))
+    goto done;
+  result = 0;
+done:
+  if (s) {
+    FILE *files[] = {s->input, s->nodes, s->output, s->spool};
+    for (unsigned i = 0; i < 4; ++i)
+      if (files[i])
+        fclose(files[i]);
+    if (*s->dir)
+      cleanup(s->dir);
+    free(s);
+  }
+  return result ? error(e, why) : 0;
+}
 static int parse(compiler_t *c, pos_io_progress_t progress, void *ctx) {
   bool osm = false, closed = false, inway = false, inrel = false,
        innode = false;

@@ -3,11 +3,27 @@
 #include <string.h>
 
 void pos_background_defaults(pos_background_t *background) {
+  (void)pos_background_preset(background, POS_BACKGROUND_PANSEXUAL);
+}
+bool pos_background_preset(pos_background_t *background,
+                           pos_background_preset_t preset) {
+  if (!background || (preset != POS_BACKGROUND_PANSEXUAL &&
+                      preset != POS_BACKGROUND_NONBINARY))
+    return false;
   memset(background, 0, sizeof(*background));
-  background->count = 3;
-  background->colors[0] = 0xff218c;
-  background->colors[1] = 0xffd800;
-  background->colors[2] = 0x21b1ff;
+  if (preset == POS_BACKGROUND_PANSEXUAL) {
+    background->count = 3;
+    background->colors[0] = 0xff218c;
+    background->colors[1] = 0xffd800;
+    background->colors[2] = 0x21b1ff;
+  } else {
+    background->count = 4;
+    background->colors[0] = 0xfff430;
+    background->colors[1] = 0xffffff;
+    background->colors[2] = 0x9c59d1;
+    background->colors[3] = 0x000000;
+  }
+  return true;
 }
 bool pos_background_valid(const pos_background_t *background) {
   if (!background || !background->count ||

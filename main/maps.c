@@ -36,7 +36,7 @@ static bool number(const char *title, const char *label, double *value,
   return true;
 }
 static void download_run(const char *root, char raw[POS_FS_PATH],
-                         char map[POS_FS_PATH]) {
+                         char map[POS_FS_PATH], char roads[POS_FS_PATH]) {
   pos_location_t gps = pos_expansion_location();
   pos_map_info_t m = {
       .latitude = gps.latitude, .longitude = gps.longitude, .width_m = 1000};
@@ -71,18 +71,24 @@ static void download_run(const char *root, char raw[POS_FS_PATH],
                   "latitude, away from the date line.");
     return;
   }
-  const char *providers[] = {"VK Maps (Russia)", "Private.coffee (Austria)",
+  const char *providers[] = {"OpenStreetMap (500 m)", "VK Maps (Russia)",
                              "Overpass API (Germany)", "Cancel"};
   int provider = pos_ui_menu("Choose map provider", providers, 4);
   if (provider < 0 || provider == 3)
     return;
+  if (!provider && m.width_m != 500) {
+    pos_ui_notice("Choose a smaller region",
+                  "OpenStreetMap's direct API is limited here to a 500 m "
+                  "square. Choose 500 m, or an Overpass provider for larger "
+                  "areas. Dense areas can still exceed the download limit.");
+    return;
+  }
   char summary[400];
-  snprintf(
-      summary, sizeof(summary),
-      "%.5f, %.5f\n%u m square\nRoads and paths, north up.\nUp to 2 MiB "
-      "download.\nThis area is sent to this public Overpass service: %s. OSM "
-      "contributors / ODbL. No background location sharing.",
-      m.latitude, m.longitude, m.width_m, pos_map_providers[provider]);
+  snprintf(summary, sizeof(summary),
+           "%.5f, %.5f\n%u m square\nRoads and paths, north up.\nUp to 8 MiB "
+           "download.\nThis area is sent to this service: %s. OSM "
+           "contributors / ODbL. No background location sharing.",
+           m.latitude, m.longitude, m.width_m, pos_map_providers[provider]);
   pos_ui_notice("Review map download", summary);
   const char *options[] = {"Download region over Wi-Fi", "Cancel"};
   if (pos_ui_menu("Save for offline use?", options, 2) != 0)
@@ -115,13 +121,23 @@ static void download_run(const char *root, char raw[POS_FS_PATH],
     pos_ui_notice("Map download failed", e.message);
     return;
   }
+  const char *geometry = raw;
+  if (!provider) {
+    snprintf(relative, sizeof(relative), "POS/Maps/region-%08x-roads.osm", id);
+    if (pos_fs_join(roads, root, relative) ||
+        pos_nav_import_osm(raw, roads, progress, NULL, &e)) {
+      pos_ui_notice("Map not prepared", e.message);
+      return;
+    }
+    geometry = roads;
+  }
   snprintf(relative, sizeof(relative), "POS/Maps/region-%08x.pmap", id);
   if (pos_fs_join(map, root, relative))
     return;
-  if (pos_map_compile(raw, map, &m, progress, NULL, &e))
+  if (pos_map_compile(geometry, map, &m, progress, NULL, &e))
     pos_ui_notice("Map not installed", e.message);
   else {
-    if (pos_nav_compile(raw, map, progress, NULL, &e)) {
+    if (pos_nav_compile(geometry, map, progress, NULL, &e)) {
       pos_ui_notice("Road view saved", e.message);
       return;
     }
@@ -141,12 +157,12 @@ static void download_run(const char *root, char raw[POS_FS_PATH],
 }
 
 static void download(const char *root) {
-  char (*paths)[POS_FS_PATH] = calloc(2, POS_FS_PATH);
+  char (*paths)[POS_FS_PATH] = calloc(3, POS_FS_PATH);
   if (!paths) {
     pos_ui_notice("Maps", "Not enough memory to prepare a download.");
     return;
   }
-  download_run(root, paths[0], paths[1]);
+  download_run(root, paths[0], paths[1], paths[2]);
   free(paths);
 }
 

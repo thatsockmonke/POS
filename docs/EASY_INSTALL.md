@@ -6,9 +6,35 @@ The firmware goes into the Cardputer over USB. The microSD holds its installatio
 files and becomes the POS system drive. You do not need ESP-IDF, a compiler,
 manual flash addresses or an understanding of partitions.
 
+## Fresh install after an updater heap error (0.6.7-dev)
+
+If choosing a clean start, copy any wanted SD files to your computer, then format
+that card as FAT32 in ChromeOS. This erases the card. Keep the original factory
+firmware `.bin` and `.json` backup on your computer. Download this release's
+`pos-setup`, replace the old copy and make the new executable runnable if needed.
+
+For one USB port, run the same command twice: first with the card connected and
+**2 — Prepare the microSD only**, then with the Cardputer connected and
+**3 — Flash Cardputer only**:
+
+```sh
+"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.6.7-dev --sd-folder "/mnt/shared/removable/POS Drive"
+```
+
+Eject the card in ChromeOS Files after copying. Follow the original-factory
+backup/recovery checks during USB flashing. Insert the prepared card in the
+powered-off ADV, boot **Install POS / resume**, type **INSTALL**, and power-cycle
+when prompted. Complete setup and verify **0.6.7-dev** in System Information.
+Both firmware and SD System must match; the installer installs/verifies the pair.
+Copying new SD files alone does not update runtime firmware. The updater-fix bridge
+is not required before a fresh install. Wi-Fi/settings may reset with USB flashing.
+
+For your wallpaper: **Background → P → Presets → Pansexual flag / Nonbinary flag**;
+**Enter** edits a stripe and **S** saves. Use **Esc** to discard a draft.
+
 ## Start here
 
-1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.6.5-dev).
+1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.6.7-dev).
 2. Download **`pos-setup`**. This is the executable wizard, not the Source code ZIP.
    Its optional `pos-setup.sha256` checksum is beside it. The complete POS ZIP
    also includes a copy of the wizard.
@@ -214,7 +240,7 @@ If the card has only the old installer files and you have **not installed POS**:
    **pos-install-old** (or another unused name). Keep the old files; formatting
    is unnecessary. Preserve any `pos-install.copying` folder under another name too.
 3. Download this release's **pos-setup**, replace the old executable and run it
-   with `--release v0.6.5-dev`. Choose **2. Prepare the microSD only** and select
+   with `--release v0.6.7-dev`. Choose **2. Prepare the microSD only** and select
    the card's shared top-level folder. It copies and verifies the matching package.
 4. Eject the card, put it into the powered-off ADV, connect the ADV and share its
    USB connection with Linux. Run the same command and choose **3. Flash Cardputer
@@ -222,15 +248,15 @@ If the card has only the old installer files and you have **not installed POS**:
    backup of the POS installer. Follow the restore/observed-factory-boot prompts,
    then type FLASH when asked.
 5. On the Cardputer choose **Install POS / resume**, type **INSTALL**, and
-   power-cycle when prompted. Setup uses black screens. Navigate with Fn held
-   plus the printed arrows; Enter also works while Fn remains held. Fn+backtick
+   power-cycle when prompted. Setup uses black screens. Navigate with the printed
+   arrows, without Fn in menus; Enter selects. Fn+backtick
    goes back, and the printed Del key erases the previous character.
 
 With the paths used in the reported Crostini session, run:
 
 ```sh
 chmod +x "/mnt/shared/MyFiles/Downloads/pos-setup"
-"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.6.5-dev --sd-folder "/mnt/shared/removable/POS Drive"
+"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.6.7-dev --sd-folder "/mnt/shared/removable/POS Drive"
 ```
 
 If the card already contains an installed **/POS** tree, keep it and your files.
@@ -242,8 +268,8 @@ Optional commands for troubleshooting:
 
 ```sh
 ~/pos-setup --download-only                 # Download/verify without device changes
-~/pos-setup --release v0.6.5-dev             # Use a specific published version
-~/pos-setup --bundle /path/pos-0.6.5-dev.zip # Use a ZIP and matching .sha256 offline
+~/pos-setup --release v0.6.7-dev             # Use a specific published version
+~/pos-setup --bundle /path/pos-0.6.7-dev.zip # Use a ZIP and matching .sha256 offline
 ~/pos-setup --sd-folder '/mnt/chromeos/removable/YOUR CARD'
 ```
 
@@ -326,7 +352,7 @@ preset to the draft, **S** saves, and Escape cancels. The draft is visible direc
 there is no separate Preview button. Color picker controls remain arrows, Q/E for
 hue, Shift for fine steps, Enter to accept, Escape to cancel that color change.
 
-**Files:** the text browser is restored in 0.6.5-dev. Up/Down moves through
+**Files:** the text browser is restored in 0.6.7-dev. Up/Down moves through
 names, Parent, Previous/Next and Folder actions; Enter opens a selected entry's
 actions. Choose Open folder, Play in Audio Player, or Open file → Text Editor.
 Copy/cut/paste, rename, Trash and explicit permanent deletion remain available.
@@ -365,7 +391,7 @@ because of a version cutoff. Signatures, file hashes, hardware compatibility,
 package format, increasing signed sequences and downgrade prevention still apply.
 Use Settings → System → Software Update → Check for Updates as usual.
 
-## Sounds and recording (0.6.5-dev)
+## Sounds and recording (0.6.7-dev)
 
 Open Settings → **Sounds** for master On/Off, Volume (0–100%), Key presses,
 Apps / notifications and Preview sound. Preferences survive restarts and backups.
@@ -393,7 +419,7 @@ Text Editor: Esc → Delete document moves the saved original to Trash after
 confirmation. Files can restore it. Unsaved edits are discarded only on success.
 Firmware history and rollback instructions are in [FIRMWARE_HISTORY.md](FIRMWARE_HISTORY.md).
 
-## Maps (0.6.5-dev)
+## Maps (0.6.7-dev)
 
 After updating, open **Maps → Download a region**. Fit/detect the GPS cap first;
 a current fix is needed for "Around my GPS position", or enter decimal coordinates.
@@ -408,7 +434,7 @@ Routes calculate on the SD card and **Resume saved route** works without Wi-Fi.
 The yellow route, next-turn arrow, road name and remaining distance replace
 straight-line guidance. See [MAPS.md](MAPS.md) for snapping and access-rule limits.
 
-### World overview and numeric microphone gain (0.6.5-dev)
+### World overview and numeric microphone gain (0.6.7-dev)
 
 Update through Settings → System → Software Update. No SD formatting or USB
 reflash is needed. Recorder → Microphone gain → Ctrl+U → type a whole number

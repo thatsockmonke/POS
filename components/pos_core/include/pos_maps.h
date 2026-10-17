@@ -4,7 +4,7 @@
 #define POS_MAP_WIDTH 240
 #define POS_MAP_HEIGHT 88
 #define POS_MAP_PIXELS (POS_MAP_WIDTH * POS_MAP_HEIGHT / 8)
-#define POS_MAP_DOWNLOAD_LIMIT (2u * 1024u * 1024u)
+#define POS_MAP_DOWNLOAD_LIMIT (8u * 1024u * 1024u)
 #define POS_MAP_SEGMENTS 30000u
 /* Small north-up regions, away from polar/date-line projection singularities.
  */

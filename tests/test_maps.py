@@ -82,17 +82,27 @@ class MapTests(unittest.TestCase):
         part.unlink();self.compile();before=self.map.read_bytes();self.run_map('compile',self.raw,self.map,ok=False);self.assertEqual(self.map.read_bytes(),before)
         self.run_map('raster',self.map,'cancel',ok=False)
     def test_oversized_download_and_excessive_geometry_are_refused(self):
-        self.raw.write_bytes(b' '*(2*1024*1024+1));self.run_map('compile',self.raw,self.map,ok=False)
+        self.raw.write_bytes(b' '*(8*1024*1024+1));self.run_map('compile',self.raw,self.map,ok=False)
         self.raw.write_bytes(b'<osm version="0.6"><way id="1">'+b'<nd lat="34.05" lon="-118.24"/><nd lat="34.051" lon="-118.241"/>'*15001+b'</way></osm>')
         self.run_map('compile',self.raw,self.map,ok=False);self.assertFalse(self.map.exists())
     def test_long_attributes_quotes_and_nd_boundaries(self):
         self.compile(osm().replace(b'<tag k="name" v="Test &amp; Road"/>',b'<tag k="name" v="'+b'a'*500+b'"/>').replace(b'lat="34.05"',b"lat = '34.05'"))
         self.assertGreater(int(self.run_map('raster',self.map)),0)
+    def test_quoted_angle_bracket_in_a_name_does_not_break_geometry(self):
+        self.compile(osm().replace(b'Test &amp; Road', b'Road > Alley'))
+        self.assertEqual(len(self.map.read_bytes()),64+2*16)
     def test_query_is_bounded_encoded_and_contains_no_personal_identifiers(self):
-        url=self.run_map('query').strip();self.assertLess(len(url),512)
+        url=self.run_map('query',34,0,1000,1).strip();self.assertLess(len(url),512)
         q=urllib.parse.parse_qs(urllib.parse.urlparse(url).query)['data'][0]
         self.assertIn('[maxsize:67108864]',q);self.assertIn('way["highway"]',q);self.assertIn('rel(bw.r)[type=restriction]',q);self.assertTrue(q.endswith('out tags;'))
         for provider in (1,2):self.run_map("query",34,0,1000,provider)
+        direct=self.run_map("query",34,0,500,0).strip()
+        parsed=urllib.parse.urlparse(direct)
+        self.assertEqual(parsed.netloc,'api.openstreetmap.org')
+        bbox=list(map(float,urllib.parse.parse_qs(parsed.query)['bbox'][0].split(',')))
+        self.assertLess(bbox[0],0);self.assertGreater(bbox[2],0)
+        self.assertLess(bbox[1],34);self.assertGreater(bbox[3],34)
+        self.run_map("query",34,0,1000,0,ok=False)
         self.run_map("query",34,0,1000,3,ok=False)
         for args in [('nan',0,1000),(81,0,1000),(0,180,1000),(0,0,5000),(0,0,0)]:self.run_map('query',*args,ok=False)
     def test_north_up_projection_bearing_and_marker_rendering(self):self.run_map('geometry')

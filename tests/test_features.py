@@ -405,6 +405,14 @@ class FeatureTests(unittest.TestCase):
         latest.write_text("torn write")
         self.assertEqual(json.loads(self.run_feature("settings-read").stdout)["background"],saved["background"])
 
+    def test_flag_presets_persist_exact_stripe_order_and_cancel_preserves_current(self):
+        for preset, colors in (("nonbinary", [0xfff430, 0xffffff, 0x9c59d1, 0]),
+                                ("pan", [0xff218c, 0xffd800, 0x21b1ff])):
+            self.run_feature("background-preset-"+preset)
+            self.assertEqual(json.loads(self.run_feature("settings-read").stdout)["background"], colors)
+            self.run_feature("background-preset-nonbinary-cancel")
+            self.assertEqual(json.loads(self.run_feature("settings-read").stdout)["background"], colors)
+
     def test_background_cancel_home_and_invalid_count_preserve_saved_preferences(self):
         self.run_feature("settings-save")
         before={p.name:p.read_bytes() for p in (self.card/"POS/Users").glob("settings.*.json")}

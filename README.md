@@ -4,16 +4,15 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**Development: 0.6.7-dev, unreleased and held.**
+**Current release: [0.6.7-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.6.7-dev) — experimental.**
 
-The focused [0.6.6-dev updater-fix bridge](https://github.com/thatsockmonke/POS/releases/tag/v0.6.6-dev)
-is based on 0.6.4-dev. It remains the newest release until the user explicitly
-confirms installing it. Read [the file-preserving recovery guide](docs/UPDATER_HEAP.md)
-if the installed updater reports insufficient manifest heap. The larger feature/
-map-provider update will not be published before that confirmation.
+Includes the updater manifest-memory fix, editable pansexual/nonbinary wallpaper
+presets, numeric microphone gain (1–4096), a GPS-centered offline world overview,
+simpler encrypted Known Networks and direct OpenStreetMap region downloads.
+See [easy installation](docs/EASY_INSTALL.md) and [downloads](docs/DOWNLOADS.md).
+If the old updater runs out of heap, use the matching USB installer and SD package;
+do not flash a runtime alone over a different SD System version.
 
-The development source retains numeric microphone gain and the offline world
-map from 0.6.5, and now contains the updater memory fix.
 Choose a region in **Maps → Download a region**, then use **Saved regions → Enter**
 for **Travel mode**, **Search road name**, **Route to map crosshair**, and **Resume
 saved route**. Route calculation and cached turn guidance work without Internet;
@@ -23,7 +22,7 @@ its route, next maneuver/road name and remaining distance.
 **Download your regions again after updating from 0.6.3** to include access and
 restriction data. Existing road maps remain viewable. Routes cover the selected
 cached graph; unsupported conditional/via-way rules are blocked conservatively.
-[World map preview](downloads/0.6.5-dev/world.png) · See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.6.5-dev/maps.png).
+[World map preview](downloads/0.6.7-dev/world.png) · See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.6.7-dev/maps.png).
 
 Earlier Recorder playback, launcher, editor and Wi-Fi improvements remain:
 The launcher keeps its selection box fixed while crisp 32×32 icons slide on an
@@ -57,7 +56,7 @@ Upgrade through **0.6.0-dev** first if using an older installation. Active updat
 metadata stays at exactly seven fields; the old bridge feed remains frozen.
 Black-start flag/logo boot, microphone gain and themed app visuals remain.
 
-[Animated UI preview](downloads/0.6.5-dev/ui-animation.png) · [Recorder](downloads/0.6.5-dev/recorder.png) · [Files](downloads/0.6.5-dev/files.png) · [Background](downloads/0.6.5-dev/background.png) · [Counter](downloads/0.6.5-dev/counter.png)
+[Animated UI preview](downloads/0.6.7-dev/ui-animation.png) · [Recorder](downloads/0.6.7-dev/recorder.png) · [Files](downloads/0.6.7-dev/files.png) · [Background](downloads/0.6.7-dev/background.png) · [Counter](downloads/0.6.7-dev/counter.png)
 
 Previews use the actual portable renderer with example state; they are not
 hardware recordings or device frame-rate measurements.
@@ -172,14 +171,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.6.5-dev/launcher.png)
-![Color picker](downloads/0.6.5-dev/color-picker.png)
+![Launcher](downloads/0.6.7-dev/launcher.png)
+![Color picker](downloads/0.6.7-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.6.5-dev/boot-animation.png)
+![POS boot animation](downloads/0.6.7-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.6.5-dev/boot-splash.png)
+[Final splash frame](downloads/0.6.7-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -196,7 +195,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.5-dev --zip-output dist/pos-0.6.5-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.7-dev --zip-output dist/pos-0.6.7-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png

@@ -27,6 +27,12 @@ typedef struct {
  */
 int pos_nav_compile(const char *xml, const char *map, pos_io_progress_t, void *,
                     pos_error_t *);
+/* Resolve ordinary OSM node references using a bounded external sort on SD.
+ * Keep roads, tagged nodes and restriction relations, with inline coordinates
+ * for the existing compilers. Source and existing destinations are preserved.
+ */
+int pos_nav_import_osm(const char *source, const char *destination,
+                       pos_io_progress_t, void *, pos_error_t *);
 int pos_nav_search(const char *map, const char *query, double lat, double lon,
                    unsigned mode, pos_nav_place_t results[POS_NAV_RESULTS],
                    unsigned *count, pos_io_progress_t, void *, pos_error_t *);

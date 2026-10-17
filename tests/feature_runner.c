@@ -413,14 +413,16 @@ int pos_network_https_limit(const char *u, const char *m, const char *b,
                             const char *t, const char *r, const char *d,
                             const char *h, pos_io_progress_t p, void *c,
                             pos_error_t *e, uint32_t limit) {
-  assert(limit == 2u * 1024u * 1024u);
+  assert(limit == POS_MAP_DOWNLOAD_LIMIT);
   if (maps_download_test) {
-    assert(strstr(u, "https://maps.mail.ru/") == u && !strcmp(m, "GET"));
+    assert(strstr(u, "https://api.openstreetmap.org/api/0.6/map?bbox=") == u &&
+           !strcmp(m, "GET"));
     char full[POS_FS_PATH];
     assert(!pos_fs_join(full, r, d));
     const char *xml =
-        "<osm version=\"0.6\"><way id=\"1\"><nd ref=\"1\" lat=\"34.050\" "
-        "lon=\"-118.248\"/><nd ref=\"2\" lat=\"34.051\" lon=\"-118.247\"/><tag "
+        "<osm version=\"0.6\"><node id=\"2\" lat=\"34.051\" lon=\"-118.247\"/>"
+        "<node id=\"1\" lat=\"34.050\" lon=\"-118.248\"/>"
+        "<way id=\"1\"><nd ref=\"1\"/><nd ref=\"2\"/><tag "
         "k=\"highway\" v=\"residential\"/></way></osm>";
     return pos_fs_write_new(full, xml, strlen(xml));
   }
@@ -977,6 +979,32 @@ static int background_tests(const char *root, const char *mode) {
   (void)pos_settings_load(root, &settings);
   pos_settings_t before = settings;
   ui_next = ui_count = 0;
+  if (!strncmp(mode, "background-preset-", 18)) {
+    bool pan = strstr(mode, "pan") != NULL;
+    bool cancel = strstr(mode, "cancel") != NULL;
+    /* Invalid presets must not modify the caller's current background. */
+    assert(!pos_background_preset(NULL, POS_BACKGROUND_PANSEXUAL));
+    assert(!pos_background_preset(&settings.background,
+                                  (pos_background_preset_t)99));
+    assert(!memcmp(&settings, &before, sizeof(settings)));
+    push_key('p', 0);
+    choose(pan ? 0 : 1);
+    push_key(cancel ? POS_KEY_ESCAPE : 's', 0);
+    bool saved = pos_ui_background(root, &settings);
+    assert(saved == !cancel && ui_next == ui_count);
+    if (cancel) {
+      assert(!memcmp(&settings, &before, sizeof(settings)));
+    } else {
+      pos_background_t expected;
+      assert(pos_background_preset(&expected, pan ? POS_BACKGROUND_PANSEXUAL
+                                                  : POS_BACKGROUND_NONBINARY));
+      assert(!memcmp(&settings.background, &expected, sizeof(expected)));
+      pos_settings_t loaded;
+      assert(!pos_settings_load(root, &loaded));
+      assert(!memcmp(&loaded.background, &expected, sizeof(expected)));
+    }
+    return 0;
+  }
   if (!strcmp(mode, "background-invalid-count")) {
     for (unsigned i = 0; i < 15; ++i)
       push_key(POS_KEY_LEFT, 0);

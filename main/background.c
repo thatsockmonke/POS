@@ -84,7 +84,7 @@ bool pos_ui_background(const char *root, pos_settings_t *settings) {
                     draft.background.count,
                     (unsigned)draft.background.colors[selected]);
       pos_view_line(&view, 14, "Up/Down:stripe Enter:color");
-      pos_view_line(&view, 15, "L/R:count  S:save P:pan");
+      pos_view_line(&view, 15, "L/R:count S:save P:presets");
       pos_device_show(&view);
       last = now;
       redraw = false;
@@ -112,8 +112,13 @@ bool pos_ui_background(const char *root, pos_settings_t *settings) {
       pos_ui_color(title, &draft.background.colors[selected]);
     }
     if (e.key == 'p' || e.key == 'P') {
-      pos_background_defaults(&draft.background);
-      selected = 0;
+      const char *presets[] = {"Pansexual flag", "Nonbinary flag", "Cancel"};
+      int preset = pos_ui_menu("Background presets", presets, 3);
+      if (preset == 0 || preset == 1) {
+        pos_background_preset(&draft.background,
+                              (pos_background_preset_t)preset);
+        selected = 0;
+      }
     }
     if (e.key == 's' || e.key == 'S') {
       if (pos_settings_save(root, &draft))

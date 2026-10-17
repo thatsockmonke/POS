@@ -23,6 +23,49 @@ class NavigationTests(unittest.TestCase):
         self.assertNotIn("runtime error:",p.stderr)
         self.assertEqual(p.returncode,0 if ok else 1,p.stdout+p.stderr);return p.stdout
     def build_map(self,*parts):self.raw.write_bytes(xml(*parts));self.run_nav('build',self.raw,self.map)
+    def test_direct_osm_import_resolves_unsorted_64_bit_nodes_and_filters_nonroads(self):
+        ids={i:2**40+i for i in (1,2,3)}
+        direct=''.join(f'<node id="{ids[i]}" lat="{NODES[i][0]}" lon="{NODES[i][1]}"/>' for i in (3,1,2))
+        direct+=f'<way id="10"><nd ref="{ids[1]}"/><nd ref="{ids[2]}"/><tag k="highway" v="residential"/><tag k="name" v="A &gt; B"/></way>'
+        direct+=f'<way id="20"><nd ref="{ids[2]}"/><nd ref="{ids[3]}"/><tag k="highway" v="residential"/></way>'
+        direct+=f'<way id="30"><nd ref="{ids[1]}"/><nd ref="{ids[3]}"/><tag k="building" v="yes"/></way>'
+        direct+='<relation id="500"><member type="way" ref="30" role="outer"/><tag k="type" v="multipolygon"/></relation>'
+        direct+=relation(10,20,ids[2])
+        self.raw.write_bytes(xml(direct));original=self.raw.read_bytes();prepared=self.root/'roads.osm'
+        self.run_nav('import',self.raw,prepared)
+        self.assertEqual(self.raw.read_bytes(),original)
+        data=prepared.read_bytes();self.assertNotIn(b'building',data);self.assertNotIn(b'multipolygon',data)
+        self.assertIn(b'restriction',data);self.assertIn(b'lat="34.050000"',data)
+        self.run_nav('build',prepared,self.map)
+        self.route(1,3,4,ok=False);self.route(1,2)
+        self.assertEqual(len(self.map.read_bytes()),64+2*16)
+
+    def test_osm_import_rejects_missing_duplicate_invalid_and_truncated_nodes(self):
+        good='<node id="1" lat="34.05" lon="-118.248"/><node id="2" lat="34.05" lon="-118.247"/>'
+        road='<way id="10"><nd ref="1"/><nd ref="2"/><tag k="highway" v="residential"/></way>'
+        prepared=self.root/'roads.osm'
+        for source in (xml(road), xml(good,good,road), xml(good.replace('34.05','nan'),road),xml(good,road)[:-6],xml(good,road)+b'junk',b'<html>error</html>'):
+            self.raw.write_bytes(source);self.run_nav('import',self.raw,prepared,ok=False)
+            self.assertFalse(prepared.exists());self.assertFalse(list(self.root.glob('*.work-*')))
+
+    def test_osm_import_cancel_collision_and_long_description_preserve_originals(self):
+        direct=xml('<node id="1" lat="34.05" lon="-118.248"/>',
+                   '<node id="2" lat="34.05" lon="-118.247"/>',
+                   '<way id="10"><nd ref="1"/><nd ref="2"/><tag k="description" v="'+('x'*10000)+'"/><tag k="highway" v="residential"/></way>')
+        self.raw.write_bytes(direct);prepared=self.root/'roads.osm'
+        self.run_nav('import',self.raw,prepared,'cancel',ok=False)
+        self.assertFalse(prepared.exists());self.assertEqual(self.raw.read_bytes(),direct)
+        self.run_nav('import',self.raw,prepared);before=prepared.read_bytes()
+        self.run_nav('import',self.raw,prepared,ok=False);self.assertEqual(prepared.read_bytes(),before)
+        self.run_nav('build',prepared,self.map);self.route(1,2)
+
+    def test_osm_import_external_index_spans_many_sort_batches_and_node_barriers_survive(self):
+        parts=[f'<node id="{i}" lat="34.05" lon="{-118.248+i*.000001:.6f}"/>' for i in range(900,0,-1)]
+        parts[900-450]='<node id="450" lat="34.05" lon="-118.247550"><tag k="barrier" v="bollard"/></node>'
+        parts.append('<way id="10">'+''.join(f'<nd ref="{i}"/>' for i in range(1,901))+'<tag k="highway" v="residential"/></way>')
+        self.raw.write_bytes(xml(*parts));prepared=self.root/'roads.osm'
+        self.run_nav('import',self.raw,prepared);self.run_nav('build',prepared,self.map)
+        self.assertIn(b'bollard',prepared.read_bytes());self.assertFalse(list(self.root.glob('*.work-*')))
     def route(self,start,goal,mode=4,ok=True):
         self.run_nav('route',self.map,self.routefile,*NODES[start],*NODES[goal],mode,ok=ok)
         if not ok:return []

@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.6.5-dev is an **experimental foundation**, not the complete master roadmap.
+POS 0.6.7-dev is an **experimental foundation**, not the complete master roadmap.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
 flashing, peripherals, factory boot recovery and electrical power-loss behavior
 have not been tested here. Read [STATUS.md](STATUS.md) before choosing to install.
@@ -19,9 +19,9 @@ including Chromebook shared-folder/USB limits. The detailed manual route follows
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.6.5-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.6.7-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.6.5-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.6.7-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -42,10 +42,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.6.5-dev.zip.sha256
-mkdir pos-0.6.5-dev
-unzip pos-0.6.5-dev.zip -d pos-0.6.5-dev
-cd pos-0.6.5-dev
+sha256sum -c pos-0.6.7-dev.zip.sha256
+mkdir pos-0.6.7-dev
+unzip pos-0.6.7-dev.zip -d pos-0.6.7-dev
+cd pos-0.6.7-dev
 sha256sum -c SHA256SUMS
 ```
 
@@ -284,16 +284,18 @@ do not prove FAT survives torn sectors or actual electrical power loss.
 ## Set your launcher background
 
 From the launcher, use **Left/Right** to center **Background**, then press **Up** or **Enter**.
-Choose **Stripe count** (1-12), then open each stripe's color picker. **Left/Right**
+Use **Left/Right** to change the stripe count (1-12), **Up/Down** to select a
+stripe and **Enter** to open its color picker. In the picker, **Left/Right**
 changes saturation; **Up/Down** changes brightness; **Q/E** changes hue along the
 rainbow bar. Hold **Shift** for finer steps. The cursor and swatch show your
 selection. **Enter** accepts a color; **Esc** cancels that color edit.
 
-Choose **Preview launcher** to inspect the draft. Press Enter/Esc to return,
-then choose **Save & Apply** to save and return home. Changes remain local until
-that save succeeds. **Cancel**, Esc from the main Background menu, or **Fn+Space**
-discards unsaved edits. New stripes start white; **Pan flag preset** restores
-pink/yellow/blue in the draft. Saved backgrounds do not change the boot animation.
+The striped canvas previews the draft live. Press **P** for **Presets**:
+**Pansexual flag** (pink/yellow/blue) or **Nonbinary flag**
+(yellow/white/purple/black). Both are ordinary editable stripes.
+Press **S** to save and return home. Changes remain local until saving succeeds;
+**Esc**, **Fn+'** or G0 discards unsaved edits. New stripes start white.
+Saved backgrounds do not change the boot animation.
 
 Only one foreground app runs. **Fn+Space** (or a short G0 press) requests closing
 the app from any screen. The editor asks what to do with unsaved changes. **Fn+backtick** is Escape: back within

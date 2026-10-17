@@ -1,8 +1,10 @@
 #include "pos_network_service.h"
 #include "esp_app_desc.h"
 #include "esp_crt_bundle.h"
+#include "esp_heap_caps.h"
 #include "esp_http_client.h"
 #include "esp_http_server.h"
+#include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_netif_sntp.h"
@@ -262,6 +264,25 @@ static esp_err_t redirect_header(esp_http_client_event_t *event) {
   }
   return ESP_OK;
 }
+static int https_failure(esp_http_client_handle_t client, pos_error_t *e,
+                         const char *phase) {
+  int tls = 0, flags = 0;
+  esp_http_client_get_and_clear_last_tls_error(client, &tls, &flags);
+  int socket_error = esp_http_client_get_errno(client);
+  size_t heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+  size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  ESP_LOGW("pos_https", "%s: TLS=%d verify=0x%x socket=%d heap=%u largest=%u",
+           phase, tls, flags, socket_error, (unsigned)heap, (unsigned)largest);
+  if (e)
+    snprintf(
+        e->message, sizeof(e->message),
+        "%s. TLS %d, verify 0x%x, socket %d. Free %u, largest %u bytes. "
+        "%s",
+        phase, tls, flags, socket_error, (unsigned)heap, (unsigned)largest,
+        flags ? "Check UTC time and certificate trust; validation stays on."
+              : "Check Wi-Fi/server availability or retry after restarting.");
+  return -1;
+}
 static int https_once(const char *url, const char *method, const char *body,
                       const char *type, const char *root,
                       const char *destination, const char *sha,
@@ -277,14 +298,15 @@ static int https_once(const char *url, const char *method, const char *body,
   if (time(NULL) < 1704067200)
     return error(
         e, "Sync time first so HTTPS certificate dates can be validated.");
-  esp_http_client_config_t config = {.url = url,
-                                     .crt_bundle_attach = esp_crt_bundle_attach,
-                                     .timeout_ms = !strncmp(destination, "POS/Maps/", 9) ? 30000 : 12000,
-                                     .buffer_size = 4096,
-                                     .disable_auto_redirect = true,
-                                     .keep_alive_enable = false,
-                                     .event_handler = redirect_header,
-                                     .user_data = location};
+  esp_http_client_config_t config = {
+      .url = url,
+      .crt_bundle_attach = esp_crt_bundle_attach,
+      .timeout_ms = !strncmp(destination, "POS/Maps/", 9) ? 30000 : 12000,
+      .buffer_size = 1024,
+      .disable_auto_redirect = true,
+      .keep_alive_enable = false,
+      .event_handler = redirect_header,
+      .user_data = location};
   esp_http_client_handle_t client = esp_http_client_init(&config);
   if (!client)
     return error(e, "Not enough memory for HTTPS.");
@@ -292,13 +314,13 @@ static int https_once(const char *url, const char *method, const char *body,
   esp_http_client_set_method(client, !strcmp(method, "POST") ? HTTP_METHOD_POST
                                                              : HTTP_METHOD_GET);
   esp_http_client_set_header(client, "Accept-Encoding", "identity");
-  esp_http_client_set_header(client, "User-Agent", "POS/0.6 (https://github.com/thatsockmonke/POS)");
+  esp_http_client_set_header(client, "User-Agent",
+                             "POS/0.6 (https://github.com/thatsockmonke/POS)");
   if (type)
     esp_http_client_set_header(client, "Content-Type", type);
   int result = -1;
   if (esp_http_client_open(client, bytes) != ESP_OK) {
-    error(e,
-          "HTTPS connection failed; certificate validation remains enabled.");
+    https_failure(client, e, "HTTPS connection failed");
     goto done;
   }
   size_t sent = 0;
@@ -311,6 +333,10 @@ static int https_once(const char *url, const char *method, const char *body,
     sent += n;
   }
   int64_t length = esp_http_client_fetch_headers(client);
+  if (length < 0) {
+    https_failure(client, e, "HTTPS headers failed");
+    goto done;
+  }
   int status = esp_http_client_get_status_code(client);
   if ((status == 301 || status == 302 || status == 303 || status == 307 ||
        status == 308) &&
@@ -319,13 +345,19 @@ static int https_once(const char *url, const char *method, const char *body,
     goto done;
   }
   if (status < 200 || status >= 300) {
-    error(e, "Server returned a non-success status or redirect. Use the final "
-             "HTTPS URL.");
+    if (e)
+      snprintf(
+          e->message, sizeof(e->message), "Server returned HTTP %d. %s", status,
+          status == 429 ? "Rate limited: wait before retrying."
+          : status >= 500
+              ? "Server unavailable: try later or select another provider."
+          : status == 400 ? "Region/request rejected: choose a smaller area."
+                          : "Check the selected service URL.");
     goto done;
   }
   result = pos_receive_file_limit(
       root, destination,
-      length < 0 || esp_http_client_is_chunked_response(client)
+      length <= 0 || esp_http_client_is_chunked_response(client)
           ? UINT64_MAX
           : (uint64_t)length,
       limit, sha, http_read, client, progress, ctx, e);

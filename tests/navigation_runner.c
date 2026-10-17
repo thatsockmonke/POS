@@ -16,6 +16,9 @@ int main(int argc, char **argv) {
   pos_map_info_t m = {
       .latitude = 34.05, .longitude = -118.248, .width_m = 1000};
   strcpy(m.name, "Routing test");
+  if (!strcmp(argv[1], "import") && argc >= 4)
+    rc = pos_nav_import_osm(argv[2], argv[3], progress,
+                            argc > 4 ? (void *)1 : NULL, &e);
   if (!strcmp(argv[1], "build") && argc >= 4) {
     if (argc >= 7) {
       m.latitude = strtod(argv[4], NULL);

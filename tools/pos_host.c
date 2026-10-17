@@ -115,7 +115,7 @@ static int preview(const char *root, const char *output, unsigned screen,
       pos_view_line(&v, 1, "Draft - S saves / Esc cancels");
       pos_view_line(&v, 2, "Stripe 2/3  #FFD800");
       pos_view_line(&v, 14, "Up/Down:stripe Enter:color");
-      pos_view_line(&v, 15, "L/R:count  S:save P:pan");
+      pos_view_line(&v, 15, "L/R:count S:save P:presets");
     } else {
       static const int8_t press[] = {12, 8, 3, 0, 2, 0};
       v.visual = POS_VISUAL_COUNTER;
