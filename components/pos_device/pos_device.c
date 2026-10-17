@@ -291,7 +291,6 @@ int pos_device_init(void) {
   }
   if (xTaskCreate(input_task, "pos_input", 4096, NULL, 5, NULL) != pdPASS)
     return -1;
-  pos_device_brightness(70);
   return 0;
 }
 
@@ -308,7 +307,7 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout_ms) {
   return received;
 }
 
-void pos_device_boot_flash(void) {
+void pos_device_boot_animation(void) {
   /* Once per boot, immediately after initialization; no SD assets or
    * framebuffer. */
   if (!info.display_ok)
@@ -320,8 +319,11 @@ void pos_device_boot_flash(void) {
     pos_device_show(&view);
     if (!info.display_ok)
       break;
+    /* Clear panel RAM to black before lighting the first visible frame. */
+    if (!i)
+      pos_device_brightness(70);
     /* Count transfer time toward animation frame pacing; still hold the
-     * flashes and final splash for their full duration after presentation. */
+     * final splash for its full duration after presentation. */
     int64_t remaining = (int64_t)hold_ms * 1000;
     if (view.boot_splash && i != POS_BOOT_HOLD_FRAME)
       remaining -= esp_timer_get_time() - start;

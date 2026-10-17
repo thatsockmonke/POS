@@ -1,12 +1,12 @@
-POS 0.5.9-dev - Pan Operating System
+POS 0.5.10-dev - Pan Operating System
 
-Boot: pink -> yellow -> blue flashes. Yellow slides into the middle, then
-pink slides into the top starting halfway through yellow. Large POS fades
-in across all three stripes, holds one second, then normal startup continues.
-ADV arrows: hold Fn with ; (Up), , (Left), . (Down), / (Right).
+Boot starts black. Pink slides in first, yellow starts halfway through pink,
+blue starts halfway through yellow, then large POS fades in and holds one second.
+ADV arrows: ; (Up), , (Left), . (Down), / (Right), no Fn needed in menus/apps.
+Text entry keeps punctuation; Fn+arrows moves the editor cursor.
 Launcher: Left/Right moves, Up/Enter opens the centered app. Fn+Space closes the app.
 Background: choose 1-12 stripes; arrows pick color, Q/E hue, Shift fine.
-Preview then Save & Apply; cancel keeps the previous background.
+Select stripes with Up/Down, Enter opens color picker; S saves, Esc cancels.
 Only one foreground app runs; shared system services may continue.
 Ctrl+U clears text fields; setup validates names before continuing.
 Files shows folder pages and empty folders. Keep SD inserted when restarting.

@@ -11,27 +11,24 @@ bool pos_boot_frame(unsigned step, pos_view_t *view, uint32_t *hold_ms) {
   if (step > POS_BOOT_HOLD_FRAME || !view || !hold_ms)
     return false;
   pos_view_clear(view, "POS");
-  if (step < POS_BOOT_COLOR_COUNT) {
-    view->solid_color = true;
-    view->color_rgb565 = pos_boot_colors[step];
-    *hold_ms = POS_BOOT_COLOR_MS;
-  } else {
-    view->boot_splash = true;
-    unsigned frame = step - POS_BOOT_COLOR_COUNT + 1;
-    unsigned slides = POS_BOOT_SLIDE_FRAMES + POS_BOOT_STAGGER_FRAMES;
-    view->boot_yellow_width = frame < POS_BOOT_SLIDE_FRAMES
-                                  ? 240 * frame / POS_BOOT_SLIDE_FRAMES
-                                  : 240;
-    unsigned pink =
-        frame > POS_BOOT_STAGGER_FRAMES ? frame - POS_BOOT_STAGGER_FRAMES : 0;
-    view->boot_pink_width =
-        pink < POS_BOOT_SLIDE_FRAMES ? 240 * pink / POS_BOOT_SLIDE_FRAMES : 240;
-    unsigned fade = frame > slides ? frame - slides : 0;
-    view->boot_text_alpha =
-        fade < POS_BOOT_FADE_FRAMES ? 255 * fade / POS_BOOT_FADE_FRAMES : 255;
-    *hold_ms =
-        step == POS_BOOT_HOLD_FRAME ? POS_BOOT_SPLASH_MS : POS_BOOT_FRAME_MS;
+  view->boot_splash = true;
+  unsigned widths[POS_BOOT_COLOR_COUNT];
+  for (unsigned stripe = 0; stripe < POS_BOOT_COLOR_COUNT; ++stripe) {
+    unsigned start = stripe * POS_BOOT_STAGGER_FRAMES;
+    unsigned frame = step > start ? step - start : 0;
+    widths[stripe] = frame < POS_BOOT_SLIDE_FRAMES
+                         ? 240 * frame / POS_BOOT_SLIDE_FRAMES
+                         : 240;
   }
+  view->boot_pink_width = widths[0];
+  view->boot_yellow_width = widths[1];
+  view->boot_blue_width = widths[2];
+  unsigned slides = POS_BOOT_SLIDE_FRAMES + 2 * POS_BOOT_STAGGER_FRAMES;
+  unsigned fade = step > slides ? step - slides : 0;
+  view->boot_text_alpha =
+      fade < POS_BOOT_FADE_FRAMES ? 255 * fade / POS_BOOT_FADE_FRAMES : 255;
+  *hold_ms =
+      step == POS_BOOT_HOLD_FRAME ? POS_BOOT_SPLASH_MS : POS_BOOT_FRAME_MS;
   return true;
 }
 
@@ -100,6 +97,32 @@ static bool icon_ink(const pos_view_t *v, int tile, int x, int y) {
 static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
   if (!v || x < 0 || x >= 240 || y < 0 || y >= 135)
     return 0;
+  if (v->boot_splash) {
+    uint16_t background = 0;
+    if (y < 45 && x < v->boot_pink_width)
+      background = pos_boot_colors[0];
+    else if (y >= 45 && y < 90 && x < v->boot_yellow_width)
+      background = pos_boot_colors[1];
+    else if (y >= 90 && x < v->boot_blue_width)
+      background = pos_boot_colors[2];
+    /* Center the visible 198x91 ink, including the font's trailing blank
+     * columns/row. Letters reach halfway into both outer stripes. */
+    int tx = x - 21, ty = y - 22;
+    if (v->boot_text_alpha && tx >= 0 && tx < 3 * 8 * 9 && ty >= 0 &&
+        ty < 7 * 13) {
+      static const char title[] = "POS";
+      if ((font8x8_basic[(unsigned char)title[tx / 72]][ty / 13] >>
+           ((tx / 9) % 8)) &
+          1) {
+        unsigned remaining = 255 - v->boot_text_alpha;
+        unsigned red = (((background >> 11) & 31) * remaining + 127) / 255;
+        unsigned green = (((background >> 5) & 63) * remaining + 127) / 255;
+        unsigned blue = ((background & 31) * remaining + 127) / 255;
+        return (red << 11) | (green << 5) | blue;
+      }
+    }
+    return background;
+  }
   if (v->battery_overlay && x >= 184 && y < 9) {
     if (y == 8)
       return 0;
@@ -123,30 +146,6 @@ static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
                     1))
       return 0xffff;
     return 0;
-  }
-  if (v->boot_splash) {
-    uint16_t background = pos_boot_colors[2];
-    if (y < 45 && x < v->boot_pink_width)
-      background = pos_boot_colors[0];
-    else if (y >= 45 && y < 90 && x < v->boot_yellow_width)
-      background = pos_boot_colors[1];
-    /* Center the visible 198x91 ink, including the font's trailing blank
-     * columns/row. Letters reach halfway into both outer stripes. */
-    int tx = x - 21, ty = y - 22;
-    if (v->boot_text_alpha && tx >= 0 && tx < 3 * 8 * 9 && ty >= 0 &&
-        ty < 7 * 13) {
-      static const char title[] = "POS";
-      if ((font8x8_basic[(unsigned char)title[tx / 72]][ty / 13] >>
-           ((tx / 9) % 8)) &
-          1) {
-        unsigned remaining = 255 - v->boot_text_alpha;
-        unsigned red = (((background >> 11) & 31) * remaining + 127) / 255;
-        unsigned green = (((background >> 5) & 63) * remaining + 127) / 255;
-        unsigned blue = ((background & 31) * remaining + 127) / 255;
-        return (red << 11) | (green << 5) | blue;
-      }
-    }
-    return background;
   }
   if (v->solid_color)
     return v->color_rgb565;

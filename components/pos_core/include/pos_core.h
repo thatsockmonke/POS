@@ -38,21 +38,20 @@ typedef struct {
 /* TCA8418 FIFO event: low seven bits are 1 + row*10 + column, bit 7 is down. */
 bool pos_keyboard_decode(pos_keyboard_t *keyboard, uint8_t raw,
                          pos_event_t *event);
-int pos_navigation(
-    const pos_event_t *event); /* pressed key; letters remain ordinary text */
+int pos_navigation(const pos_event_t *event); /* Arrow legends work without Fn;
+                                                 text stays raw. */
 
 #define POS_ROWS 16
 #define POS_COLS 30
 enum {
   POS_BOOT_COLOR_COUNT = 3,
-  POS_BOOT_COLOR_MS = 180,
   POS_BOOT_SPLASH_MS = 1000,
   POS_BOOT_FRAME_MS = 40,
   POS_BOOT_SLIDE_FRAMES = 10,
   POS_BOOT_STAGGER_FRAMES = 5,
   POS_BOOT_FADE_FRAMES = 10,
-  POS_BOOT_HOLD_FRAME = POS_BOOT_COLOR_COUNT + POS_BOOT_SLIDE_FRAMES +
-                        POS_BOOT_STAGGER_FRAMES + POS_BOOT_FADE_FRAMES
+  POS_BOOT_HOLD_FRAME =
+      POS_BOOT_SLIDE_FRAMES + 2 * POS_BOOT_STAGGER_FRAMES + POS_BOOT_FADE_FRAMES
 };
 extern const uint16_t pos_boot_colors[POS_BOOT_COLOR_COUNT];
 enum {
@@ -96,6 +95,7 @@ typedef struct {
   bool boot_splash;
   uint16_t boot_pink_width;
   uint16_t boot_yellow_width;
+  uint16_t boot_blue_width;
   uint8_t boot_text_alpha;
   pos_background_t background;
   bool color_picker;
@@ -116,7 +116,7 @@ bool pos_visual_pixel(const pos_view_t *, int x, int y, uint16_t *color);
 void pos_color_picker_view(const char *title, uint32_t rgb, uint16_t hue,
                            uint16_t saturation, uint16_t value,
                            pos_view_t *view);
-/* Three color flashes, staggered flag slides, text fade, then a one-second
+/* Black start, staggered pink/yellow/blue slides, text fade, then a one-second
  * hold. False after the last frame. Frames require no SD assets. */
 bool pos_boot_frame(unsigned step, pos_view_t *view, uint32_t *hold_ms);
 

@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.5.9-dev is an **experimental foundation**, not the complete master roadmap.
+POS 0.5.10-dev is an **experimental foundation**, not the complete master roadmap.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
 flashing, peripherals, factory boot recovery and electrical power-loss behavior
 have not been tested here. Read [STATUS.md](STATUS.md) before choosing to install.
@@ -19,9 +19,9 @@ including Chromebook shared-folder/USB limits. The detailed manual route follows
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.5.9-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.5.10-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.5.9-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.5.10-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -42,10 +42,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.5.9-dev.zip.sha256
-mkdir pos-0.5.9-dev
-unzip pos-0.5.9-dev.zip -d pos-0.5.9-dev
-cd pos-0.5.9-dev
+sha256sum -c pos-0.5.10-dev.zip.sha256
+mkdir pos-0.5.10-dev
+unzip pos-0.5.10-dev.zip -d pos-0.5.10-dev
+cd pos-0.5.10-dev
 sha256sum -c SHA256SUMS
 ```
 
@@ -176,10 +176,10 @@ with the final runtime. Close the serial program and reset/power-cycle if needed
 
 ## 6. Let the installer install POS
 
-1. The LCD shows **pink → yellow → blue once**, about 180 ms per color, then the
-   yellow stripe slides into the middle over blue. When yellow is halfway across,
-   pink starts sliding into the top. Large centered **POS** fades in across all three
-   stripes, holds for **one second**, then normal boot status follows. The sequence runs once on each
+1. The LCD starts **black**, then pink slides in from the left at the top.
+   Yellow starts in the middle when pink is halfway; blue starts at the bottom
+   when yellow is halfway. Once all stripes are complete, large centered **POS**
+   fades in, holds for **one second**, then normal boot status follows. The sequence runs once on each
    firmware boot, including recovery boots. Setup, SD validation and recovery
    checks still run before the launcher opens.
 2. In **POS Installer / Recovery**, choose **Install POS / resume** with Up/Down and Enter.
@@ -216,8 +216,9 @@ BLE sharing and the LoRa/GPS cap.
 
 ## 7. Normal use and recovery
 
-On the ADV, hold **Fn** with **;** (Up), **,** (Left), **.** (Down),
-or **/** (Right). Enter works even while Fn is held. Hold **Aa/Shift** for
+On the ADV, press **;** (Up), **,** (Left), **.** (Down), or **/** (Right)
+directly in menus and apps; **Fn is not needed**. In text fields/editor these
+keys type punctuation; hold Fn for editor cursor arrows. Enter also works while Fn is held. Hold **Aa/Shift** for
 capitals/symbols; stock ADV also uses Fn+letters for capitals. The printed
 **Del** key erases left; **Fn+Del** deletes ahead in the editor. Opt is exposed
 as Meta. In USB terminals, use the normal arrow keys.

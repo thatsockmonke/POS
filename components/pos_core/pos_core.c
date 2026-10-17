@@ -89,8 +89,26 @@ bool pos_keyboard_decode(pos_keyboard_t *k, uint8_t raw, pos_event_t *event) {
 }
 
 int pos_navigation(const pos_event_t *event) {
-  if (!event->pressed)
+  if (!event || !event->pressed)
     return 0;
+  /* Interpret arrow legends only in navigation contexts. Text consumers
+   * receive the unchanged stock punctuation; Shift still allows fine moves. */
+  if (!(event->modifiers & (POS_MOD_CTRL | POS_MOD_ALT | POS_MOD_META))) {
+    switch (event->key) {
+    case ';':
+    case ':':
+      return POS_KEY_UP;
+    case ',':
+    case '<':
+      return POS_KEY_LEFT;
+    case '.':
+    case '>':
+      return POS_KEY_DOWN;
+    case '/':
+    case '?':
+      return POS_KEY_RIGHT;
+    }
+  }
   return event->key;
 }
 

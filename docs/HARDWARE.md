@@ -120,14 +120,16 @@ behavior from observed hardware evidence. No physical result has been filled in.
 ## Boot flag palette
 
 The boot sequence follows the pansexual flag from top to bottom: pink `#FF218C`,
-yellow `#FFD800`, blue `#21B1FF`, each shown once for 180 ms. The reference is
+yellow `#FFD800`, blue `#21B1FF`. There are no full-screen color flashes. The reference is
 [this published flag SVG](https://github.com/JoeHart/pride-flag-api/blob/20320fccb7441847f60a66cdfb7c5ac6f3c7ad06/data/flags/svg/pansexual_2010.svg).
 The LCD uses RGB565 values `0xF911`, `0xFEC0`, `0x259F`;
 actual panel color appearance still requires on-device observation.
 
-After the blue flash, yellow slides in from the left into the middle third.
-When yellow is halfway across, pink starts sliding into the top third; blue
-remains underneath. Each slide takes a nominal 400 ms with a 200 ms stagger.
+The backlight stays off until the first black frame has been transferred.
+Pink slides in from the left into the top third. Yellow starts in the middle
+when pink is halfway across; blue starts in the bottom third when yellow is
+halfway across. Unfilled areas stay black. Each slide takes a nominal 400 ms
+with a 200 ms stagger. The battery overlay resumes after the boot artwork.
 Black POS lettering then fades in over 400 ms. Its visible 198x91-pixel bounds
 are centered, reaching halfway into the pink and blue stripes. The completed
 flag holds for 1000 ms after presentation, then validated startup continues.

@@ -61,7 +61,7 @@ static void player(const char *root, const char *initial, const char *playlist,
     while (!leave && !change && !pos_home_pending()) {
       pos_event_t event;
       if (pos_device_event(&event, paused ? 100 : 0) && event.pressed) {
-        int key = event.key;
+        int key = pos_navigation(&event);
         if (key == POS_KEY_HOME) {
           leave = true;
           break;

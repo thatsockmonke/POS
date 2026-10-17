@@ -243,6 +243,13 @@ class FeatureTests(unittest.TestCase):
     def test_physical_stock_fn_arrows_and_enter_operate_black_installer_menu(self):
         self.run_feature("keyboard-ui")
 
+    def test_bare_physical_arrows_navigate_and_text_fields_keep_punctuation(self):
+        self.run_feature("keyboard-bare")
+
+    def test_editor_keeps_arrow_key_punctuation_as_text(self):
+        self.run_feature("editor-ui-punctuation")
+        self.assertEqual((self.card/"POS/Users/Owner/Documents/Untitled.txt").read_bytes(),b"wasd;,./:<>?")
+
     def test_entire_stock_adv_key_layout_normal_shift_and_fn_layers(self):
         # Stock UserDemo keyboard.cpp b549eac0...: physical TCA codes by row,
         # normal/Shift character legends and Fn overrides. No decoder-derived
@@ -408,9 +415,9 @@ class FeatureTests(unittest.TestCase):
                 self.run_feature("restore","--archive",archive,card=destination)
                 self.assertEqual(json.loads(self.run_feature("settings-read",card=destination).stdout)["background"],saved)
 
-    def test_boot_slides_yellow_then_pink_and_fades_large_centered_pos(self):
+    def test_boot_starts_black_and_staggers_pink_yellow_blue_before_logo(self):
         report=json.loads(self.run_feature("boot-splash").stdout)
-        for key in ("yellow_first","pink_staggered","smooth_fade","large_centered_letters"):
+        for key in ("black_start","pink_first","yellow_staggered","blue_staggered","smooth_fade","large_centered_letters"):
             self.assertTrue(report[key])
         self.assertEqual(report["splash_ms"],1000)
 
@@ -425,7 +432,7 @@ class FeatureTests(unittest.TestCase):
             kind=png[offset+4:offset+8];data=png[offset+8:offset+8+size]
             self.assertEqual(zlib.crc32(kind+data),struct.unpack_from(">I",png,offset+8+size)[0])
             offset+=size+12
-            if kind==b"acTL":self.assertEqual(struct.unpack(">II",data),(29,0))
+            if kind==b"acTL":self.assertEqual(struct.unpack(">II",data),(31,0))
             if kind==b"fcTL":
                 if payload is not None:frames.append(zlib.decompress(payload))
                 seq,width,height,x,y,delay,denom,dispose,blend=struct.unpack(">IIIIIHHBB",data)
@@ -437,19 +444,24 @@ class FeatureTests(unittest.TestCase):
                 sequence+=1;payload+=data[4:]
             if kind==b"IEND":
                 frames.append(zlib.decompress(payload));break
-        self.assertEqual(offset,len(png));self.assertEqual(len(frames),29)
-        self.assertEqual(holds,[180]*3+[40]*25+[1000])
+        self.assertEqual(offset,len(png));self.assertEqual(len(frames),31)
+        self.assertEqual(holds,[40]*30+[1000])
         for frame in frames:
             self.assertEqual(len(frame),135*721)
             self.assertTrue(all(frame[y*721]==0 for y in range(135)))
         def pixel(frame,x,y):return tuple(frames[frame][y*721+1+x*3:y*721+4+x*3])
-        pink,yellow,blue=[pixel(i,239,134) for i in range(3)]
-        self.assertEqual(pixel(7,119,60),yellow);self.assertEqual(pixel(7,120,60),blue)
-        self.assertEqual(pixel(7,0,0),blue)
-        self.assertEqual(pixel(8,23,0),pink);self.assertEqual(pixel(8,24,0),blue)
-        self.assertEqual(pixel(17,30,22),pink)
-        self.assertNotIn(pixel(18,30,22),(pink,(0,0,0)))
-        self.assertEqual(pixel(28,30,22),(0,0,0));self.assertEqual(frames[27],frames[28])
+        black=(0,0,0)
+        self.assertFalse(any(frames[0]))
+        pink,yellow,blue=[pixel(20,239,y) for y in (0,45,134)]
+        self.assertEqual(pixel(5,119,0),pink);self.assertEqual(pixel(5,120,0),black)
+        self.assertEqual(pixel(5,0,60),black)
+        self.assertEqual(pixel(6,23,60),yellow);self.assertEqual(pixel(6,24,60),black)
+        self.assertEqual(pixel(10,119,60),yellow);self.assertEqual(pixel(10,120,60),black)
+        self.assertEqual(pixel(10,0,100),black)
+        self.assertEqual(pixel(11,23,100),blue);self.assertEqual(pixel(11,24,100),black)
+        self.assertEqual(pixel(20,30,22),pink)
+        self.assertNotIn(pixel(21,30,22),(pink,black))
+        self.assertEqual(pixel(30,30,22),black);self.assertNotEqual(frames[29],frames[30])
         static=self.base/"boot-splash.png"
         subprocess.run([sys.executable,str(ROOT/"tools/posctl.py"),"preview",
                         "--screen","boot","--output",str(static)],check=True)

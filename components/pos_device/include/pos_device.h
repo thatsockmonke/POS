@@ -12,7 +12,7 @@ typedef struct {
   uint64_t frame_total_us;
 } pos_device_info_t;
 int pos_device_init(void);
-void pos_device_boot_flash(void);
+void pos_device_boot_animation(void);
 bool pos_device_event(pos_event_t *event, uint32_t timeout_ms);
 void pos_device_show(const pos_view_t *view);
 void pos_device_brightness(unsigned percent);

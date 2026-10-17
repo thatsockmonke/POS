@@ -4,7 +4,12 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.5.9-dev adds saved microphone gain and a visual, animated UI pass.**
+**0.5.10-dev starts on black, forms the pink/yellow/blue flag, then fades in POS.**
+The full-screen color flashes are removed. Each stripe starts halfway through the
+previous one. Printed arrow keys now navigate menus and apps without holding Fn;
+text fields keep punctuation, and Fn+arrows still moves the editor cursor.
+
+The saved microphone gain and visual UI from 0.5.9-dev are included:
 Recorder has a single microphone/level meter colored from your wallpaper and
 1x–64x gain, adjustable with Left/Right while recording. The launcher springs
 between apps, zooms/fades on opening and reverses the motion on return. Fn +
@@ -14,7 +19,7 @@ has a squishy red button and jumping count, and Music has a disc/progress view.
 The user confirms the 0.5.8-dev microphone records sound; gain, motion and the new
 layouts still need a physical usability/performance check.
 
-[Animated UI preview](downloads/0.5.9-dev/ui-animation.png) · [Recorder](downloads/0.5.9-dev/recorder.png) · [Files](downloads/0.5.9-dev/files.png) · [Background](downloads/0.5.9-dev/background.png) · [Counter](downloads/0.5.9-dev/counter.png)
+[Animated UI preview](downloads/0.5.10-dev/ui-animation.png) · [Recorder](downloads/0.5.10-dev/recorder.png) · [Files](downloads/0.5.10-dev/files.png) · [Background](downloads/0.5.10-dev/background.png) · [Counter](downloads/0.5.10-dev/counter.png)
 
 Previews use the actual portable renderer with example state; they are not
 hardware recordings or device frame-rate measurements.
@@ -55,9 +60,9 @@ Follow the full guide for exact commands, checks, USB permissions and recovery.
 
 Implemented:
 
-- A single pink → yellow → blue sequence at boot (180 ms per color), then yellow slides into the middle
-  over blue. Pink slides into the top when yellow is halfway across. Large centered
-  **POS** lettering fades in across all three stripes, holds for one second, then normal boot continues.
+- Boot starts black; pink slides in from the left, yellow starts when pink is halfway,
+  and blue starts when yellow is halfway. Once all stripes are complete, large centered
+  **POS** lettering fades in, holds for one second, then normal boot continues.
 - Native ST7789 display output and TCA8418 ADV keyboard input, with USB fallback.
 - A fifteen-app horizontal launcher with black icons outlined in white, streamed from SD.
   Left/Right moves the ribbon; Up or Enter opens the centered app. Only one foreground app runs.
@@ -129,14 +134,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.5.9-dev/launcher.png)
-![Color picker](downloads/0.5.9-dev/color-picker.png)
+![Launcher](downloads/0.5.10-dev/launcher.png)
+![Color picker](downloads/0.5.10-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.5.9-dev/boot-animation.png)
+![POS boot animation](downloads/0.5.10-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.5.9-dev/boot-splash.png)
+[Final splash frame](downloads/0.5.10-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -153,7 +158,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.9-dev --zip-output dist/pos-0.5.9-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.10-dev --zip-output dist/pos-0.5.10-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -186,21 +191,23 @@ standalone runtime at the factory address. Read [INSTALL.md](docs/INSTALL.md).
 
 ## Controls
 
-On the Cardputer ADV, hold **Fn** and press the printed arrow keys:
-**;** = Up, **,** = Left, **.** = Down, **/** = Right. WASD type ordinary letters.
-USB terminals can use their normal arrow keys.
+On the Cardputer ADV, press the printed arrow keys directly in menus and apps:
+**;** = Up, **,** = Left, **.** = Down, **/** = Right. **No Fn required.**
+Shift+arrows still makes fine color-picker adjustments. In text fields and the
+editor, those keys type punctuation; hold **Fn** for editor cursor arrows.
+WASD type ordinary letters. USB terminals can use their normal arrow keys.
 
 | Context | Keys |
 | --- | --- |
 | Launcher | Left/Right arrows move; Up or Enter opens the centered app |
-| Menus | Fn+Up/Down arrows move; Enter selects (also works while holding Fn) |
+| Menus | Up/Down arrows move without Fn; Enter selects |
 | Color picker | Arrow keys move color cursor; Q/E changes hue; Shift makes finer steps; Enter accepts |
 | Text fields | WASD are ordinary letters; Shift, Backspace, Enter; Ctrl+U clears |
 | Music | Space pauses; Left/Right previous/next; Up/Down volume; R shuffle; P add to playlist |
 | Text Editor | Type normally; Fn+arrows move; Ctrl+S saves; Ctrl+F finds; Ctrl+G goes to line; Esc opens menu |
 | Typing | Hold Aa/Shift for capitals/symbols; Fn+letters also types capitals, as in stock ADV; Del erases left; Fn+Del erases ahead in the editor |
 | Back/cancel | Fn+backtick (Escape); closes an app from its main screen |
-| Close app / launcher | Fn+Space or a short G0 button press, from any screen; editor asks about unsaved text; unsaved background edits are discarded |
+| Close app / launcher | Fn + apostrophe, Fn+Space or a short G0 button press, from any screen; editor asks about unsaved text; unsaved background edits are discarded |
 | Recover from a stalled app | Hold Fn+Space or G0 for two seconds; restart into recovery |
 | USB fallback | ANSI arrow keys, Enter, Escape, and byte 0x1d for Home; IDF monitor itself reserves Ctrl-] |
 

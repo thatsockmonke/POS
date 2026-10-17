@@ -625,7 +625,7 @@ void app_main(void) {
     ESP_LOGE(TAG, "Cannot initialize input/display services");
     idle();
   }
-  pos_device_boot_flash();
+  pos_device_boot_animation();
   pos_device_info_t device = pos_device_info();
   char boot[220];
   snprintf(boot, sizeof(boot),

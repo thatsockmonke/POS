@@ -6,22 +6,22 @@ You do not need to compile the OS to use a prebuilt package.
 
 ## Current development package
 
-**POS 0.5.9-dev — experimental; saved microphone gain and spring/fade UI; physical usability checks pending.**
+**POS 0.5.10-dev — experimental; black-start staggered flag boot and navigation without Fn; includes microphone gain and spring/fade UI.**
 
-- **Beginner installer:** [download pos-setup](https://github.com/thatsockmonke/POS/releases/download/v0.5.9-dev/pos-setup) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.9-dev/pos-setup.sha256) · [easy instructions](EASY_INSTALL.md)
-- [POS 0.5.9-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.5.9-dev)
-- [Download pos-0.5.9-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.5.9-dev/pos-0.5.9-dev.zip)
-- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.9-dev/pos-0.5.9-dev.zip.sha256)
-- [Signed OTA package](https://github.com/thatsockmonke/POS/releases/download/v0.5.9-dev/pos-update-0.5.9-dev.zip) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.9-dev/pos-update-0.5.9-dev.zip.sha256) · [on-device update instructions](UPDATES.md)
-- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.5.9-dev/boot-animation.png)
-- [Animated launcher/app transitions](https://github.com/thatsockmonke/POS/releases/download/v0.5.9-dev/ui-animation.png)
-- App previews: [Recorder](https://github.com/thatsockmonke/POS/releases/download/v0.5.9-dev/recorder.png), [Files](https://github.com/thatsockmonke/POS/releases/download/v0.5.9-dev/files.png), [Background](https://github.com/thatsockmonke/POS/releases/download/v0.5.9-dev/background.png), [Counter](https://github.com/thatsockmonke/POS/releases/download/v0.5.9-dev/counter.png)
+- **Beginner installer:** [download pos-setup](https://github.com/thatsockmonke/POS/releases/download/v0.5.10-dev/pos-setup) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.10-dev/pos-setup.sha256) · [easy instructions](EASY_INSTALL.md)
+- [POS 0.5.10-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.5.10-dev)
+- [Download pos-0.5.10-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.5.10-dev/pos-0.5.10-dev.zip)
+- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.10-dev/pos-0.5.10-dev.zip.sha256)
+- [Signed OTA package](https://github.com/thatsockmonke/POS/releases/download/v0.5.10-dev/pos-update-0.5.10-dev.zip) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.5.10-dev/pos-update-0.5.10-dev.zip.sha256) · [on-device update instructions](UPDATES.md)
+- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.5.10-dev/boot-animation.png)
+- [Animated launcher/app transitions](https://github.com/thatsockmonke/POS/releases/download/v0.5.10-dev/ui-animation.png)
+- App previews: [Recorder](https://github.com/thatsockmonke/POS/releases/download/v0.5.10-dev/recorder.png), [Files](https://github.com/thatsockmonke/POS/releases/download/v0.5.10-dev/files.png), [Background](https://github.com/thatsockmonke/POS/releases/download/v0.5.10-dev/background.png), [Counter](https://github.com/thatsockmonke/POS/releases/download/v0.5.10-dev/counter.png)
 - [Browse versioned downloads](https://github.com/thatsockmonke/POS/tree/main/downloads)
 - [Full installation guide](INSTALL.md)
 - [Implemented / partial / planned features](STATUS.md)
 
 The 0.3.6-dev candidate was withdrawn before release after an ESP32 stack audit.
-Use 0.5.9-dev, which includes the bounded-buffer fix and a compiler frame-size guard.
+Use 0.5.10-dev, which includes the bounded-buffer fix and a compiler frame-size guard.
 
 Every new POS version is published as a versioned GitHub Release with its matching
 installation ZIP and checksum. Development versions are marked **prerelease**.
@@ -57,7 +57,7 @@ From the source checkout with ESP-IDF v5.5.5 activated:
 ```sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.9-dev --zip-output dist/pos-0.5.9-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.10-dev --zip-output dist/pos-0.5.10-dev.zip
 ```
 
 Choose a fresh output name if one already exists. `bundle` verifies images and

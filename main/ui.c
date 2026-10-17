@@ -140,7 +140,7 @@ static int menu(const char *title, const char *const *items, int count,
       if (count > 10)
         pos_view_line(&view, 14, "Menu %d/%d", selected / 10 + 1,
                       (count + 9) / 10);
-      pos_view_line(&view, 15, "Fn+arrows Enter:OK Fn+`:back");
+      pos_view_line(&view, 15, "Arrows Enter:OK Fn+`:back");
       pos_device_show(&view);
       redraw = false;
     }

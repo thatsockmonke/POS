@@ -359,3 +359,12 @@ retain readable text; this is not a replacement of every diagnostic with icons.
 
 Animations use short integer spring curves and streamed rendering. Slow draws
 skip intermediate frames; frame-rate/response measurements require hardware.
+
+## Arrow navigation without Fn (0.5.10-dev)
+
+Menus and apps interpret the printed arrow legends directly: ; Up, , Left,
+. Down and / Right. This includes the launcher, Files, Background/color picker,
+Music volume/tracks and Recorder gain. Shift+arrows still adjusts color finely.
+Fn+arrows and USB arrows continue to work. In editor/text fields, the raw keys
+retain punctuation; Fn+arrows moves the text cursor. Global close shortcuts stay
+Fn + apostrophe, Fn+Space or a short G0 press.

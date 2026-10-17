@@ -11,7 +11,7 @@ int pos_launcher_action(const pos_event_t *event) {
   if (!event || !event->pressed ||
       (event->modifiers & (POS_MOD_CTRL | POS_MOD_ALT)))
     return 0;
-  switch (event->key) {
+  switch (pos_navigation(event)) {
   case POS_KEY_LEFT:
     return POS_KEY_LEFT;
   case POS_KEY_RIGHT:

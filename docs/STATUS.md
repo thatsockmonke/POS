@@ -1,4 +1,4 @@
-# POS feature status — 0.5.9-dev
+# POS feature status — 0.5.10-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -8,7 +8,7 @@ layouts and display-off still require physical validation; other peripherals ret
 
 | Area | Current implementation | Remaining work |
 | --- | --- | --- |
-| Boot appearance | Pink → yellow → blue flashes (180 ms each), yellow slides into the middle over blue, pink follows halfway through; large POS fades across all stripes, holds 1 second, then normal boot | Observe orientation/color on actual ADV |
+| Boot appearance | Black start; pink, yellow and blue slide in with each starting halfway through the previous stripe; large POS fades in after the flag completes, holds 1 second, then normal boot | Observe orientation/color on actual ADV |
 | Display/input | ST7789 output, TCA8418 decode, arrow-key/context routing, global Home, held recovery shortcut, nonblocking USB fallback | Verify all 56 positions, wiring, timing and stalled-app recovery physically |
 | Core/UI/apps | Central event loop, streamed icons, fifteen-app ribbon, one foreground app, lifecycle/cleanup, spring navigation, zoom/fade entry/return, shared wallpaper accents and paginated menus; launcher workspace is heap-owned | Additional scoped apps; physical stack/heap measurements |
 | Background app | 1-12 horizontal stripes, visual arrow-key picker, Q/E hue, Shift fine steps, live striped canvas, white selection pulse, S to save and protected persistence | Optional richer styling later |

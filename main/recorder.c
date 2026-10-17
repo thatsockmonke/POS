@@ -70,18 +70,18 @@ static void record(const char *root, pos_settings_t *settings) {
   while (!done && !pos_home_pending()) {
     pos_event_t event;
     if (pos_device_event(&event, paused ? 50 : 0) && event.pressed) {
-      if (event.key == POS_KEY_HOME || event.key == POS_KEY_ESCAPE ||
-          event.key == POS_KEY_ENTER)
+      int key = pos_navigation(&event);
+      if (key == POS_KEY_HOME || key == POS_KEY_ESCAPE || key == POS_KEY_ENTER)
         done = true;
-      if (event.key == POS_KEY_LEFT || event.key == POS_KEY_RIGHT) {
-        if (event.key == POS_KEY_LEFT && gain > 1)
+      if (key == POS_KEY_LEFT || key == POS_KEY_RIGHT) {
+        if (key == POS_KEY_LEFT && gain > 1)
           gain /= 2;
-        if (event.key == POS_KEY_RIGHT && gain < 64)
+        if (key == POS_KEY_RIGHT && gain < 64)
           gain *= 2;
         pos_microphone_set_gain(gain);
         redraw = true;
       }
-      if (event.key == ' ') {
+      if (key == ' ') {
         paused = !paused;
         if (paused) {
           if (save_capture_tail(r, &e)) {

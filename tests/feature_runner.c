@@ -404,7 +404,10 @@ static int editor_ui_tests(const char *root, const char *mode) {
     push_key('s', POS_MOD_CTRL);
     idle_event();
     push_key(POS_KEY_HOME, 0);
-  } else if (!strcmp(mode, "editor-ui-save")) {
+  } else if (!strcmp(mode, "editor-ui-save") ||
+             !strcmp(mode, "editor-ui-punctuation")) {
+    if (!strcmp(mode, "editor-ui-punctuation"))
+      push_text(";,./:<>?");
     push_key('s', POS_MOD_CTRL);
     idle_event();
     push_key(POS_KEY_HOME, 0);
@@ -527,42 +530,41 @@ static int ui_tests(void) {
 static int boot_splash_tests(void) {
   pos_view_t view;
   uint32_t hold = 0, total = 0;
-  for (unsigned step = 0; step < POS_BOOT_COLOR_COUNT; ++step) {
-    assert(pos_boot_frame(step, &view, &hold));
-    assert(hold == 180 && view.solid_color && !view.boot_splash);
-    for (int y = 0; y < 135; ++y)
-      for (int x = 0; x < 240; ++x)
-        assert(pos_view_pixel(&view, x, y) == pos_boot_colors[step]);
-    total += hold;
-  }
-  unsigned slides = POS_BOOT_SLIDE_FRAMES + POS_BOOT_STAGGER_FRAMES;
-  for (unsigned frame = 1; frame <= slides; ++frame) {
-    assert(pos_boot_frame(POS_BOOT_COLOR_COUNT + frame - 1, &view, &hold));
+  /* Independently check every pixel while each stripe grows over black.
+   * Boot artwork also takes priority over the normal battery overlay. */
+  for (unsigned frame = 0; frame <= 20; ++frame) {
+    assert(pos_boot_frame(frame, &view, &hold));
     assert(hold == 40 && view.boot_splash && !view.solid_color);
     assert(!view.boot_text_alpha);
-    unsigned yellow = frame < 10 ? frame * 24 : 240;
-    unsigned pink = frame <= 5 ? 0 : frame < 15 ? (frame - 5) * 24 : 240;
+    view.battery_overlay = true;
+    view.battery_available = true;
+    view.battery_percent = 75;
+    unsigned pink = frame < 10 ? frame * 24 : 240;
+    unsigned yellow = frame <= 5 ? 0 : frame < 15 ? (frame - 5) * 24 : 240;
+    unsigned blue = frame <= 10 ? 0 : frame < 20 ? (frame - 10) * 24 : 240;
     for (int y = 0; y < 135; ++y)
       for (int x = 0; x < 240; ++x) {
-        unsigned color = y < 45 && x < (int)pink                ? 0
-                         : y >= 45 && y < 90 && x < (int)yellow ? 1
-                                                                : 2;
-        assert(pos_view_pixel(&view, x, y) == pos_boot_colors[color]);
+        uint16_t expected = y < 45 && x < (int)pink ? pos_boot_colors[0]
+                            : y >= 45 && y < 90 && x < (int)yellow
+                                ? pos_boot_colors[1]
+                            : y >= 90 && x < (int)blue ? pos_boot_colors[2]
+                                                       : 0;
+        assert(pos_view_pixel(&view, x, y) == expected);
       }
     total += hold;
   }
   uint16_t previous[3] = {pos_boot_colors[0], pos_boot_colors[1],
                           pos_boot_colors[2]};
-  for (unsigned frame = 0; frame < POS_BOOT_FADE_FRAMES; ++frame) {
-    assert(pos_boot_frame(POS_BOOT_COLOR_COUNT + slides + frame, &view, &hold));
-    assert(hold == 40 && view.boot_pink_width == 240 &&
-           view.boot_yellow_width == 240);
+  for (unsigned frame = 1; frame <= 10; ++frame) {
+    assert(pos_boot_frame(20 + frame, &view, &hold));
+    assert(hold == (frame == 10 ? 1000 : 40) && view.boot_pink_width == 240 &&
+           view.boot_yellow_width == 240 && view.boot_blue_width == 240);
     for (unsigned stripe = 0; stripe < 3; ++stripe) {
       uint16_t pixel = pos_view_pixel(&view, 30, 22 + stripe * 39);
       assert((pixel >> 11) <= (previous[stripe] >> 11));
       assert(((pixel >> 5) & 63) <= ((previous[stripe] >> 5) & 63));
       assert((pixel & 31) <= (previous[stripe] & 31));
-      if (frame == 0)
+      if (frame == 1)
         assert(pixel != 0 && pixel != pos_boot_colors[stripe]);
       previous[stripe] = pixel;
       assert(pos_view_pixel(&view, 239, stripe * 45) ==
@@ -573,7 +575,6 @@ static int boot_splash_tests(void) {
   assert(!previous[0] && !previous[1] && !previous[2]);
   assert(pos_boot_frame(POS_BOOT_HOLD_FRAME, &view, &hold));
   assert(hold == 1000 && view.boot_text_alpha == 255);
-  total += hold;
   unsigned ink[3] = {0}, ink_stripes[3] = {0};
   int left = 240, right = 0, top = 135, bottom = 0;
   for (int y = 0; y < 135; ++y)
@@ -597,16 +598,18 @@ static int boot_splash_tests(void) {
   for (unsigned i = 0; i < 3; ++i)
     assert(ink[i] > 500 && ink_stripes[i] > 500);
   assert(left == 21 && right == 218 && top == 22 && bottom == 112);
-  assert(total == 2540);
+  assert(total == 2200);
   assert(!pos_boot_frame(POS_BOOT_HOLD_FRAME + 1, &view, &hold));
   assert(!pos_boot_frame(UINT32_MAX, &view, &hold));
   assert(!pos_boot_frame(0, NULL, &hold));
   assert(!pos_boot_frame(0, &view, NULL));
   pos_view_clear(&view, "Home");
   assert(!view.boot_splash && !view.solid_color && !view.boot_text_alpha);
-  assert(!view.boot_pink_width && !view.boot_yellow_width);
+  assert(!view.boot_pink_width && !view.boot_yellow_width &&
+         !view.boot_blue_width);
   assert(pos_view_pixel(&view, 0, 90) != pos_boot_colors[2]);
-  puts("{\"yellow_first\":true,\"pink_staggered\":true,\"smooth_fade\":true,"
+  puts("{\"black_start\":true,\"pink_first\":true,\"yellow_staggered\":true,"
+       "\"blue_staggered\":true,\"smooth_fade\":true,"
        "\"large_centered_letters\":true,\"splash_ms\":1000}");
   return 0;
 }
@@ -693,13 +696,13 @@ static int setup_tests(const char *root, const char *mode) {
          device_error ? "true" : "false");
   return 0;
 }
-static int keyboard_ui_tests(void) {
-  /* Physical Fn, Down, release Down, Enter while Fn remains held. */
+static int keyboard_ui_tests(bool fn) {
+  /* Stock physical Down + Enter work both with and without Fn. */
   const uint8_t raw[] = {0x83, 0xba, 0x3a, 0xc3, 0x43};
   pos_keyboard_t keyboard = {0};
   ui_next = ui_count = 0;
   check_black_screens = true;
-  for (unsigned i = 0; i < sizeof(raw); ++i) {
+  for (unsigned i = fn ? 0 : 1; i < sizeof(raw); ++i) {
     pos_event_t e;
     if (pos_keyboard_decode(&keyboard, raw[i], &e))
       ui_events[ui_count++] = e;
@@ -707,7 +710,31 @@ static int keyboard_ui_tests(void) {
   const char *items[] = {"First", "Second"};
   assert(pos_ui_menu("Installer", items, 2) == 1);
   assert(ui_last.selected_row == 4);
-  puts("Physical Fn navigation and selection passed");
+  const uint8_t scans[] = {57, 54, 58, 64};
+  const char *punctuation = ";,./";
+  const char *shifted = ":<>?";
+  const int arrows[] = {POS_KEY_UP, POS_KEY_LEFT, POS_KEY_DOWN, POS_KEY_RIGHT};
+  memset(&keyboard, 0, sizeof(keyboard));
+  ui_next = ui_count = 0;
+  for (unsigned i = 0; i < 4; ++i) {
+    pos_event_t e;
+    assert(pos_keyboard_decode(&keyboard, scans[i] | 128, &e));
+    assert(e.key == punctuation[i] && pos_navigation(&e) == arrows[i]);
+    assert(pos_launcher_action(&e) == (i == 0   ? POS_KEY_ENTER
+                                       : i == 2 ? 0
+                                                : arrows[i]));
+    ui_events[ui_count++] = e;
+    assert(pos_keyboard_decode(&keyboard, scans[i], &e) && !pos_navigation(&e));
+    e = (pos_event_t){shifted[i], POS_MOD_SHIFT, true};
+    assert(pos_navigation(&e) == arrows[i]);
+    e = (pos_event_t){punctuation[i], POS_MOD_CTRL, true};
+    assert(pos_navigation(&e) == punctuation[i]);
+  }
+  push_key(POS_KEY_ENTER, 0);
+  char text[16] = "";
+  assert(pos_ui_text("Text", "Punctuation", text, sizeof(text), false));
+  assert(!strcmp(text, ";,./"));
+  puts("Physical arrows navigate without Fn; text punctuation preserved");
   return 0;
 }
 static void choose(unsigned index) {
@@ -1123,7 +1150,7 @@ static int core_tests(void) {
          !core.state);
   fail_save = false;
   const uint32_t rgb[] = {0xff218c, 0xffd800, 0x21b1ff};
-  assert(POS_BOOT_COLOR_COUNT == 3 && POS_BOOT_COLOR_MS == 180);
+  assert(POS_BOOT_COLOR_COUNT == 3);
   for (unsigned i = 0; i < POS_BOOT_COLOR_COUNT; ++i) {
     uint16_t expected = ((rgb[i] >> 19) << 11) | (((rgb[i] >> 10) & 63) << 5) |
                         ((rgb[i] >> 3) & 31);
@@ -1183,12 +1210,12 @@ static int apps_ui(const char *root, const char *mode) {
     pos_settings_defaults(&settings);
     pos_ui_set_theme(&settings.background);
     choose(1); /* Gain menu starts at saved default 8x. */
-    push_key(POS_KEY_RIGHT, 0);
-    push_key(POS_KEY_RIGHT, 0);
+    push_key('/', 0);
+    push_key('/', 0);
     push_key(POS_KEY_ENTER, 0); /* 32x */
     push_key(POS_KEY_ENTER, 0); /* Start */
     idle_event();
-    push_key(POS_KEY_RIGHT, 0);
+    push_key('/', 0);
     idle_event(); /* Live 64x */
     push_key(POS_KEY_HOME, 0);
     pos_ui_recorder(root, &settings);
@@ -1376,7 +1403,9 @@ int main(int argc, char **argv) {
   if (!strcmp(argv[2], "text-qol"))
     return text_qol_tests();
   if (!strcmp(argv[2], "keyboard-ui"))
-    return keyboard_ui_tests();
+    return keyboard_ui_tests(true);
+  if (!strcmp(argv[2], "keyboard-bare"))
+    return keyboard_ui_tests(false);
   if (!strcmp(argv[2], "keyboard-events")) {
     pos_keyboard_t keyboard = {0};
     for (int i = 3; i < argc; ++i) {
