@@ -730,6 +730,7 @@ static const pos_app_t modal_apps[] = {{.name = "Settings",
 
 #ifndef POS_INSTALLER
 static void stop_services(void) {
+  pos_audio_feedback_shutdown();
   pos_audio_stop();
   pos_microphone_stop();
   pos_motion_stop();
@@ -800,17 +801,27 @@ void pos_desktop(const char *root, bool recovery_only) {
   setenv("TZ", services->settings.timezone, 1);
   tzset();
   pos_device_brightness(services->settings.brightness);
+  pos_audio_feedback_configure(
+      services->settings.sounds_enabled, services->settings.sounds_volume,
+      services->settings.sounds_keys, services->settings.sounds_alerts);
+  pos_audio_feedback(POS_SOUND_NOTICE);
   (void)pos_ui_take_home();
   pos_core_t core = {.services = services};
   int selected = 0;
   pos_ui_set_theme(&services->settings.background);
   pos_device_set_theme(&services->settings.background);
-  uint64_t refreshed = 0;
+  uint64_t refreshed = 0, motion_time = esp_timer_get_time() / 1000;
+  pos_ribbon_t ribbon = {0};
+  bool ribbon_moving = false, launcher_dirty = true;
   char *system_root = workspace->system_root;
   pos_fs_join(system_root, root, "POS");
   for (;;) {
     pos_event_t event;
-    if (pos_device_event(&event, 30)) {
+    uint64_t motion_now = esp_timer_get_time() / 1000;
+    ribbon_moving =
+        pos_ribbon_tick(&ribbon, (unsigned)(motion_now - motion_time));
+    motion_time = motion_now;
+    if (pos_device_event(&event, ribbon_moving ? 1 : 30)) {
       if (core.app) {
         bool closing = event.pressed && (event.key == POS_KEY_HOME ||
                                          event.key == POS_KEY_ESCAPE);
@@ -825,6 +836,7 @@ void pos_desktop(const char *root, bool recovery_only) {
                             &services->settings.background, selected,
                             &workspace->view);
           pos_ui_spring(&workspace->view, false, true);
+          pos_audio_feedback(POS_SOUND_CLOSE);
         }
       } else {
         int key = pos_launcher_action(&event);
@@ -833,17 +845,20 @@ void pos_desktop(const char *root, bool recovery_only) {
         if (key == POS_KEY_LEFT)
           selected =
               (selected + POS_LAUNCHER_APP_COUNT - 1) % POS_LAUNCHER_APP_COUNT;
-        if (key == POS_KEY_RIGHT || key == POS_KEY_LEFT ||
-            key == POS_KEY_ENTER) {
+        if (key == POS_KEY_RIGHT || key == POS_KEY_LEFT) {
+          pos_ribbon_nudge(&ribbon, key == POS_KEY_RIGHT ? 1 : -1);
+          ribbon_moving = true;
+          launcher_dirty = true;
+        }
+        if (key == POS_KEY_ENTER) {
+          ribbon = (pos_ribbon_t){0};
+          ribbon_moving = false;
+          launcher_dirty = true;
           pos_launcher_view(system_root, services->settings.device_name,
                             &services->settings.background, selected,
                             &workspace->view);
-          workspace->view.ribbon_offset = key == POS_KEY_RIGHT  ? 80
-                                          : key == POS_KEY_LEFT ? -80
-                                                                : 0;
-          pos_ui_spring(&workspace->view, key == POS_KEY_ENTER, false);
-        }
-        if (key == POS_KEY_ENTER) {
+          pos_ui_spring(&workspace->view, true, false);
+          pos_audio_feedback(POS_SOUND_OPEN);
           pos_device_fade_next();
           if (selected == 0) {
             if (pos_core_open(&core, &counter_app))
@@ -869,6 +884,7 @@ void pos_desktop(const char *root, bool recovery_only) {
                               &services->settings.background, selected,
                               &workspace->view);
             pos_ui_spring(&workspace->view, false, true);
+            pos_audio_feedback(POS_SOUND_CLOSE);
           }
           if (selected == 5)
             pos_core_open(&core, &info_app);
@@ -878,10 +894,11 @@ void pos_desktop(const char *root, bool recovery_only) {
       refreshed = 0;
     }
     uint64_t now = esp_timer_get_time() / 1000;
-    unsigned interval =
-        core.app == &counter_app && now - ((counter_t *)core.state)->last < 300
-            ? 25
-            : 250;
+    unsigned interval = !core.app && ribbon_moving ? 16
+                        : core.app == &counter_app &&
+                                now - ((counter_t *)core.state)->last < 300
+                            ? 25
+                            : 250;
     if (now - refreshed < interval && refreshed)
       continue;
     refreshed = now;
@@ -889,13 +906,17 @@ void pos_desktop(const char *root, bool recovery_only) {
     if (core.app)
       pos_core_tick(&core, now, view);
     else {
-      pos_launcher_view(system_root, services->settings.device_name,
-                        &services->settings.background, selected, view);
-#ifndef POS_INSTALLER
-      if (selected == 12 || selected == 13) {
-        if (!radio_app_available(NULL))
-          pos_view_line(view, 13, "Disabled: check Settings");
+      if (launcher_dirty) {
+        pos_launcher_view(system_root, services->settings.device_name,
+                          &services->settings.background, selected, view);
+        launcher_dirty = false;
       }
+      view->ribbon_offset = pos_ribbon_offset(&ribbon);
+#ifndef POS_INSTALLER
+      if (selected == 12 || selected == 13)
+        pos_view_line(view, 13, "%s",
+                      radio_app_available(NULL) ? ""
+                                                : "Disabled: check Settings");
 #endif
     }
     pos_device_show(view);

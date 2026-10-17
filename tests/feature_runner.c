@@ -164,7 +164,7 @@ int pos_ble_send(const char *relative, pos_io_progress_t progress, void *ctx,
 static unsigned fake_gain = 8;
 static bool microphone_ended, microphone_tail_enabled, microphone_silent;
 static bool mic_quiet_meter_seen, mic_silence_seen;
-static unsigned folder_hint_seen;
+static unsigned folder_hint_seen, microphone_backlog;
 static unsigned microphone_tail_frames;
 static const char *microphone_test_root;
 static unsigned brightness_applied;
@@ -233,19 +233,20 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout) {
 void pos_device_show(const pos_view_t *view) {
   assert(!display_hidden);
   if (!strcmp(view->lines[0], "Recorder")) {
+    if (view->visual == POS_VISUAL_MIC)
+      assert(!microphone_backlog);
     if (view->visual == POS_VISUAL_MIC && strstr(view->lines[12], "0.7%"))
       mic_quiet_meter_seen = true;
     if (!strcmp(view->lines[1], "No input detected"))
       mic_silence_seen = true;
   }
-  if (view->visual == POS_VISUAL_FILES) {
+  if (!strcmp(view->lines[0], "POS/Users/Owner")) {
+    assert(view->visual == POS_VISUAL_NONE);
     const char *names[] = {"Documents", "Music", "Pictures", "Mixed", "Links"};
-    const unsigned kinds[] = {POS_ICON_DOCUMENT, POS_ICON_AUDIO, POS_ICON_IMAGE,
-                              POS_ICON_MIXED, POS_ICON_FOLDER};
     for (unsigned i = 0; i < 5; ++i)
-      if (!strcmp(view->lines[2], names[i]) &&
-          view->visual_icons[1] == (128 | kinds[i]))
-        folder_hint_seen |= 1u << i;
+      for (unsigned row = 3; row < 13; ++row)
+        if (!strcmp(view->lines[row], names[i]))
+          folder_hint_seen |= 1u << i;
   }
   if (display_off_count && !strcmp(view->lines[0], "System")) {
     assert(view->selected_row == 6); /* Turn display off remains selected. */
@@ -749,6 +750,26 @@ static int settings_ui_tests(const char *root, const char *mode) {
   strcpy(s.display_name, "Keep Stevie");
   assert(!pos_settings_save(root, &s));
   ui_next = ui_count = 0;
+  if (!strcmp(mode, "settings-ui-sounds")) {
+    choose(11);
+    push_key(POS_KEY_ENTER, 0); // Master off.
+    push_key(POS_KEY_DOWN, 0);
+    push_key(POS_KEY_ENTER, 0);
+    replace_field("37");
+    push_key(POS_KEY_DOWN, 0);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_DOWN, 0);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_settings(root, &s);
+    pos_settings_t loaded;
+    assert(!pos_settings_load(root, &loaded));
+    assert(!loaded.sounds_enabled && !loaded.sounds_keys &&
+           !loaded.sounds_alerts && loaded.sounds_volume == 37);
+    assert(loaded.microphone_gain == 8 &&
+           !strcmp(loaded.display_name, "Keep Stevie"));
+    return 0;
+  }
   if (!strcmp(mode, "settings-ui-brightness")) {
     choose(1);
     replace_field("5");
@@ -1016,6 +1037,22 @@ static int launcher_tests(const char *root) {
       assert(black && white);
     }
   }
+  /* Selection rebasing must not jump the visible ribbon, including wraparound.
+   */
+  for (int selected = 0; selected < POS_LAUNCHER_APP_COUNT; ++selected) {
+    pos_view_t previous, next;
+    pos_launcher_view(root, "PANPUTER", &background, selected, &previous);
+    for (int direction = -1; direction <= 1; direction += 2) {
+      int target = (selected + direction + POS_LAUNCHER_APP_COUNT) %
+                   POS_LAUNCHER_APP_COUNT;
+      pos_launcher_view(root, "PANPUTER", &background, target, &next);
+      next.ribbon_offset = direction * 80;
+      for (int y = 38; y < 90; ++y)
+        for (int x = 0; x < 240; ++x)
+          assert(pos_view_pixel(&previous, x, y) ==
+                 pos_view_pixel(&next, x, y));
+    }
+  }
   assert(!pos_background_resize(&background, 0) &&
          !pos_background_resize(&background, 13));
   puts("{\"launcher_controls\":true,\"all_stripe_counts\":true,\"outlined_"
@@ -1226,6 +1263,17 @@ static int apps_ui(const char *root, const char *mode) {
     assert(pos_home_pending() && microphone_stops);
     return 0;
   }
+  if (!strcmp(mode, "recorder-ui-drain")) {
+    microphone_backlog = 32;
+    push_key(POS_KEY_ENTER, 0);
+    idle_event();
+    push_key(POS_KEY_HOME, 0);
+    pos_settings_t settings;
+    pos_settings_defaults(&settings);
+    pos_ui_recorder(root, &settings);
+    assert(!microphone_backlog && microphone_reads == 32);
+    return 0;
+  }
   if (!strcmp(mode, "recorder-ui-home") || !strcmp(mode, "recorder-ui-tail") ||
       !strcmp(mode, "recorder-ui-silent")) {
     microphone_test_root = root;
@@ -1266,7 +1314,7 @@ static int apps_ui(const char *root, const char *mode) {
   }
   if (!strcmp(mode, "files-ui-icons")) {
     for (unsigned i = 0; i < 15; ++i)
-      push_key(POS_KEY_RIGHT, 0);
+      push_key(POS_KEY_DOWN, 0);
     push_key(POS_KEY_HOME, 0);
     pos_ui_files(root);
     assert(folder_hint_seen == 31 && pos_home_pending());
@@ -1288,8 +1336,8 @@ static int apps_ui(const char *root, const char *mode) {
         ++at;
       }
     closedir(directory);
-    keys_down(file_index - 4);
-    push_key(' ', 0);
+    keys_down(file_index);
+    push_key(POS_KEY_ENTER, 0);
     if (!strcmp(mode, "files-ui-delete-cancel")) {
       keys_down(6);
       push_key(POS_KEY_ENTER, 0);
@@ -1302,10 +1350,10 @@ static int apps_ui(const char *root, const char *mode) {
     keys_down(strstr(mode, "cut") ? 2 : 1);
     push_key(POS_KEY_ENTER, 0);
     push_key(POS_KEY_ENTER, 0);
-    keys_down(directory_index - 4);
+    keys_down(directory_index);
     push_key(POS_KEY_ENTER, 0);
-    push_key(POS_KEY_UP, 0); /* Empty folder starts on Folder actions. */
-    push_key(POS_KEY_DOWN, 0);
+    push_key(POS_KEY_ENTER, 0);
+    keys_down(3);
     push_key(POS_KEY_ENTER, 0);
     keys_down(1);
     push_key(POS_KEY_ENTER, 0);
@@ -1500,6 +1548,10 @@ int main(int argc, char **argv) {
       cJSON_AddNumberToObject(json, "brightness", settings.brightness);
       cJSON_AddNumberToObject(json, "microphone_gain",
                               settings.microphone_gain);
+      cJSON_AddBoolToObject(json, "sounds_enabled", settings.sounds_enabled);
+      cJSON_AddBoolToObject(json, "sounds_keys", settings.sounds_keys);
+      cJSON_AddBoolToObject(json, "sounds_alerts", settings.sounds_alerts);
+      cJSON_AddNumberToObject(json, "sounds_volume", settings.sounds_volume);
       cJSON *colors = cJSON_AddArrayToObject(json, "background");
       for (unsigned i = 0; i < settings.background.count; ++i)
         cJSON_AddItemToArray(colors,
@@ -1576,8 +1628,12 @@ int pos_microphone_read(int16_t *m, size_t capacity, size_t *n,
     return 0;
   }
   ++microphone_reads;
+  if (microphone_backlog)
+    --microphone_backlog;
   if (ui_next < ui_count && ui_events[ui_next].key == INT_MIN)
     ++ui_next;
+  if (capacity > 256)
+    capacity = 256;
   *n = capacity;
   for (size_t i = 0; i < capacity; ++i)
     m[i] = microphone_silent ? 0 : (int16_t)i;
@@ -1608,3 +1664,18 @@ int pos_infrared_send(uint8_t a, uint8_t c, pos_error_t *e) {
   (void)e;
   return 0;
 }
+
+int pos_audio_feedback_configure(bool enabled, unsigned volume, bool keys,
+                                 bool alerts) {
+  (void)enabled;
+  (void)keys;
+  (void)alerts;
+  assert(volume <= 100);
+  return 0;
+}
+void pos_audio_feedback(pos_sound_t sound) { (void)sound; }
+void pos_audio_feedback_shutdown(void) {}
+bool pos_microphone_active(void) {
+  return microphone_starts > microphone_stops;
+}
+size_t pos_microphone_pending(void) { return microphone_backlog * 256; }

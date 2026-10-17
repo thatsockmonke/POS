@@ -4,8 +4,9 @@
 #include <string.h>
 
 const char *const pos_launcher_names[POS_LAUNCHER_APP_COUNT] = {
-    "Counter",  "Settings", "Diagnostics", "Files",
-    "Recovery", "About",    "Background", "Text Editor", "Wi-Fi", "Music", "Share", "Location", "Radio", "Range Test", "Recorder"};
+    "Counter", "Settings",   "Diagnostics", "Files",      "Recovery",
+    "About",   "Background", "Text Editor", "Wi-Fi",      "Music",
+    "Share",   "Location",   "Radio",       "Range Test", "Recorder"};
 
 int pos_launcher_action(const pos_event_t *event) {
   if (!event || !event->pressed ||
@@ -41,8 +42,8 @@ void pos_launcher_view(const char *root, const char *device,
   FILE *icons = root && !pos_fs_join(path, root, "System/Assets/apps.icons")
                     ? fopen(path, "rb")
                     : NULL;
-  for (unsigned tile = 0; tile < 3; ++tile) {
-    int app = (selected + POS_LAUNCHER_APP_COUNT + (int)tile - 1) %
+  for (unsigned tile = 0; tile < 7; ++tile) {
+    int app = (selected + POS_LAUNCHER_APP_COUNT + (int)tile - 3) %
               POS_LAUNCHER_APP_COUNT;
     if (!icons || fseek(icons, app * 8, SEEK_SET) ||
         fread(view->icons[tile], 1, 8, icons) != 8)

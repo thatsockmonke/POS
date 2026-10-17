@@ -169,7 +169,7 @@ with a codec error instead of claiming capture was configured.
 - [Pinned slot-mask selection and effective gain](https://github.com/m5stack/M5Unified/blob/e125e73f28b6b83e621e48df432af426bb2ff935/src/utility/Mic_Class.inl)
 
 I2S clocks run before codec setup, and one second of analog warm-up is discarded.
-The dedicated task drains into a 32,000-byte mono stream buffer; SD writes and UI
+The dedicated task drains into a 64,000-byte mono stream buffer (32,000-byte fallback); SD writes and UI
 rendering run independently. Stop/pause drains the buffered tail before cleanup.
 DMA overflow or a full stream buffer remains an explicit error. Actual acoustic
 gain, noise, wiring/slot behavior and coexistence still require device testing.
@@ -189,3 +189,16 @@ common-root bundle (approximately 99% coverage per ESP-IDF), retaining certifica
 validation and failing closed for other roots. Builds may enable the full/custom
 bundle if they fit; see `sdkconfig.defaults`. SDK log level is WARN, while POS
 measurement/USB reports and panic output remain available. No PSRAM is assumed.
+
+0.6.1-dev gives Recorder priority over full-screen redraws: drain queued PCM in
+up-to-1024-frame batches, skip the meter while behind, and start the next 200-ms
+redraw interval after presentation. A 4096-byte stdio buffer batches SD writes.
+The two-second capture buffer is preferred; allocation falls back to one second.
+Overflow remains a recoverable error after draining already-captured PCM.
+
+UI feedback uses the same verified speaker profile in a separate 4096-byte-stack
+worker with one atomic pending cue. Ramped stereo PCM tones, four DMA blocks of
+silence and a bounded drain precede codec mute. Atomic ownership prevents speaker
+cues from touching capture/playback resources. Key events only queue a cue; they
+do not write I2S or wait. Actual loudness, latency, heap and long SD stalls still
+need physical measurements; these are not claimed from host tests.

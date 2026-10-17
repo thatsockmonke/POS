@@ -4,6 +4,17 @@
 int pos_audio_write(const int16_t *stereo, size_t frames, unsigned sample_rate,
                     pos_error_t *e);
 void pos_audio_stop(void);
+typedef enum {
+  POS_SOUND_KEY, POS_SOUND_NAV, POS_SOUND_SELECT, POS_SOUND_BACK,
+  POS_SOUND_OPEN, POS_SOUND_CLOSE, POS_SOUND_NOTICE, POS_SOUND_PREVIEW,
+  POS_SOUND_COUNT
+} pos_sound_t;
+/* One coalesced asynchronous cue; never mixes with playback or microphone. */
+int pos_audio_feedback_configure(bool enabled, unsigned volume, bool keys, bool alerts);
+void pos_audio_feedback(pos_sound_t sound);
+void pos_audio_feedback_shutdown(void);
+bool pos_microphone_active(void);
+size_t pos_microphone_pending(void);
 typedef struct {
   bool cap_detected, gps_detected, lora_enabled, radio_ready, tx_enabled,
       maps_available, logging;

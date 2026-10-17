@@ -42,7 +42,7 @@ jobs:
         run: |
           pos_tag=${INPUT_RELEASE:-$EVENT_RELEASE}
           if [ -z "$pos_tag" ]; then
-            pos_tag=$(python3 -c 'import json,pathlib; p=pathlib.Path("updates/latest.json"); p=p if p.exists() else pathlib.Path("updates/manifest.json"); print("v"+json.loads(json.loads(p.read_text())["payload"])["release"])')
+            pos_tag=$(python3 -c 'import json,pathlib; p=pathlib.Path("updates/latest.json"); print("v"+json.loads(json.loads(p.read_text())["payload"])["release"])')
           fi
           python3 - "$pos_tag" <<'PY'
           import re, sys
@@ -94,7 +94,7 @@ jobs:
         env:
           POS_VERSION: ${{ steps.release.outputs.version }}
         run: |
-          git add updates/manifest.json updates/latest.json "updates/releases/$POS_VERSION"
+          git add updates/latest.json "updates/releases/$POS_VERSION"
           if ! git diff --cached --quiet; then
             git -c user.name='POS Update Publisher' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Publish signed POS $POS_VERSION update"
             git push origin HEAD:main

@@ -10,9 +10,6 @@ import subprocess
 import tempfile
 from urllib.parse import urlsplit
 
-# Only the transition release and older packages carry the obsolete field.
-TRANSITION_RELEASE = '0.6.0-dev'
-LEGACY_MINIMUM_VERSION = '0.0.0'
 
 def version(value: str):
     m=re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*))?',value)
@@ -104,8 +101,6 @@ def make_update(args,api):
             package['files']=sorted(records.values(),key=lambda r:r['path'])
         validate_package(package,api)
         payload={'format':1,'model':api.MODEL,'release':args.release,'sequence':args.sequence,'kind':args.kind,'base_url':args.base_url,'package':package}
-        if compare(args.release,TRANSITION_RELEASE)<=0:
-            payload['minimum_version']=LEGACY_MINIMUM_VERSION
         body=json.dumps(payload,separators=(',',':'),ensure_ascii=True)
         signature=subprocess.run(['openssl','dgst','-sha256','-sign',str(args.private_key)],input=body.encode(),check=True,capture_output=True).stdout
         public=subprocess.run(['openssl','pkey','-in',str(args.private_key),'-pubout'],check=True,capture_output=True).stdout

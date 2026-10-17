@@ -5,6 +5,7 @@
 #include <unistd.h>
 struct pos_recorder {
   FILE *file;
+  uint8_t io_buffer[4096];
   char relative[241], path[POS_FS_PATH], part[POS_FS_PATH];
   uint32_t frames, crc;
   bool failed, complete;
@@ -63,6 +64,11 @@ pos_recorder_t *pos_recorder_open(const char *root, pos_error_t *e) {
   if (!found || !(r->file = fopen(r->part, "wbx"))) {
     fail(e, "Cannot create a recording. Check SD space and Recordings folder.");
     free(r);
+    return NULL;
+  }
+  if (setvbuf(r->file, (char *)r->io_buffer, _IOFBF, sizeof(r->io_buffer))) {
+    fail(e, "Cannot allocate recording stream buffer.");
+    pos_recorder_close(r);
     return NULL;
   }
   uint8_t h[44];

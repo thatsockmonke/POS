@@ -20,8 +20,8 @@ struct test_sem {
   pthread_cond_t ready;
   bool signalled;
 };
-static pthread_t foreground, worker;
-static bool worker_created, fail_alloc, fail_task, enabled, receiving;
+static pthread_t foreground;
+static bool fail_alloc, fail_task, enabled, receiving;
 static bool fail_config, fail_readback;
 static uint8_t codec[256];
 enum { RIGHT_SIGNAL, LEFT_SIGNAL, SILENT, EXTREMES };
@@ -43,8 +43,9 @@ static int16_t expected_sample(unsigned index) {
 }
 static atomic_uint blocks;
 static atomic_bool fail_read;
-static unsigned allocated, channels;
-static uint16_t sample;
+static atomic_uint allocated, channels, output_writes, output_peak,
+    active_tasks;
+static uint32_t sample;
 static i2s_event_callbacks_t callbacks;
 static void delay(void) {
   struct timespec t = {0, 1000000};
@@ -82,7 +83,8 @@ int i2s_channel_init_std_mode(i2s_chan_handle_t h, const i2s_std_config_t *c) {
   assert(c->clk_cfg == 16000);
   assert(c->slot_cfg == I2S_SLOT_MODE_STEREO);
   assert(c->gpio_cfg.bclk == 41 && c->gpio_cfg.ws == 43);
-  assert(c->gpio_cfg.din == 46 && c->gpio_cfg.mclk == I2S_GPIO_UNUSED);
+  assert(c->gpio_cfg.mclk == I2S_GPIO_UNUSED);
+  assert(receiving ? c->gpio_cfg.din == 46 : c->gpio_cfg.dout == 42);
   return fail_config ? -1 : 0;
 }
 int i2s_channel_register_event_callback(i2s_chan_handle_t h,
@@ -137,8 +139,16 @@ int i2s_channel_read(i2s_chan_handle_t h, void *data, size_t bytes, size_t *n,
 int i2s_channel_write(i2s_chan_handle_t h, const void *p, size_t n,
                       size_t *written, unsigned t) {
   (void)h;
-  (void)p;
   (void)t;
+  assert(!receiving);
+  const int16_t *pcm = p;
+  for (size_t i = 0; i < n / 2; ++i) {
+    unsigned v = pcm[i] < 0 ? -(int)pcm[i] : pcm[i];
+    unsigned peak = atomic_load(&output_peak);
+    while (peak < v && !atomic_compare_exchange_weak(&output_peak, &peak, v))
+      ;
+  }
+  atomic_fetch_add(&output_writes, 1);
   *written = n;
   return 0;
 }
@@ -215,18 +225,19 @@ int xSemaphoreTake(SemaphoreHandle_t s, unsigned timeout) {
   return pdTRUE;
 }
 void vSemaphoreDelete(SemaphoreHandle_t s) {
-  if (worker_created) {
-    pthread_join(worker, NULL);
-    worker_created = false;
-  }
   pthread_cond_destroy(&s->ready);
   pthread_mutex_destroy(&s->lock);
   free(s);
   --allocated;
 }
-static void (*entry)(void *);
+struct thread_args {
+  void (*fn)(void *);
+  void *ctx;
+};
 static void *thread_entry(void *p) {
-  entry(p);
+  struct thread_args args = *(struct thread_args *)p;
+  free(p);
+  args.fn(args.ctx);
   return NULL;
 }
 int xTaskCreate(void (*fn)(void *), const char *name, unsigned stack, void *ctx,
@@ -237,14 +248,38 @@ int xTaskCreate(void (*fn)(void *), const char *name, unsigned stack, void *ctx,
   (void)handle;
   if (fail_task)
     return 0;
-  entry = fn;
-  assert(!pthread_create(&worker, NULL, thread_entry, ctx));
-  worker_created = true;
+  struct thread_args *args = malloc(sizeof(*args));
+  assert(args);
+  *args = (struct thread_args){fn, ctx};
+  pthread_t thread;
+  atomic_fetch_add(&active_tasks, 1);
+  assert(!pthread_create(&thread, NULL, thread_entry, args));
+  pthread_detach(thread);
   return pdPASS;
 }
 void vTaskDelete(void *h) {
   (void)h;
+  atomic_fetch_sub(&active_tasks, 1);
   pthread_exit(NULL);
+}
+void vTaskDelay(unsigned ms) {
+  struct timespec t = {ms / 1000, (ms % 1000) * 1000000};
+  nanosleep(&t, NULL);
+}
+size_t xStreamBufferBytesAvailable(StreamBufferHandle_t s) {
+  pthread_mutex_lock(&s->lock);
+  size_t n = s->count;
+  pthread_mutex_unlock(&s->lock);
+  return n;
+}
+static void wait_cue(void) {
+  unsigned before = atomic_load(&output_writes);
+  for (unsigned i = 0; i < 1000 && atomic_load(&output_writes) == before; ++i)
+    delay();
+  assert(atomic_load(&output_writes) > before);
+  for (unsigned i = 0; i < 1000 && atomic_load(&channels); ++i)
+    delay();
+  assert(!atomic_load(&channels));
 }
 int main(void) {
   foreground = pthread_self();
@@ -275,7 +310,34 @@ int main(void) {
   }
   assert(delivered == captured * 256); /* Save every buffered tail frame. */
   pos_microphone_stop();
-  assert(!allocated && !channels && !worker_created);
+  assert(!allocated && !channels);
+  /* Repeated display stalls followed by batch drainage remain sustainable. */
+  sample = 0;
+  atomic_store(&blocks, 0);
+  assert(!pos_microphone_start(&e));
+  int16_t batch[1024];
+  expected = 63u * 256u;
+  delivered = 0;
+  for (unsigned cycle = 0; cycle < 24; ++cycle) {
+    wait_blocks(atomic_load(&blocks) + 12);
+    while (pos_microphone_pending() >= 256) {
+      assert(!pos_microphone_read(batch, 1024, &frames, &e));
+      for (size_t j = 0; j < frames; ++j)
+        assert(batch[j] == expected_sample(expected++));
+      delivered += (unsigned)frames;
+    }
+  }
+  pos_microphone_end();
+  captured = atomic_load(&blocks);
+  do {
+    assert(!pos_microphone_read(batch, 1024, &frames, &e));
+    for (size_t j = 0; j < frames; ++j)
+      assert(batch[j] == expected_sample(expected++));
+    delivered += (unsigned)frames;
+  } while (frames);
+  assert(delivered == captured * 256);
+  pos_microphone_stop();
+  assert(!allocated && !channels);
   /* An inactive RIGHT remains silent even if LEFT has data; never pick noise
    * from the wrong channel automatically. Raw L/R diagnostics expose it. */
   for (signal_mode = LEFT_SIGNAL; signal_mode <= EXTREMES; ++signal_mode) {
@@ -356,11 +418,15 @@ int main(void) {
   /* A prolonged storage stall is reported, never silently dropped. */
   atomic_store(&blocks, 0);
   assert(!pos_microphone_start(&e));
-  wait_blocks(63);
-  for (unsigned i = 0; i < 20; ++i)
-    delay();
-  assert(pos_microphone_read(mono, 256, &frames, &e));
-  assert(strstr(e.message, "SD could not keep up") && frames == 0);
+  wait_blocks(126);
+  pos_microphone_end();
+  size_t retained = 0;
+  while (!pos_microphone_read(mono, 256, &frames, &e)) {
+    retained += frames;
+    assert(frames);
+  }
+  assert(retained == 32000 && strstr(e.message, "Audio buffer filled") &&
+         frames == 0);
   pos_microphone_stop();
   assert(!allocated && !channels);
   /* Failed allocation/task creation and I2S errors release all resources. */
@@ -376,7 +442,8 @@ int main(void) {
   assert(!pos_microphone_start(&e));
   for (unsigned i = 0; i < 20; ++i)
     delay();
-  assert(pos_microphone_read(mono, 256, &frames, &e));
+  while (!pos_microphone_read(mono, 256, &frames, &e))
+    assert(frames);
   pos_microphone_stop();
   atomic_store(&fail_read, false);
   assert(!allocated && !channels);
@@ -384,10 +451,52 @@ int main(void) {
   callbacks.on_recv_q_ovf((void *)1, NULL, NULL);
   for (unsigned i = 0; i < 20; ++i)
     delay();
-  assert(pos_microphone_read(mono, 256, &frames, &e));
+  while (!pos_microphone_read(mono, 256, &frames, &e))
+    assert(frames);
   pos_microphone_stop();
   pos_microphone_stop();
   assert(!allocated && !channels);
+  /* Actual asynchronous cue worker, waveform volume and shared ownership. */
+  assert(!pos_audio_feedback_configure(true, 20, true, true));
+  pos_audio_feedback(POS_SOUND_NAV);
+  wait_cue();
+  unsigned quiet = atomic_exchange(&output_peak, 0);
+  assert(quiet > 0 && quiet <= 3277);
+  assert(!pos_audio_feedback_configure(true, 40, true, true));
+  pos_audio_feedback(POS_SOUND_NAV);
+  wait_cue();
+  unsigned louder = atomic_exchange(&output_peak, 0);
+  assert(louder >= quiet * 2 - 2 && louder <= 6554);
+  unsigned writes = atomic_load(&output_writes);
+  assert(!pos_audio_feedback_configure(false, 40, true, true));
+  pos_audio_feedback(POS_SOUND_NOTICE);
+  vTaskDelay(30);
+  assert(atomic_load(&output_writes) == writes);
+  assert(!pos_audio_feedback_configure(true, 40, false, false));
+  pos_audio_feedback(POS_SOUND_KEY);
+  pos_audio_feedback(POS_SOUND_NOTICE);
+  vTaskDelay(30);
+  assert(atomic_load(&output_writes) == writes);
+  pos_audio_feedback(POS_SOUND_PREVIEW);
+  wait_cue();
+  assert(!pos_audio_feedback_configure(true, 40, true, true));
+  int16_t silence[512] = {0};
+  assert(!pos_audio_write(silence, 256, 16000, &e));
+  writes = atomic_load(&output_writes);
+  pos_audio_feedback(POS_SOUND_NOTICE);
+  vTaskDelay(30);
+  assert(atomic_load(&output_writes) == writes && channels == 1);
+  pos_audio_stop();
+  assert(!pos_microphone_start(&e));
+  writes = atomic_load(&output_writes);
+  pos_audio_feedback(POS_SOUND_NOTICE);
+  vTaskDelay(20);
+  assert(atomic_load(&output_writes) == writes && pos_microphone_active());
+  pos_microphone_stop();
+  pos_audio_feedback_shutdown();
+  for (unsigned i = 0; i < 100 && atomic_load(&active_tasks); ++i)
+    delay();
+  assert(!active_tasks && !allocated && !channels);
   puts("Delayed consumers preserve ordered PCM; overruns/errors stop; restarts "
        "and cleanup pass.");
   return 0;

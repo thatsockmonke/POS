@@ -10,6 +10,8 @@ typedef struct {
   uint8_t brightness;
   uint8_t
       microphone_gain; /* 1x-64x, powers of two; format 1/2 default to 8x. */
+  bool sounds_enabled, sounds_keys, sounds_alerts;
+  uint8_t sounds_volume;
   bool setup_complete;
   uint32_t generation;
   pos_background_t background;

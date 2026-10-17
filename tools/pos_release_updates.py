@@ -59,11 +59,9 @@ def expected_base(config: dict, version: str) -> str:
             f"{config['branch']}/updates/releases/{version}/")
 
 
-def validate_feed(root: Path, legacy: bool = False) -> dict:
+def validate_feed(root: Path, *, history: bool = False) -> dict:
     config = configuration(root)
-    channel = root/('updates/manifest.json' if legacy else config['manifest'])
-    if not legacy and not channel.exists() and not channel.is_symlink():
-        channel = root/'updates/manifest.json'  # Import the last pre-0.6 sequence.
+    channel = root/config['manifest']
     if not channel.is_file() or channel.is_symlink():
         raise ValueError('Signed update channel is missing or is a symlink')
     if channel.stat().st_size > 32768:
@@ -76,9 +74,8 @@ def validate_feed(root: Path, legacy: bool = False) -> dict:
     directory = root/'updates/releases'/release
     if directory.is_symlink() or not directory.is_dir():
         raise ValueError('Channel has no corresponding release directory')
-    data = signed_directory(directory, root/'updates/public-key.pem')
-    if pos_updates.compare(release, pos_updates.TRANSITION_RELEASE) > 0 and 'minimum_version' in data:
-        raise ValueError('Updates after 0.6.0-dev must omit the obsolete minimum_version field')
+    data = (pos_deploy.verify_update_artifact(directory, root/'updates/public-key.pem', posctl)[1]
+            if history else signed_directory(directory, root/'updates/public-key.pem'))
     if (channel.read_bytes() != (directory/'manifest.json').read_bytes() or
             data['release'] != release or data['base_url'] != expected_base(config, release)):
         raise ValueError('Channel and immutable signed release do not match')
@@ -112,7 +109,7 @@ def publish(root: Path, archive: Path, private: Path) -> dict:
                             check=True, capture_output=True).stdout
     if fingerprint(public) != config['fingerprint']:
         raise ValueError('Signing key differs from the key trusted by firmware')
-    previous = validate_feed(root) if (root/config['manifest']).exists() or (root/'updates/manifest.json').exists() else None
+    previous = validate_feed(root, history=True) if (root/config['manifest']).exists() else None
     with tempfile.TemporaryDirectory(prefix='pos-release-update-') as work:
         state = Path(work)
         bundle, manifest = verified_bundle(archive, state)
@@ -120,11 +117,6 @@ def publish(root: Path, archive: Path, private: Path) -> dict:
         if archive.name != f'pos-{release}.zip':
             raise ValueError('Release archive filename and firmware version differ')
         pos_updates.version(release)
-        future = pos_updates.compare(release, pos_updates.TRANSITION_RELEASE) > 0
-        if future:
-            bridge = validate_feed(root, legacy=True)
-            if bridge['release'] != pos_updates.TRANSITION_RELEASE or 'minimum_version' not in bridge:
-                raise ValueError('Publish the required 0.6.0-dev transition release first')
         destination = root/'updates/releases'/release
         if destination.exists() or destination.is_symlink():
             existing = signed_directory(destination, root/'updates/public-key.pem')
@@ -166,8 +158,6 @@ def publish(root: Path, archive: Path, private: Path) -> dict:
             shutil.copytree(stage, destination)
             signed_directory(destination, root/'updates/public-key.pem')
         write_channel(root/config['manifest'], (destination/'manifest.json').read_bytes())
-        if not future:
-            write_channel(root/'updates/manifest.json', (destination/'manifest.json').read_bytes())
         return validate_feed(root)
 
 

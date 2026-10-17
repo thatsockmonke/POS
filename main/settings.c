@@ -1,6 +1,7 @@
 #include "pos_device.h"
 #include "pos_health.h"
 #include "pos_network_service.h"
+#include "pos_peripherals.h"
 #include "ui.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +16,8 @@ static bool save(const char *root, pos_settings_t *active,
     return false;
   }
   *active = *next;
+  pos_audio_feedback_configure(next->sounds_enabled, next->sounds_volume,
+                               next->sounds_keys, next->sounds_alerts);
   pos_device_brightness(next->brightness);
   setenv("TZ", next->timezone, 1);
   tzset();
@@ -175,6 +178,52 @@ static void system_settings(const char *root) {
       display_off();
   }
 }
+static void sounds(const char *root, pos_settings_t *settings) {
+  int selected = 0;
+  while (!pos_home_pending()) {
+    char enabled[40], volume[32], keys[40], alerts[40];
+    snprintf(enabled, sizeof(enabled), "UI sounds: %s",
+             settings->sounds_enabled ? "On" : "Off");
+    snprintf(volume, sizeof(volume), "Volume: %u%%", settings->sounds_volume);
+    snprintf(keys, sizeof(keys), "Key presses: %s",
+             settings->sounds_keys ? "On" : "Off");
+    snprintf(alerts, sizeof(alerts), "Apps / notifications: %s",
+             settings->sounds_alerts ? "On" : "Off");
+    const char *items[] = {enabled, volume,          keys,
+                           alerts,  "Preview sound", "Back"};
+    int choice = pos_ui_menu_from("Sounds", items, 6, selected);
+    if (choice < 0 || choice == 5)
+      return;
+    selected = choice;
+    if (choice == 4) {
+      pos_audio_feedback(POS_SOUND_PREVIEW);
+      continue;
+    }
+    pos_settings_t next = *settings;
+    if (choice == 0)
+      next.sounds_enabled = !next.sounds_enabled;
+    if (choice == 2)
+      next.sounds_keys = !next.sounds_keys;
+    if (choice == 3)
+      next.sounds_alerts = !next.sounds_alerts;
+    if (choice == 1) {
+      char text[4];
+      snprintf(text, sizeof(text), "%u", next.sounds_volume);
+      if (!pos_ui_text("UI sound volume", "Percent (0-100, 0 is silent)", text,
+                       sizeof(text), false))
+        continue;
+      char *end;
+      long value = strtol(text, &end, 10);
+      if (!*text || *end || value < 0 || value > 100) {
+        pos_ui_notice("Invalid volume", "Enter a whole number from 0 to 100.");
+        continue;
+      }
+      next.sounds_volume = value;
+    }
+    if (save(root, settings, &next))
+      pos_audio_feedback(POS_SOUND_PREVIEW);
+  }
+}
 void pos_ui_settings(const char *root, pos_settings_t *settings) {
   int selected = 0;
   while (!pos_home_pending()) {
@@ -189,9 +238,10 @@ void pos_ui_settings(const char *root, pos_settings_t *settings) {
                            "Restore default preferences",
                            "IR & motion",
                            "Developer deployment",
+                           "Sounds",
                            "Back"};
-    int choice = pos_ui_menu_from("Settings", items, 12, selected);
-    if (choice < 0 || choice == 11)
+    int choice = pos_ui_menu_from("Settings", items, 13, selected);
+    if (choice < 0 || choice == 12)
       return;
     selected = choice;
     if (choice == 0)
@@ -223,6 +273,8 @@ void pos_ui_settings(const char *root, pos_settings_t *settings) {
       pos_ui_instruments();
     if (choice == 10)
       pos_ui_deploy(root);
+    if (choice == 11)
+      sounds(root, settings);
     pos_device_brightness(settings->brightness);
     setenv("TZ", settings->timezone, 1);
     tzset();

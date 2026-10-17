@@ -53,15 +53,15 @@ static int preview(const char *root, const char *output, unsigned screen,
       pos_view_line(&v, 14, "Enter/Esc: stop & save");
       pos_view_line(&v, 15, "Fn+': close     G0: home");
     } else if (screen == 4) {
-      v.visual = POS_VISUAL_FILES;
-      v.visual_icons[0] = 128 | POS_ICON_AUDIO;
-      v.visual_icons[1] = 128 | POS_ICON_DOCUMENT;
-      v.visual_icons[2] = 128 | POS_ICON_IMAGE;
-      pos_view_line(&v, 1, "Page 1/1    Item 5/7");
-      pos_view_line(&v, 2, "Documents");
-      pos_view_line(&v, 12, "Music     Documents Pictures");
-      pos_view_line(&v, 14, "Enter:open Space:actions");
-      pos_view_line(&v, 15, "Esc:back Fn+':close G0:home");
+      pos_view_line(&v, 1, "Folder page 1/1");
+      const char *items[] = {".. (parent)", "Previous (first)",
+                             "Next (last)", "Folder actions",
+                             "Documents",   "Music",
+                             "Recordings"};
+      for (unsigned i = 0; i < 7; ++i)
+        pos_view_line(&v, 3 + i, "%s", items[i]);
+      v.selected_row = 7;
+      pos_view_line(&v, 15, "Arrows Enter:OK Fn+`:back");
     } else if (screen == 5) {
       v.visual = POS_VISUAL_STRIPES;
       v.visual_selection = 1;
@@ -84,12 +84,15 @@ static int preview(const char *root, const char *output, unsigned screen,
     pos_launcher_view(root, "PANPUTER", &background, POS_LAUNCHER_APP_COUNT - 1,
                       &v);
     if (screen == 7) {
-      unsigned f = frame % 6;
+      unsigned f = frame >= 18 ? (frame - 18) % 6 : 0;
       int spring = pos_motion_spring(f);
-      if (frame < 6) {
-        v.ribbon_offset = 80 * spring / 100;
-        v.tile_lift = f < 5 ? (100 - abs(spring)) * 8 / 100 : 0;
-      } else if (frame < 12) {
+      if (frame < 18) {
+        pos_ribbon_t motion = {0};
+        pos_ribbon_nudge(&motion, 1);
+        for (unsigned i = 0; i < frame; ++i)
+          pos_ribbon_tick(&motion, 32);
+        v.ribbon_offset = pos_ribbon_offset(&motion);
+      } else if (frame < 24) {
         v.tile_scale = 100 + (100 - spring) * 48 / 100;
         v.fade = f >= 3 ? (f - 2) * 85 : 0;
       } else {
@@ -145,22 +148,23 @@ int main(int argc, char **argv) {
   if (!strcmp(command, "ui-frames")) {
     if (argc != 4)
       return 2;
-    for (unsigned frame = 0; frame < 29; ++frame) {
-      unsigned screen = frame < 12 || frame >= 23 ? 7 : 3;
-      unsigned pose = frame < 12    ? frame
-                      : frame >= 23 ? 12 + frame - 23
-                      : frame >= 20 ? 100 + frame - 20
-                                    : frame - 12;
+    for (unsigned frame = 0; frame < 41; ++frame) {
+      unsigned screen = frame < 24 || frame >= 35 ? 7 : 3;
+      unsigned pose = frame < 24    ? frame
+                      : frame >= 35 ? 24 + frame - 35
+                      : frame >= 32 ? 100 + frame - 32
+                                    : frame - 24;
       char output[POS_FS_PATH];
       if (snprintf(output, sizeof(output), "%s/%u.ppm", argv[3], frame) >=
           (int)sizeof(output))
         return 2;
       if (preview(root, output, screen, pose))
         return 1;
-      printf("%u\n", frame >= 20 && frame < 23  ? 35
-                     : frame >= 6 && frame < 12 ? 45
-                     : screen == 7              ? 65
-                                                : 120);
+      printf("%u\n", frame < 18                  ? 32
+                     : frame >= 32 && frame < 35 ? 35
+                     : frame >= 18 && frame < 24 ? 45
+                     : screen == 7               ? 65
+                                                 : 120);
     }
     return 0;
   }

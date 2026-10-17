@@ -233,26 +233,18 @@ int pos_update_load(const char *file, const char *key, const char *current,
   if (!pos_fs_json_safe(body, strlen(body)))
     goto invalid;
   j = cJSON_ParseWithOpts(body, NULL, true);
-  const char *release = string(j, "release"),
-             *minimum = string(j, "minimum_version"),
-             *model = string(j, "model"), *kind = string(j, "kind"),
-             *base = string(j, "base_url");
+  const char *release = string(j, "release"), *model = string(j, "model"),
+             *kind = string(j, "kind"), *base = string(j, "base_url");
   cJSON *format = cJSON_GetObjectItemCaseSensitive(j, "format"),
-        *legacy_minimum =
-            cJSON_GetObjectItemCaseSensitive(j, "minimum_version"),
         *sequence = cJSON_GetObjectItemCaseSensitive(j, "sequence"),
         *package = cJSON_GetObjectItemCaseSensitive(j, "package");
   int compare;
-  /* Older feed readers require this field. Accept and validate its syntax
-   * when present, but it no longer limits direct upgrades. */
-  if (!cJSON_IsObject(j) || cJSON_GetArraySize(j) != (legacy_minimum ? 8 : 7) ||
+  if (!cJSON_IsObject(j) || cJSON_GetArraySize(j) != 7 ||
       !cJSON_IsNumber(format) || format->valuedouble != 1 || !model ||
       strcmp(model, POS_MODEL) || !release ||
       pos_version_compare(release, release, &compare) ||
-      pos_version_compare(current, current, &compare) ||
-      (legacy_minimum &&
-       (!minimum || pos_version_compare(minimum, minimum, &compare))) ||
-      !kind || (strcmp(kind, "firmware") && strcmp(kind, "assets")) || !base ||
+      pos_version_compare(current, current, &compare) || !kind ||
+      (strcmp(kind, "firmware") && strcmp(kind, "assets")) || !base ||
       !pos_https_url_valid(base) || strchr(base, '?') || strlen(base) > 350 ||
       !cJSON_IsNumber(sequence) || sequence->valuedouble < 1 ||
       sequence->valuedouble > UINT32_MAX ||

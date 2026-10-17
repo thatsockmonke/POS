@@ -37,8 +37,12 @@ static void save_gain(const char *root, pos_settings_t *settings,
 }
 static void record(const char *root, pos_settings_t *settings) {
   pos_error_t e = {0};
-  pos_view_t *v = calloc(1, sizeof(*v));
-  if (!v) {
+  struct {
+    pos_view_t view;
+    int16_t samples[1024];
+  } *work = calloc(1, sizeof(*work));
+  pos_view_t *v = work ? &work->view : NULL;
+  if (!work) {
     pos_ui_notice("Recorder unavailable", "Not enough heap.");
     return;
   }
@@ -51,14 +55,14 @@ static void record(const char *root, pos_settings_t *settings) {
   pos_recorder_t *r = pos_recorder_open(root, &e);
   if (!r) {
     pos_ui_notice("Cannot record", e.message);
-    free(v);
+    free(work);
     return;
   }
   pos_microphone_set_gain(settings->microphone_gain);
   if (pos_microphone_start(&e)) {
     pos_recorder_close(r);
     pos_ui_notice("Microphone unavailable", e.message);
-    free(v);
+    free(work);
     return;
   }
   bool paused = false, failed = false, done = false;
@@ -99,22 +103,29 @@ static void record(const char *root, pos_settings_t *settings) {
     if (done || pos_home_pending())
       break;
     if (!paused) {
-      int16_t samples[256];
-      size_t n = 0;
-      if (pos_microphone_read(samples, 256, &n, &e) ||
-          pos_recorder_write(r, samples, n, &e)) {
-        failed = true;
+      unsigned drained = 0;
+      do {
+        int16_t *samples = work->samples;
+        size_t n = 0;
+        if (pos_microphone_read(samples, 1024, &n, &e) ||
+            pos_recorder_write(r, samples, n, &e)) {
+          failed = true;
+          break;
+        }
+        for (size_t i = 0; i < n; ++i) {
+          unsigned amplitude = samples[i] < 0 ? -(int)samples[i] : samples[i];
+          if (amplitude > peak)
+            peak = amplitude;
+        }
+        drained += (unsigned)n;
+      } while (pos_microphone_pending() >= 256 && drained < 16000);
+      if (failed)
         break;
-      }
-      for (size_t i = 0; i < n; ++i) {
-        unsigned amplitude = samples[i] < 0 ? -(int)samples[i] : samples[i];
-        if (amplitude > peak)
-          peak = amplitude;
-      }
     }
     uint32_t seconds = pos_recorder_frames(r) / POS_RECORD_RATE;
     uint64_t now = esp_timer_get_time() / 1000;
-    if (redraw || seconds != displayed || now - last_draw >= 100) {
+    if ((paused || pos_microphone_pending() < 4000) &&
+        (redraw || seconds != displayed || now - last_draw >= 200)) {
       bool silent = !paused && !peak;
       silent_readouts = silent ? silent_readouts + 1 : 0;
       unsigned target = peak * 1000 / 32768;
@@ -141,7 +152,7 @@ static void record(const char *root, pos_settings_t *settings) {
       pos_view_line(v, 15, "Fn+': close     G0: home");
       pos_device_show(v);
       displayed = seconds;
-      last_draw = now;
+      last_draw = esp_timer_get_time() / 1000;
       redraw = false;
       peak = 0;
     }
@@ -160,7 +171,7 @@ static void record(const char *root, pos_settings_t *settings) {
   else
     pos_ui_notice("Recording saved", pos_recorder_path(r));
   pos_recorder_close(r);
-  free(v);
+  free(work);
 }
 void pos_ui_recorder(const char *root, pos_settings_t *settings) {
   const char *items[] = {

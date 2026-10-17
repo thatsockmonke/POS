@@ -25,6 +25,7 @@
 #include "pos_battery.h"
 #include "pos_console.h"
 #include "pos_health.h"
+#include "pos_peripherals.h"
 #include "pos_timezone.h"
 #include <stdatomic.h>
 #include <stdio.h>
@@ -297,11 +298,19 @@ int pos_device_init(void) {
 bool pos_device_event(pos_event_t *event, uint32_t timeout_ms) {
   bool received = events && xQueueReceive(events, event,
                                           pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
+  if (!display_hidden && received && event->pressed) {
+    int key = pos_navigation(event);
+    pos_audio_feedback(
+        key == POS_KEY_HOME || key == POS_KEY_ESCAPE ? POS_SOUND_BACK
+        : key == POS_KEY_ENTER                       ? POS_SOUND_SELECT
+        : key >= POS_KEY_UP && key <= POS_KEY_RIGHT  ? POS_SOUND_NAV
+                                                     : POS_SOUND_KEY);
+  }
   if (!display_hidden && received && event->pressed &&
       event->key == POS_KEY_HOME)
     pos_home_request();
   pos_health_tick();
-  if (!display_hidden && previous_valid &&
+  if (!display_hidden && !pos_microphone_active() && previous_valid &&
       (uint64_t)esp_timer_get_time() / 1000 - battery_refresh >= 5000)
     pos_device_show(&previous);
   return received;

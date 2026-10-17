@@ -1,6 +1,7 @@
 #include "ui.h"
 #include "esp_timer.h"
 #include "pos_device.h"
+#include "pos_peripherals.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -94,6 +95,7 @@ void pos_ui_message(const char *title, const char *body) {
 void pos_ui_notice(const char *title, const char *body) {
   if (pos_home_pending())
     return;
+  pos_audio_feedback(POS_SOUND_NOTICE);
   unsigned page = 0, pages = message_page(title, body, 0, true);
   pos_event_t e;
   for (;;) {
@@ -285,65 +287,4 @@ int pos_ui_progress(void *ctx, const char *phase, const char *name,
     if (cancelled(&e))
       return 1;
   return 0;
-}
-
-int pos_ui_file_cards(const char *title, const char *const *names,
-                      const uint8_t *icons, int count, unsigned page,
-                      unsigned pages) {
-  if (count < 1 || pos_home_pending())
-    return -1;
-  int selected = count > 4 ? 4 : 3;
-  if (selected >= count)
-    selected = 0;
-  bool redraw = true, animate = false;
-  while (!pos_home_pending()) {
-    if (redraw) {
-      pos_view_t view;
-      pos_view_clear(&view, title);
-      pos_ui_style(&view);
-      view.visual = POS_VISUAL_FILES;
-      if (count == 4)
-        pos_view_line(&view, 1, "Empty folder - use Actions");
-      else
-        pos_view_line(&view, 1, "Page %u/%u    Item %d/%d", page + 1, pages,
-                      selected + 1, count);
-      pos_view_line(&view, 2, "%.30s", names[selected]);
-      char labels[3][11] = {{0}};
-      for (int tile = 0; tile < 3; ++tile) {
-        int at = selected + tile - 1;
-        view.visual_icons[tile] = at >= 0 && at < count ? icons[at] : 255;
-        if (at >= 0 && at < count)
-          snprintf(labels[tile], sizeof(labels[tile]), "%.10s", names[at]);
-      }
-      pos_view_line(&view, 12, "%-10.10s%-10.10s%-10.10s", labels[0], labels[1],
-                    labels[2]);
-      pos_view_line(&view, 14, "Enter:open Space:actions");
-      pos_view_line(&view, 15, "Esc:back  Fn+':close G0:home");
-      if (animate)
-        pos_ui_spring(&view, false, false);
-      else
-        pos_device_show(&view);
-      redraw = false;
-      animate = false;
-    }
-    pos_event_t e;
-    if (!pos_device_event(&e, 100) || !e.pressed)
-      continue;
-    if (e.key == POS_KEY_HOME || e.key == POS_KEY_ESCAPE)
-      return -1;
-    int key = pos_navigation(&e);
-    if (key == ' ')
-      return selected + count;
-    if (key == POS_KEY_ENTER)
-      return selected;
-    if (key == POS_KEY_LEFT || key == POS_KEY_UP) {
-      selected = (selected + count - 1) % count;
-      redraw = animate = true;
-    }
-    if (key == POS_KEY_RIGHT || key == POS_KEY_DOWN) {
-      selected = (selected + 1) % count;
-      redraw = animate = true;
-    }
-  }
-  return -1;
 }

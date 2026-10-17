@@ -8,7 +8,7 @@ manual flash addresses or an understanding of partitions.
 
 ## Start here
 
-1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.6.0-dev).
+1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.6.1-dev).
 2. Download **`pos-setup`**. This is the executable wizard, not the Source code ZIP.
    Its optional `pos-setup.sha256` checksum is beside it. The complete POS ZIP
    also includes a copy of the wizard.
@@ -214,7 +214,7 @@ If the card has only the old installer files and you have **not installed POS**:
    **pos-install-old** (or another unused name). Keep the old files; formatting
    is unnecessary. Preserve any `pos-install.copying` folder under another name too.
 3. Download this release's **pos-setup**, replace the old executable and run it
-   with `--release v0.6.0-dev`. Choose **2. Prepare the microSD only** and select
+   with `--release v0.6.1-dev`. Choose **2. Prepare the microSD only** and select
    the card's shared top-level folder. It copies and verifies the matching package.
 4. Eject the card, put it into the powered-off ADV, connect the ADV and share its
    USB connection with Linux. Run the same command and choose **3. Flash Cardputer
@@ -230,7 +230,7 @@ With the paths used in the reported Crostini session, run:
 
 ```sh
 chmod +x "/mnt/shared/MyFiles/Downloads/pos-setup"
-"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.6.0-dev --sd-folder "/mnt/shared/removable/POS Drive"
+"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.6.1-dev --sd-folder "/mnt/shared/removable/POS Drive"
 ```
 
 If the card already contains an installed **/POS** tree, keep it and your files.
@@ -242,8 +242,8 @@ Optional commands for troubleshooting:
 
 ```sh
 ~/pos-setup --download-only                 # Download/verify without device changes
-~/pos-setup --release v0.6.0-dev             # Use a specific published version
-~/pos-setup --bundle /path/pos-0.6.0-dev.zip # Use a ZIP and matching .sha256 offline
+~/pos-setup --release v0.6.1-dev             # Use a specific published version
+~/pos-setup --bundle /path/pos-0.6.1-dev.zip # Use a ZIP and matching .sha256 offline
 ~/pos-setup --sd-folder '/mnt/chromeos/removable/YOUR CARD'
 ```
 
@@ -285,7 +285,7 @@ recovery shortcut still applies.
 ## Recorder overrun fix
 
 0.5.7-dev separates microphone capture from SD writes and screen rendering,
-with one second of bounded mono PCM buffering. WAV creation/header sync happens
+with bounded mono PCM buffering (two seconds preferred, one-second fallback). WAV creation/header sync happens
 before capture starts. A card that cannot keep up for longer than that buffer
 can still stop recording rather than silently discard audio. In Recorder,
 choose **Recover interrupted WAV**, select the file ending **.wav.part** in
@@ -325,10 +325,10 @@ preset to the draft, **S** saves, and Escape cancels. The draft is visible direc
 there is no separate Preview button. Color picker controls remain arrows, Q/E for
 hue, Shift for fine steps, Enter to accept, Escape to cancel that color change.
 
-**Files:** arrows move across icon cards; Enter opens folders, audio and text documents directly; Space opens the action
-menu. Folder icons hint at documents, audio, images or mixed contents, inspecting
-at most 24 immediate entries without loading file data or following symlinks.
-Parent, Previous, Next and Folder actions cards retain the existing operations.
+**Files:** the text browser is restored in 0.6.1-dev. Up/Down moves through
+names, Parent, Previous/Next and Folder actions; Enter opens a selected entry's
+actions. Choose Open folder, Play in Audio Player, or Open file → Text Editor.
+Copy/cut/paste, rename, Trash and explicit permanent deletion remain available.
 
 **Counter:** Enter, Space or Up adds one; Down subtracts one. The red button
 squishes and the number jumps, with the value saved on close. Music/Audio Player
@@ -363,3 +363,16 @@ The new updater no longer shows a minimum version or requires a clean reinstall
 because of a version cutoff. Signatures, file hashes, hardware compatibility,
 package format, increasing signed sequences and downgrade prevention still apply.
 Use Settings → System → Software Update → Check for Updates as usual.
+
+## Sounds and recording (0.6.1-dev)
+
+Open Settings → **Sounds** for master On/Off, Volume (0–100%), Key presses,
+Apps / notifications and Preview sound. Preferences survive restarts and backups.
+Volume 0 or master Off is silent. Feedback is suppressed while the microphone or
+music/audio playback owns the codec. It resumes after those operations stop.
+
+Recorder prioritizes saving queued samples over drawing the meter. It writes
+larger batches, uses buffered SD writes and leaves more time for drainage between
+renders. If storage still stalls beyond the bounded buffer, it reports the error
+and retains the partial WAV. Recover existing `.wav.part` files in Recorder before
+deleting them; an overrun's uncaptured audio cannot be reconstructed.

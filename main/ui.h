@@ -7,9 +7,6 @@ void pos_ui_set_theme(const pos_background_t *background);
 void pos_ui_style(pos_view_t *view);
 /* Bounded spring frames; missed frames are skipped on slow displays. */
 void pos_ui_spring(pos_view_t *view, bool opening, bool returning);
-int pos_ui_file_cards(const char *title, const char *const *names,
-                       const uint8_t *icons, int count, unsigned page,
-                       unsigned pages);
 void pos_ui_message(const char *title, const char *body);
 void pos_ui_notice(const char *title, const char *body);
 int pos_ui_menu(const char *title, const char *const *items, int count);

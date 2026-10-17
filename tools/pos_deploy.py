@@ -167,7 +167,8 @@ class NoRedirect(HTTPRedirectHandler):
         raise ValueError("Publish the update at its final HTTPS URL; redirects are refused")
 
 
-def validate_update(directory: Path, public_key: Path, api):
+def verify_update_artifact(directory: Path, public_key: Path, api):
+    """Authenticate an immutable historical artifact and verify every resource."""
     from pos_updates import validate_package, version
     path = directory / "manifest.json"
     if path.is_symlink() or path.stat().st_size > 32768:
@@ -178,7 +179,7 @@ def validate_update(directory: Path, public_key: Path, api):
         raise ValueError("Unsupported signed envelope")
     payload = json.loads(envelope["payload"])
     fields = {"format", "model", "release", "sequence", "kind", "base_url", "package"}
-    if (set(payload) not in (fields, fields | {"minimum_version"}) or
+    if (not fields.issubset(payload) or
             payload["format"] != 1 or payload["model"] != api.MODEL or payload["kind"] not in ("firmware", "assets") or
             type(payload["sequence"]) is not int or not 1 <= payload["sequence"] <= 0xffffffff or
             not valid_https(payload["base_url"])):
@@ -186,10 +187,6 @@ def validate_update(directory: Path, public_key: Path, api):
     if not isinstance(payload['release'], str):
         raise ValueError('Invalid release version')
     version(payload['release'])
-    if 'minimum_version' in payload:
-        if not isinstance(payload['minimum_version'], str):
-            raise ValueError('Invalid legacy version metadata')
-        version(payload['minimum_version'])  # Read legacy metadata without enforcing it.
     validate_package(payload["package"], api)
     public = public_key.read_bytes()
     if len(public) > 512 or b"PRIVATE" in public:
@@ -221,6 +218,13 @@ def validate_update(directory: Path, public_key: Path, api):
                 not file.is_file() or file.stat().st_size != record["size"] or api.sha256(file) != record["sha256"]):
             raise ValueError("Local payload differs from the signed package")
     return raw, payload, hashlib.sha256(der).hexdigest(), expected_build
+
+
+def validate_update(directory: Path, public_key: Path, api):
+    result = verify_update_artifact(directory, public_key, api)
+    if set(result[1]) != {"format", "model", "release", "sequence", "kind", "base_url", "package"}:
+        raise ValueError("Invalid signed update fields")
+    return result
 
 
 def deploy(args, api) -> dict:

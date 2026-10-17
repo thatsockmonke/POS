@@ -8,43 +8,12 @@ continue in the background. Music and explicit file-transfer sessions stop on ex
 
 ## Files
 
-Files starts in `POS/Users/Owner`. Each directory has paginated entries, Parent,
-Previous/Next and Folder actions. Enter opens folders, audio or text directly;
-Space opens the selected entry's action menu.
-
-- **Open:** enter a folder or choose Text Editor/Preview for a file. For MP3/WAV,
-  the first action is **Play in Audio Player**. It opens the selected file and
-  returns to Files at EOF. Audio Player has no launcher icon. Music remains a
-  separate library app. Folder actions → Recordings opens the recordings folder.
-- **Copy / Cut:** put the selected path on the app's clipboard. Navigate to the
-  destination, choose Folder actions → Paste, then accept/edit the destination
-  filename. Cut moves only after a successful paste; leaving Files clears the
-  clipboard. Existing targets are refused, including case-insensitive collisions
-  on FAT32. Use a new filename to keep both copies.
-- **Rename / New folder:** enter a simple name. System containers, installer
-  media, recovery backups and settings slots are protected from these operations.
-- **Move to Trash:** the original moves into a unique
-  `POS/Users/Owner/Trash/item-N/data`, with readable `restore.json` recording its
-  original path. No user data is formatted or automatically erased.
-- **Restore:** Folder actions → Open Trash, open the relevant item-N folder, then
-  Folder actions → Restore this Trash item. Existing destinations are preserved;
-  rename/move a conflicting file first. The original parent folder must exist.
-- **Delete permanently:** type `DELETE` exactly. This can delete files/folders
-  recursively and cannot be undone. A cancelled/failed deletion leaves the
-  remaining files in place. Trash is the safer normal delete action.
-- **Share:** send a selected file through the common Share screen. Folder transfer
-  is currently local copy/move; BLE/Wi-Fi sharing selects one file at a time.
-
-Copies stream through a 4-KiB buffer and verify the staged file before publishing
-it. Folder copies remain under a unique `destination.pos-copy-N.part` name until
-all contents are copied and verified. Interrupted/cancelled work stays accessible;
-it is never presented as a successfully completed target. Original files remain
-untouched. Copies do not silently resume or overwrite partial destinations.
-
-Paths are limited to 240 bytes and 16 directory levels. Symlinks are refused by
-native helpers. Deeper/longer paths or insufficient space produce an error and
-retain the original. Directory listings follow storage order rather than sorting
-the entire directory in RAM. The factory recovery browser remains read-only.
+Files opens to POS/Users/Owner in a plain paginated text list. Up/Down moves,
+Enter selects Parent/Previous/Next/Folder actions or opens an entry's action menu.
+Select Open folder, Play in Audio Player, or Open file → Text Editor/Preview/Share.
+Copy/cut/paste, rename, Trash/restore, folder operations and confirmed permanent
+deletion retain their existing protections. No decorative folder-content scans
+or icon carousel remain. Arrows work without Fn outside text entry.
 
 ## POS Music
 
@@ -313,7 +282,7 @@ with unique `Recording-00001.wav` names. Writes sync approximately every two
 recorded seconds; stop verifies the complete PCM CRC before publication. Partial
 `.wav.part` files remain recoverable through **Recover interrupted WAV**. Existing
 files are never overwritten. A DMA overrun, full card or storage stall beyond the
-one-second buffer remains an explicit error. The user confirms input works in
+bounded buffer remains an explicit error. The user confirms input works in
 0.5.8-dev; gain/UI changes still need acoustic/usability confirmation.
 
 ## Files Audio Player
@@ -347,10 +316,8 @@ Left/Right changes count, S saves, P resets the draft to the pan flag, Escape
 cancels. Selected stripes pulse white briefly, at a slow interval. No Preview
 button or separate preview state remains.
 
-Files uses icon cards; folder hints show paper, a note, a picture or mixed items
-from a bounded scan of up to 24 immediate entries. No recursive content scan is
-needed. Arrows select; Enter opens folders/audio/text, and Space opens actions. Protected operations, confirmation,
-Trash, copy/move and pagination retain their existing safeguards.
+Files returned to a plain text list in 0.6.1-dev. Arrows select, Enter opens
+actions, and existing file safety and pagination remain.
 
 Counter uses a red pressable button with a jumping number: Enter/Space/Up adds,
 Down subtracts. Music and the Files-only Audio Player use a disc/progress display.
@@ -368,3 +335,14 @@ Music volume/tracks and Recorder gain. Shift+arrows still adjusts color finely.
 Fn+arrows and USB arrows continue to work. In editor/text fields, the raw keys
 retain punctuation; Fn+arrows moves the text cursor. Global close shortcuts stay
 Fn + apostrophe, Fn+Space or a short G0 press.
+
+## UI sounds (0.6.1-dev)
+
+Settings → Sounds offers master enable, 0–100% volume, key-press feedback,
+app/notification feedback and a preview. Navigation/typing, selection/back,
+app open/close and notices use short ramped synthesized tones. Rapid requests
+coalesce to one pending cue; input never waits for sound generation. The codec
+has one owner: cues are skipped during microphone capture and music playback,
+then output is drained/muted before releasing ownership.
+
+Launcher motion keeps the selection box stationary. Left/Right slides the icon ribbon underneath it with momentum and spring settling; another arrow can change the motion before it finishes. Only seven tiny icon sprites are cached, including offscreen neighbors.

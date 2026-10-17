@@ -63,3 +63,13 @@ uses the same decoder/migration path and preserves the gain. Unknown future
 formats remain protected. Older firmware treats format 3 as future preferences
 and preserves it rather than silently downgrading it; user documents and audio
 remain ordinary files regardless of preferences compatibility.
+
+## Settings format 4: UI sounds
+
+0.6.1-dev saves `sounds_enabled`, `sounds_volume` (0–100), `sounds_keys` and
+`sounds_alerts` in the same checked generation slots. Formats 1–3 load without
+rewriting; missing sound preferences default to enabled, 20% volume and both
+categories on. Identity, wallpaper, timezone, brightness and microphone gain are
+preserved. Backup/restore uses the same validated decoder. Unknown future formats
+remain protected. Firmware older than 0.6.1 treats format 4 as future preferences
+rather than rewriting it; user documents/audio remain ordinary recoverable files.

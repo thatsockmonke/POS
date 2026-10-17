@@ -57,3 +57,6 @@ void vSemaphoreDelete(SemaphoreHandle_t);
 int xTaskCreate(void (*)(void *), const char *, unsigned, void *, unsigned,
                 void *);
 void vTaskDelete(void *);
+
+void vTaskDelay(unsigned);
+size_t xStreamBufferBytesAvailable(StreamBufferHandle_t);

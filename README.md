@@ -4,30 +4,29 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.6.0-dev is the required transition release: update to it before any later release.**
-It removes the updater's minimum-version cutoff and displayed minimum. Later
-update packages omit the obsolete field entirely. Older devices are offered
-0.6.0 first; after installing it, the official update feed switches automatically.
-Signed updates retain signature, hash, hardware, format, sequence and downgrade
-checks. Installed older updaters can still download this release; no SD formatting
-or USB reflash is needed for an installation with working Software Update.
+**0.6.1-dev restores text Files, adds adjustable UI sounds and fixes Recorder drainage.**
+Update to **0.6.0-dev first** if you are on an older installation. The obsolete
+update field and official-source migration code are removed from the resident
+updater; active metadata contains exactly seven fields. The archived 0.6.0 bridge
+stays available for older devices.
 
-Boot starts on black, forms the pink/yellow/blue flag, then fades in POS.
-The full-screen color flashes are removed. Each stripe starts halfway through the
-previous one. Printed arrow keys now navigate menus and apps without holding Fn;
-text fields keep punctuation, and Fn+arrows still moves the editor cursor.
+Settings → **Sounds** controls master mute, UI volume (0–100%), key presses and
+app/notification feedback, with a preview. Short synthesized beeps/boops run in
+a separate bounded worker; feedback stays silent during recording and playback.
+Files is the original text list again: arrows move and Enter opens actions,
+including Audio Player, Editor, copy/move and Trash.
 
-The saved microphone gain and visual UI from 0.5.9-dev are included:
-Recorder has a single microphone/level meter colored from your wallpaper and
-1x–64x gain, adjustable with Left/Right while recording. The launcher springs
-between apps, zooms/fades on opening and reverses the motion on return. Fn +
-apostrophe and short G0 close to the launcher; Fn+Space remains available.
-Background edits stripes directly, Files shows content-hint folder cards, Counter
-has a squishy red button and jumping count, and Music has a disc/progress view.
-The user confirms the 0.5.8-dev microphone records sound; gain, motion and the new
-layouts still need a physical usability/performance check.
+Recorder now drains accumulated PCM in batches before drawing, uses a 4-KiB
+file buffer, paces the meter from the end of each render and defers redraws while
+catching up. It prefers a two-second audio buffer and falls back to one second
+under heap pressure. Real I/O/overrun failures preserve partial WAVs and queued
+audio; use Recorder → Recover interrupted WAV. A long physical recording still
+needs checking on your device.
 
-[Animated UI preview](downloads/0.6.0-dev/ui-animation.png) · [Recorder](downloads/0.6.0-dev/recorder.png) · [Files](downloads/0.6.0-dev/files.png) · [Background](downloads/0.6.0-dev/background.png) · [Counter](downloads/0.6.0-dev/counter.png)
+Black-start flag/logo boot, spring launcher transitions, themed mono meter,
+1x–64x microphone gain, direct stripe editing and Counter motion remain.
+
+[Animated UI preview](downloads/0.6.1-dev/ui-animation.png) · [Recorder](downloads/0.6.1-dev/recorder.png) · [Files](downloads/0.6.1-dev/files.png) · [Background](downloads/0.6.1-dev/background.png) · [Counter](downloads/0.6.1-dev/counter.png)
 
 Previews use the actual portable renderer with example state; they are not
 hardware recordings or device frame-rate measurements.
@@ -142,14 +141,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.6.0-dev/launcher.png)
-![Color picker](downloads/0.6.0-dev/color-picker.png)
+![Launcher](downloads/0.6.1-dev/launcher.png)
+![Color picker](downloads/0.6.1-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.6.0-dev/boot-animation.png)
+![POS boot animation](downloads/0.6.1-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.6.0-dev/boot-splash.png)
+[Final splash frame](downloads/0.6.1-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -166,7 +165,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.0-dev --zip-output dist/pos-0.6.0-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.1-dev --zip-output dist/pos-0.6.1-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -286,3 +285,5 @@ Settings → **IR & motion** provides live BMI270 readings and explicit NEC send
 See [Developer tooling](docs/DEVELOPMENT.md) for `posctl flash`, `files` and gated
 `deploy`. HTTPS uses ESP-IDF's common-root certificate bundle to preserve the
 existing OTA layout; validation remains enabled and unsupported roots are rejected.
+
+In 0.6.1-dev the launcher selection box stays fixed while its icons slide with momentum and spring settling. Repeated arrow presses remain responsive during the animation.

@@ -59,20 +59,7 @@ enum {
   POS_VISUAL_STRIPES,
   POS_VISUAL_MIC,
   POS_VISUAL_COUNTER,
-  POS_VISUAL_FILES,
   POS_VISUAL_MUSIC
-};
-enum {
-  POS_ICON_FILE,
-  POS_ICON_FOLDER,
-  POS_ICON_DOCUMENT,
-  POS_ICON_AUDIO,
-  POS_ICON_IMAGE,
-  POS_ICON_MIXED,
-  POS_ICON_PARENT,
-  POS_ICON_PREV,
-  POS_ICON_NEXT,
-  POS_ICON_ACTIONS
 };
 typedef struct {
   char lines[POS_ROWS][POS_COLS + 1];
@@ -85,11 +72,10 @@ typedef struct {
   uint8_t visual, visual_selection;
   int16_t visual_motion;
   uint16_t visual_level; /* mono amplitude/progress, 0-1000 */
-  uint8_t visual_icons[3];
   bool visual_flash;
   bool black_background;
   int selected_tile;
-  uint8_t icons[3][8];
+  uint8_t icons[7][8]; /* Visible three plus two neighbors on each side. */
   bool solid_color;
   uint16_t color_rgb565;
   bool boot_splash;
@@ -112,6 +98,13 @@ void pos_view_line(pos_view_t *view, int row, const char *format, ...);
 uint16_t pos_view_pixel(const pos_view_t *view, int x, int y);
 /* Damped spring samples in percent. Final frame is always zero. */
 int pos_motion_spring(unsigned frame);
+/* Fixed-point, elapsed-time ribbon spring; another nudge preserves velocity. */
+typedef struct {
+  int32_t position, velocity;
+} pos_ribbon_t;
+void pos_ribbon_nudge(pos_ribbon_t *motion, int direction);
+bool pos_ribbon_tick(pos_ribbon_t *motion, unsigned elapsed_ms);
+int pos_ribbon_offset(const pos_ribbon_t *motion);
 bool pos_visual_pixel(const pos_view_t *, int x, int y, uint16_t *color);
 void pos_color_picker_view(const char *title, uint32_t rgb, uint16_t hue,
                            uint16_t saturation, uint16_t value,

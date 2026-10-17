@@ -381,6 +381,7 @@ class FeatureTests(unittest.TestCase):
         path=self.card/"POS/Users/settings.1.json"
         envelope=json.loads(path.read_text());body=json.loads(envelope["payload"])
         body["format"]=1;del body["background"];body.pop("microphone_gain",None)
+        for field in ("sounds_enabled","sounds_volume","sounds_keys","sounds_alerts"):body.pop(field,None)
         envelope["payload"]=json.dumps(body);envelope["sha256"]=hashlib.sha256(envelope["payload"].encode()).hexdigest()
         path.write_text(json.dumps(envelope));before=path.read_bytes()
         read=json.loads(self.run_feature("settings-read").stdout)
@@ -389,7 +390,7 @@ class FeatureTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(),before)
         self.run_feature("settings-save")
         upgraded=json.loads(json.loads((self.card/"POS/Users/settings.0.json").read_text())["payload"])
-        self.assertEqual(upgraded["format"],3)
+        self.assertEqual(upgraded["format"],4)
         self.assertEqual(upgraded["background"],["#FF218C","#FFD800","#21B1FF"])
 
     def test_invalid_background_settings_are_rejected_without_modification(self):
@@ -733,6 +734,43 @@ class FeatureTests(unittest.TestCase):
                 self.run_feature('settings-ui-display-' + key)
 
 
+    def test_recorder_drains_accumulated_blocks_before_redrawing(self):
+        self.run_feature('recorder-ui-drain')
+        import wave
+        with wave.open(str(self.card/'Recordings/Recording-00001.wav'),'rb') as wav:
+            self.assertEqual(wav.getnframes(),32*256)
+
+    def test_sound_settings_are_saved_and_survive_backup_restore(self):
+        self.run_feature('settings-ui-sounds')
+        expected=json.loads(self.run_feature('settings-read').stdout)
+        self.run_feature('backup');dest=self.destination()
+        self.run_feature('restore','--archive',self.card/BACKUP,card=dest)
+        actual=json.loads(self.run_feature('settings-read',card=dest).stdout)
+        for key in ('sounds_enabled','sounds_keys','sounds_alerts','sounds_volume','microphone_gain','name'):
+            self.assertEqual(actual[key],expected[key])
+
+    def test_v3_settings_gain_and_identity_load_with_sound_defaults_without_rewrite(self):
+        self.run_feature('recorder-ui-gain')
+        slots=list((self.card/'POS/Users').glob('settings.*.json'))
+        for p in slots:
+            outer=json.loads(p.read_text());body=json.loads(outer['payload']);body['format']=3
+            for key in ('sounds_enabled','sounds_keys','sounds_alerts','sounds_volume'):body.pop(key)
+            outer['payload']=json.dumps(body);outer['sha256']=hashlib.sha256(outer['payload'].encode()).hexdigest()
+            p.write_text(json.dumps(outer))
+        before={p.name:p.read_bytes() for p in slots}
+        loaded=json.loads(self.run_feature('settings-read').stdout)
+        self.assertEqual((loaded['microphone_gain'],loaded['sounds_volume']),(64,20))
+        self.assertTrue(loaded['sounds_enabled'] and loaded['sounds_keys'] and loaded['sounds_alerts'])
+        self.assertEqual(before,{p.name:p.read_bytes() for p in slots})
+
+    def test_sound_preferences_reject_invalid_values_without_modifying_original(self):
+        self.run_feature('settings-save');p=self.card/'POS/Users/settings.1.json';original=json.loads(p.read_text())
+        for field,bad in [('sounds_volume',-1),('sounds_volume',101),('sounds_volume',1.5),('sounds_volume','20'),('sounds_enabled',1),('sounds_keys','true'),('sounds_alerts',None)]:
+            outer=dict(original);body=json.loads(outer['payload']);body[field]=bad
+            outer['payload']=json.dumps(body);outer['sha256']=hashlib.sha256(outer['payload'].encode()).hexdigest()
+            p.write_text(json.dumps(outer));before=p.read_bytes();self.run_feature('settings-read',expected=1)
+            self.assertEqual(p.read_bytes(),before)
+
     def test_recorder_gain_menu_live_adjustment_and_persistence(self):
         self.run_feature('recorder-ui-gain')
         self.assertEqual(json.loads(self.run_feature('settings-read').stdout)['microphone_gain'],64)
@@ -742,6 +780,7 @@ class FeatureTests(unittest.TestCase):
         p=self.card/'POS/Users/settings.1.json'
         outer=json.loads(p.read_text());body=json.loads(outer['payload'])
         body['format']=2;body.pop('microphone_gain')
+        for field in ('sounds_enabled','sounds_volume','sounds_keys','sounds_alerts'):body.pop(field,None)
         outer['payload']=json.dumps(body);outer['sha256']=hashlib.sha256(outer['payload'].encode()).hexdigest()
         p.write_text(json.dumps(outer));before=p.read_bytes()
         loaded=json.loads(self.run_feature('settings-read').stdout)
@@ -759,7 +798,7 @@ class FeatureTests(unittest.TestCase):
                 self.run_feature('settings-read',expected=1)
                 self.assertEqual(p.read_bytes(),before)
 
-    def test_files_folder_icons_reflect_contents_and_do_not_follow_symlinks(self):
+    def test_files_text_list_shows_folders_without_reading_their_contents(self):
         for path in ('Documents/note.txt','Music/song.wav','Pictures/photo.png','Mixed/note.txt','Mixed/song.mp3'):
             self.write('POS/Users/Owner/'+path,b'content')
         target=self.base/'outside.wav';target.write_bytes(b'keep outside')

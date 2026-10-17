@@ -91,7 +91,7 @@ static bool picker_pixel(const pos_view_t *v, int x, int y, uint16_t *color) {
 }
 static bool icon_ink(const pos_view_t *v, int tile, int x, int y) {
   return x >= 0 && x < 32 && y >= 0 && y < 32 &&
-         ((v->icons[tile][y / 4] >> (x / 4)) & 1);
+         ((v->icons[tile + 2][y / 4] >> (x / 4)) & 1);
 }
 
 static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
@@ -176,21 +176,23 @@ static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
     fg = 0;
   }
   if (v->tiles) {
-    int rx = x - v->ribbon_offset;
-    int tile = rx >= 0 ? rx / 80 : -1, local = rx >= 0 ? rx % 80 : 0;
-    if (tile >= 0 && tile < 3) {
+    /* The focus belongs to the screen; only the ribbon moves underneath. */
+    int focus_x = x - v->selected_tile * 80;
+    if (focus_x >= 14 && focus_x <= 65 && y >= 38 && y <= 89) {
+      if (focus_x < 16 || focus_x > 63 || y < 40 || y > 87)
+        return 0;
+      if (focus_x == 16 || focus_x == 63 || y == 40 || y == 87)
+        return 0xffff;
+    }
+    int rx = x - v->ribbon_offset + 160;
+    int tile = rx >= 0 ? rx / 80 - 2 : -3;
+    int local = rx >= 0 ? rx % 80 : 0;
+    if (tile >= -2 && tile < 5) {
       int lift = tile == v->selected_tile ? v->tile_lift : 0;
       unsigned scale =
           tile == v->selected_tile && v->tile_scale ? v->tile_scale : 100;
       int lx = (local - 40) * 100 / (int)scale + 40;
       int ly = (y + lift - 64) * 100 / (int)scale + 64;
-      if (tile == v->selected_tile && lx >= 14 && lx <= 65 && ly >= 38 &&
-          ly <= 89) {
-        if (lx < 16 || lx > 63 || ly < 40 || ly > 87)
-          return 0;
-        if (lx == 16 || lx == 63 || ly == 40 || ly == 87)
-          return 0xffff;
-      }
       int ix = lx - 24, iy = ly - 48;
       if (icon_ink(v, tile, ix, iy))
         return 0;

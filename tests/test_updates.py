@@ -106,13 +106,10 @@ class UpdateTests(unittest.TestCase):
         self.signed(sequence=8);self.load();self.load(expected=1,floor=8);self.load(expected=1,floor=9)
         self.signed('firmware');self.load(current='0.4.1-dev',expected=1);self.load(current='0.5.0',expected=1)
         self.signed(mutate=lambda p:p['package'].update(version='0.3.8-dev'));self.load(expected=1)
-    def test_updates_have_no_version_cutoff_with_or_without_legacy_metadata(self):
-        for minimum in (None,'99.0.0'):
-            with self.subTest(legacy_minimum=minimum):
-                self.signed('firmware',minimum=minimum)
-                self.load(current='0.3.0-dev')
-                self.signed(minimum=minimum);self.load()
-        self.ui('cancel')
+    def test_update_requires_exactly_current_fields_without_minimum(self):
+        self.signed('firmware');self.load(current='0.3.0-dev')
+        self.signed(minimum='0.0.0');self.load(expected=1)
+        self.signed(minimum='99.0.0');self.load(expected=1)
 
     def test_malformed_legacy_metadata_unknown_fields_and_bad_current_version_are_rejected(self):
         for value in (None,42,{},'bad','0.04.0','1'*200):
@@ -170,7 +167,7 @@ class UpdateTests(unittest.TestCase):
     def test_signing_tool_round_trip_and_no_key_or_package_overwrite(self):
         installed=self.base/'installed.pos';installed.write_text(json.dumps(self.old));payload=self.base/'assets';(payload/'System/Assets').mkdir(parents=True);(payload/'System/Assets/icons.bin').write_bytes(b'tool icons')
         args=SimpleNamespace(kind='assets',release='0.4.1-dev',sequence=7,base_url='https://updates.example.test/pos/',output=self.base/'signed',payload=payload,installed_manifest=installed,private_key=self.private,firmware=None)
-        out=pos_updates.make_update(args,posctl);self.meta=out/'manifest.json';self.assertEqual(json.loads(json.loads(self.meta.read_text())['payload'])['minimum_version'],'0.0.0');self.load();self.assertEqual((out/'payload/System/Assets/icons.bin').read_bytes(),b'tool icons')
+        out=pos_updates.make_update(args,posctl);self.meta=out/'manifest.json';self.assertNotIn('minimum_version',json.loads(json.loads(self.meta.read_text())['payload']));self.load();self.assertEqual((out/'payload/System/Assets/icons.bin').read_bytes(),b'tool icons')
         with self.assertRaises(ValueError):pos_updates.make_update(args,posctl)
         old=self.private.read_bytes()
         with self.assertRaises(ValueError):pos_updates.keygen(self.private,self.public)

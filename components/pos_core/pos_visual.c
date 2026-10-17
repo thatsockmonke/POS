@@ -7,6 +7,32 @@ int pos_motion_spring(unsigned frame) {
   static const int8_t positions[] = {100, 38, -18, -8, 6, 0};
   return frame < sizeof(positions) ? positions[frame] : 0;
 }
+void pos_ribbon_nudge(pos_ribbon_t *motion, int direction) {
+  motion->position += direction > 0 ? 80 * 1024 : -80 * 1024;
+  /* Bound rapid key repeat to the two cached offscreen neighbors. */
+  if (motion->position > 160 * 1024)
+    motion->position = 160 * 1024;
+  if (motion->position < -160 * 1024)
+    motion->position = -160 * 1024;
+}
+bool pos_ribbon_tick(pos_ribbon_t *motion, unsigned elapsed_ms) {
+  /* Integrate in small steps so LCD/SD stalls cannot destabilize the spring. */
+  if (elapsed_ms > 250)
+    elapsed_ms = 250;
+  while (elapsed_ms) {
+    unsigned step = elapsed_ms > 8 ? 8 : elapsed_ms;
+    int64_t acceleration = -180LL * motion->position - 18LL * motion->velocity;
+    motion->velocity += (int32_t)(acceleration * step / 1000);
+    motion->position += (int32_t)((int64_t)motion->velocity * step / 1000);
+    elapsed_ms -= step;
+  }
+  if (abs(motion->position) < 256 && abs(motion->velocity) < 4096)
+    motion->position = motion->velocity = 0;
+  return motion->position || motion->velocity;
+}
+int pos_ribbon_offset(const pos_ribbon_t *motion) {
+  return motion->position / 1024;
+}
 static bool box(int x, int y, int l, int t, int w, int h) {
   return x >= l && x < l + w && y >= t && y < t + h;
 }
@@ -29,46 +55,6 @@ static uint16_t accent(const pos_view_t *v, int y) {
   return count && count <= POS_BACKGROUND_MAX_STRIPES
              ? pos_color_rgb565(v->background.colors[(unsigned)y * count / 135])
              : pos_boot_colors[(unsigned)y / 45];
-}
-static bool symbol(unsigned kind, int x, int y) {
-  if (kind == POS_ICON_DOCUMENT || kind == POS_ICON_FILE) {
-    return rim(x, y, 23, 9, 20, 34) ||
-           (kind == POS_ICON_DOCUMENT && x >= 27 && x < 39 &&
-            (y == 19 || y == 25 || y == 31));
-  }
-  if (kind == POS_ICON_AUDIO) {
-    return box(x, y, 34, 10, 3, 26) || box(x, y, 34, 10, 12, 4) ||
-           disk(x, y, 29, 37, 6);
-  }
-  if (kind == POS_ICON_IMAGE) {
-    return rim(x, y, 18, 12, 30, 27) || disk(x, y, 39, 20, 3) ||
-           (x >= 22 && x <= 43 && y >= 25 && y <= 35 && abs(x - 28) < y - 23);
-  }
-  if (kind == POS_ICON_MIXED)
-    return rim(x, y, 21, 10, 18, 28) || rim(x, y, 29, 18, 18, 28);
-  if (kind == POS_ICON_PARENT)
-    return (abs(x - 32) <= 2 && y > 16 && y < 48) ||
-           (y >= 13 && y < 29 && abs(abs(x - 32) - (28 - y)) < 2);
-  if (kind == POS_ICON_PREV || kind == POS_ICON_NEXT) {
-    if (kind == POS_ICON_NEXT)
-      x = 64 - x;
-    return y >= 17 && y <= 45 && abs(x - (20 + abs(y - 31))) < 3;
-  }
-  if (kind == POS_ICON_ACTIONS)
-    return disk(x, y, 18, 31, 4) || disk(x, y, 32, 31, 4) ||
-           disk(x, y, 46, 31, 4);
-  return false;
-}
-static bool folder(unsigned kind, int x, int y) {
-  bool content = symbol(kind, x, y);
-  bool back = rim(x, y, 12, 23, 43, 28) || rim(x, y, 15, 17, 20, 9);
-  /* Sloping front panel leaves the content visible above the open folder. */
-  int left = 8 + (y - 33) / 5, right = 59 - (y - 33) / 5;
-  bool front =
-      y >= 33 && y <= 54 &&
-      (y <= 35 || y >= 52 || abs(x - left) <= 1 || abs(x - right) <= 1) &&
-      x >= left && x <= right;
-  return content || back || front;
 }
 bool pos_visual_pixel(const pos_view_t *v, int x, int y, uint16_t *color) {
   *color = 0;
@@ -130,24 +116,6 @@ bool pos_visual_pixel(const pos_view_t *v, int x, int y, uint16_t *color) {
       if ((abs(dx) <= 2 && abs(dy) <= 7) || (abs(dx) <= 8 && abs(dy) <= 2))
         *color = 0xffff;
     }
-    return true;
-  }
-  if (v->visual == POS_VISUAL_FILES && y >= 26 && y < 96) {
-    int tile = x / 80, local = x % 80;
-    int lift = tile == 1 ? v->visual_motion : 0;
-    int iy = y - 28 + lift;
-    unsigned kind = v->visual_icons[tile];
-    if (kind == 255)
-      return true;
-    if (tile == 1 && rim(local, y, 3, 26, 74, 69))
-      *color = 0xffff;
-    bool ink = (kind & 128) || kind == POS_ICON_FOLDER
-                   ? folder(kind & 127, local - 8, iy)
-                   : symbol(kind, local - 8, iy);
-    if (ink)
-      *color = 0xffff;
-    if (tile == 1 && box(local, y, 7, 91, 66, 2))
-      *color = accent(v, y);
     return true;
   }
   if (v->visual == POS_VISUAL_MUSIC && y >= 40 && y < 104) {

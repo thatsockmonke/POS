@@ -1,4 +1,4 @@
-POS 0.6.0-dev - Pan Operating System
+POS 0.6.1-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -51,3 +51,10 @@ Maps/navigation and Meshtastic compatibility remain future work.
 
 Computer installation: download pos-setup and follow EASY_INSTALL.md.
 Crostini shared folders support copy only; raw formatting/USB need OS access.
+
+0.6.1: strict seven-field update metadata; obsolete updater compatibility removed.
+Files uses text lists and Enter action menus again.
+Settings > Sounds: master, volume 0-100%, keys, app/notification tones, preview.
+Feedback stays silent during recording/playback. Recorder drains batches before
+redrawing; two-second PCM buffer preferred, one-second fallback, 4-KiB SD buffer.
+Real storage errors keep recoverable partial WAVs. Do not delete your only copy.

@@ -20,8 +20,7 @@ typedef struct {
   char url[512], key[513];
 } pos_update_source_t;
 extern const char pos_update_official_url[], pos_update_official_key[];
-/* Defaults preserve custom/partial sources and sequences. 0.6 migrates only
- * the exact old official source/key from the bridge to the current feed. */
+/* Defaults preserve custom/partial sources and accepted sequences. */
 void pos_update_source_official(pos_update_source_t *source);
 bool pos_update_source_use_default(pos_update_source_t *source);
 /* Fingerprint is SHA-256 of DER SubjectPublicKeyInfo; only P-256 keys. */

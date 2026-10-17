@@ -1,6 +1,7 @@
 #include "pos_core.h"
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 static uint32_t hash(const pos_view_t *v, int l, int t, int r, int b) {
   uint32_t h = 2166136261u;
@@ -56,20 +57,6 @@ int main(int argc, char **argv) {
         assert(pos_view_pixel(&v, 120, y) == 0xffff);
       }
     }
-  } else if (!strcmp(argv[1], "folders")) {
-    v.visual = POS_VISUAL_FILES;
-    uint32_t hashes[3];
-    const unsigned kinds[] = {POS_ICON_DOCUMENT, POS_ICON_AUDIO,
-                              POS_ICON_IMAGE};
-    for (unsigned i = 0; i < 3; ++i) {
-      v.visual_icons[1] = 128 | kinds[i];
-      hashes[i] = hash(&v, 80, 26, 160, 96);
-    }
-    assert(hashes[0] != hashes[1] && hashes[0] != hashes[2] &&
-           hashes[1] != hashes[2]);
-    uint32_t rest = hashes[2];
-    v.visual_motion = 6;
-    assert(hash(&v, 80, 26, 160, 96) != rest);
   } else if (!strcmp(argv[1], "counter")) {
     v.visual = POS_VISUAL_COUNTER;
     pos_view_line(&v, 4, "42");
@@ -114,6 +101,65 @@ int main(int argc, char **argv) {
     for (int y = 0; y < 135; ++y)
       for (int x = 0; x < 240; ++x)
         assert(!pos_view_pixel(&v, x, y));
+  } else if (!strcmp(argv[1], "ribbon")) {
+    pos_ribbon_t m = {0};
+    pos_ribbon_nudge(&m, 1);
+    assert(pos_ribbon_offset(&m) == 80);
+    pos_ribbon_tick(&m, 64);
+    assert(pos_ribbon_offset(&m) > 0 && pos_ribbon_offset(&m) < 80);
+    int32_t velocity = m.velocity;
+    int before = pos_ribbon_offset(&m);
+    pos_ribbon_nudge(&m, 1);
+    assert(m.velocity == velocity && pos_ribbon_offset(&m) == before + 80);
+    bool overshoot = false;
+    for (unsigned i = 0; i < 120; ++i) {
+      pos_ribbon_tick(&m, 8);
+      overshoot |= m.position < 0;
+    }
+    assert(overshoot && !m.position && !m.velocity);
+    pos_ribbon_nudge(&m, -1);
+    pos_ribbon_tick(&m, 64);
+    velocity = m.velocity;
+    pos_ribbon_nudge(&m, 1);
+    assert(m.velocity ==
+           velocity); /* Reversing input does not erase momentum. */
+    for (unsigned i = 0; i < 20; ++i)
+      pos_ribbon_tick(&m, 250);
+    assert(!m.position && !m.velocity);
+    for (unsigned i = 0; i < 1000; ++i)
+      pos_ribbon_nudge(&m, 1);
+    assert(pos_ribbon_offset(&m) == 160);
+    pos_ribbon_tick(&m, 1000000);
+    assert(abs(pos_ribbon_offset(&m)) <= 160);
+    v.tiles = true;
+    v.selected_tile = 1;
+    memset(v.icons, 0xff, sizeof(v.icons));
+    const int offsets[] = {-160, -80, -5, 0, 5, 80, 160};
+    for (unsigned i = 0; i < sizeof(offsets) / sizeof(offsets[0]); ++i) {
+      v.ribbon_offset = offsets[i];
+      v.tile_scale = i % 2 ? 148 : 100;
+      v.tile_lift = i;
+      for (int x = 96; x <= 143; ++x) {
+        assert(pos_view_pixel(&v, x, 40) == 0xffff);
+        assert(pos_view_pixel(&v, x, 87) == 0xffff);
+      }
+      for (int y = 40; y <= 87; ++y) {
+        assert(pos_view_pixel(&v, 96, y) == 0xffff);
+        assert(pos_view_pixel(&v, 143, y) == 0xffff);
+      }
+    }
+    v.tile_scale = 100;
+    v.tile_lift = 0;
+    v.ribbon_offset = 0;
+    assert(pos_view_pixel(&v, 24, 50) == 0);
+    v.ribbon_offset = 12;
+    assert(pos_view_pixel(&v, 24, 50) != 0);
+    assert(pos_view_pixel(&v, 36, 50) == 0);
+    /* Cached neighbors keep the ribbon populated at both extremes. */
+    v.ribbon_offset = 160;
+    assert(pos_view_pixel(&v, 24, 50) == 0);
+    v.ribbon_offset = -160;
+    assert(pos_view_pixel(&v, 184, 50) == 0);
   } else if (!strcmp(argv[1], "spring")) {
     assert(pos_motion_spring(0) == 100 && pos_motion_spring(5) == 0 &&
            pos_motion_spring(99) == 0);

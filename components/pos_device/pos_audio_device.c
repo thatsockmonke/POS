@@ -8,12 +8,32 @@
 #include "pos_peripherals.h"
 #include <stdatomic.h>
 #include <stdio.h>
+enum { AUDIO_IDLE, AUDIO_CUE, AUDIO_PLAYBACK, AUDIO_CAPTURE };
+static atomic_uint audio_owner, feedback_config, feedback_pending;
+static atomic_bool feedback_stopping;
+static SemaphoreHandle_t feedback_exited;
+static bool feedback_running;
+static bool claim(unsigned owner) {
+  for (unsigned tries = 0; tries < 120; ++tries) {
+    unsigned expected = AUDIO_IDLE;
+    if (atomic_compare_exchange_strong(&audio_owner, &expected, owner)) {
+      atomic_store(&feedback_pending, 0);
+      return true;
+    }
+    if (expected == AUDIO_PLAYBACK && owner == AUDIO_PLAYBACK)
+      return true;
+    if (expected != AUDIO_CUE)
+      return false;
+    vTaskDelay(pdMS_TO_TICKS(5));
+  }
+  return false;
+}
 static i2s_chan_handle_t output;
 static unsigned rate;
 static i2s_chan_handle_t input;
-/* One second of mono PCM, independent of SD writes and display rendering.
+/* Prefer two seconds of mono PCM, falling back to one under heap pressure.
  * Only the capture task reads I2S; only the foreground recorder drains PCM. */
-#define MIC_BUFFER_BYTES (16000u * sizeof(int16_t))
+#define MIC_BUFFER_BYTES (32000u * sizeof(int16_t))
 static StreamBufferHandle_t mic_buffer;
 static SemaphoreHandle_t mic_exited;
 static bool mic_task_running, input_enabled;
@@ -35,7 +55,7 @@ static int fail(pos_error_t *e, const char *text) {
     snprintf(e->message, sizeof(e->message), "%s", text);
   return -1;
 }
-void pos_audio_stop(void) {
+static void audio_stop(void) {
   if (output) {
     pos_device_i2c_write(0x18, 0x32, 0);
     i2s_channel_disable(output);
@@ -44,8 +64,8 @@ void pos_audio_stop(void) {
   }
   rate = 0;
 }
-int pos_audio_write(const int16_t *stereo, size_t frames, unsigned hz,
-                    pos_error_t *e) {
+static int audio_write(const int16_t *stereo, size_t frames, unsigned hz,
+                       pos_error_t *e) {
   if (input)
     return fail(e, "Stop recording before playing audio.");
   if (!frames)
@@ -53,7 +73,7 @@ int pos_audio_write(const int16_t *stereo, size_t frames, unsigned hz,
   if (hz < 8000 || hz > 48000)
     return fail(e, "Unsupported audio sample rate.");
   if (output && rate != hz)
-    pos_audio_stop();
+    audio_stop();
   if (!output) {
     i2s_chan_config_t channel =
         I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
@@ -73,7 +93,7 @@ int pos_audio_write(const int16_t *stereo, size_t frames, unsigned hz,
                      .din = I2S_GPIO_UNUSED}};
     if (i2s_channel_init_std_mode(output, &config) != ESP_OK ||
         i2s_channel_enable(output) != ESP_OK) {
-      pos_audio_stop();
+      audio_stop();
       return fail(e, "Audio channel setup failed.");
     }
     /* M5Unified Cardputer ADV ES8311 profile: BCLK supplies the codec clock. */
@@ -82,7 +102,7 @@ int pos_audio_write(const int16_t *stereo, size_t frames, unsigned hz,
                                     {0x32, 0xBF}, {0x37, 0x08}};
     for (unsigned i = 0; i < sizeof(registers) / sizeof(registers[0]); ++i)
       if (pos_device_i2c_write(0x18, registers[i][0], registers[i][1])) {
-        pos_audio_stop();
+        audio_stop();
         return fail(e, "ES8311 codec not detected. Audio stopped.");
       }
     rate = hz;
@@ -93,6 +113,137 @@ int pos_audio_write(const int16_t *stereo, size_t frames, unsigned hz,
                  written == frames * 4
              ? 0
              : fail(e, "Audio output interrupted.");
+}
+
+void pos_audio_stop(void) {
+  for (unsigned tries = 0;
+       atomic_load(&audio_owner) == AUDIO_CUE && tries < 120; ++tries)
+    vTaskDelay(pdMS_TO_TICKS(5));
+  if (atomic_load(&audio_owner) != AUDIO_PLAYBACK)
+    return;
+  audio_stop();
+  atomic_store(&audio_owner, AUDIO_IDLE);
+}
+int pos_audio_write(const int16_t *stereo, size_t frames, unsigned hz,
+                    pos_error_t *e) {
+  if (!frames)
+    return 0;
+  if (!claim(AUDIO_PLAYBACK))
+    return fail(e, "Stop recording before playing audio.");
+  int result = audio_write(stereo, frames, hz, e);
+  if (result)
+    pos_audio_stop();
+  return result;
+}
+static void cue(pos_sound_t kind, unsigned volume) {
+  static const unsigned notes[POS_SOUND_COUNT][2] = {
+      {1046, 1046}, {880, 880},  {1320, 1320}, {660, 660},
+      {880, 1320},  {1320, 880}, {1175, 1568}, {880, 1175}};
+  unsigned frames = kind <= POS_SOUND_NAV    ? 192
+                    : kind <= POS_SOUND_BACK ? 384
+                                             : 640;
+  uint32_t phase = 0;
+  for (unsigned at = 0; at < frames;) {
+    int16_t pcm[160 * 2];
+    unsigned n = frames - at < 160 ? frames - at : 160;
+    for (unsigned i = 0; i < n; ++i) {
+      unsigned pos = at + i;
+      unsigned hz = notes[kind][pos < frames / 2 ? 0 : 1];
+      phase += (uint32_t)(((uint64_t)hz << 32) / 16000);
+      int triangle = (int)(phase >> 16);
+      triangle = triangle < 32768 ? triangle * 2 - 32768 : 98303 - triangle * 2;
+      unsigned ramp = pos < 32                ? pos
+                      : frames - 1 - pos < 32 ? frames - 1 - pos
+                                              : 32;
+      int16_t sample =
+          (int32_t)triangle * (int)volume * (int)ramp / (100 * 32 * 2);
+      pcm[i * 2] = pcm[i * 2 + 1] = sample;
+    }
+    if (audio_write(pcm, n, 16000, NULL))
+      break;
+    at += n;
+  }
+  /* Send silence through all four DMA descriptors before muting the codec.
+   * This drains the cue and avoids truncation/clicks without blocking input. */
+  int16_t silence[256 * 2] = {0};
+  for (unsigned i = 0; i < 4; ++i)
+    if (audio_write(silence, 256, 16000, NULL))
+      break;
+  vTaskDelay(pdMS_TO_TICKS(70));
+}
+static void feedback_task(void *unused) {
+  (void)unused;
+  while (!atomic_load(&feedback_stopping)) {
+    unsigned pending = atomic_exchange(&feedback_pending, 0);
+    unsigned config = atomic_load(&feedback_config);
+    if (pending && (config & 256)) {
+      unsigned kind = pending - 1;
+      bool allowed =
+          kind==POS_SOUND_PREVIEW || (kind <= POS_SOUND_BACK ? (config & 512) != 0 : (config & 1024) != 0);
+      unsigned expected = AUDIO_IDLE;
+      if (allowed && (config & 127) &&
+          atomic_compare_exchange_strong(&audio_owner, &expected, AUDIO_CUE)) {
+        cue(kind, config & 127);
+        audio_stop();
+        atomic_store(&audio_owner, AUDIO_IDLE);
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+  xSemaphoreGive(feedback_exited);
+  vTaskDelete(NULL);
+}
+int pos_audio_feedback_configure(bool enabled, unsigned volume, bool keys,
+                                 bool alerts) {
+  if (volume > 100)
+    return -1;
+  atomic_store(&feedback_config, (enabled ? 256u : 0u) | (keys ? 512u : 0u) |
+                                     (alerts ? 1024u : 0u) | volume);
+  atomic_store(&feedback_pending, 0);
+  if (enabled && volume && !feedback_running) {
+    feedback_exited = xSemaphoreCreateBinary();
+    if (!feedback_exited)
+      return -1;
+    atomic_store(&feedback_stopping, false);
+    if (xTaskCreate(feedback_task, "pos_ui_audio", 4096, NULL, 1, NULL) !=
+        pdPASS) {
+      vSemaphoreDelete(feedback_exited);
+      feedback_exited = NULL;
+      return -1;
+    }
+    feedback_running = true;
+  }
+  return 0;
+}
+void pos_audio_feedback(pos_sound_t sound) {
+  if (sound < 0 || sound >= POS_SOUND_COUNT || !feedback_running ||
+      atomic_load(&audio_owner) != AUDIO_IDLE)
+    return;
+  unsigned config = atomic_load(&feedback_config);
+  if (!(config & 256) || !(config & 127))
+    return;
+  if (sound != POS_SOUND_PREVIEW &&
+      !(config & (sound <= POS_SOUND_BACK ? 512 : 1024)))
+    return;
+  atomic_store(&feedback_pending, (unsigned)sound + 1);
+}
+void pos_audio_feedback_shutdown(void) {
+  atomic_store(&feedback_config, 0);
+  atomic_store(&feedback_pending, 0);
+  if (feedback_running) {
+    atomic_store(&feedback_stopping, true);
+    xSemaphoreTake(feedback_exited, portMAX_DELAY);
+    vSemaphoreDelete(feedback_exited);
+    feedback_exited = NULL;
+    feedback_running = false;
+  }
+}
+bool pos_microphone_active(void) {
+  return atomic_load(&audio_owner) == AUDIO_CAPTURE;
+}
+size_t pos_microphone_pending(void) {
+  return mic_buffer ? xStreamBufferBytesAvailable(mic_buffer) / sizeof(int16_t)
+                    : 0;
 }
 
 /* M5Unified's default mono input selects RIGHT and applies magnification 16
@@ -193,22 +344,24 @@ void pos_microphone_stop(void) {
     vSemaphoreDelete(mic_exited);
     mic_exited = NULL;
   }
+  unsigned expected = AUDIO_CAPTURE;
+  atomic_compare_exchange_strong(&audio_owner, &expected, AUDIO_IDLE);
 }
 int pos_microphone_read(int16_t *mono, size_t capacity, size_t *frames,
                         pos_error_t *e) {
   if (!frames)
     return fail(e, "Invalid microphone buffer.");
   *frames = 0;
-  if (!input || !mic_buffer || !mono || !capacity || capacity > 256)
+  if (!input || !mic_buffer || !mono || !capacity || capacity > 1024)
     return fail(e, "Microphone is not recording.");
   int error = atomic_load_explicit(&mic_error, memory_order_relaxed);
-  if (error)
-    return fail(e,
-                error == MIC_BUFFER_OVERRUN
-                    ? "SD could not keep up with buffered audio. Partial WAV "
-                      "retained; recover it in Recorder."
-                    : "Microphone capture interrupted. Partial WAV retained; "
-                      "recover it in Recorder.");
+  if (error && !pos_microphone_pending())
+    return fail(
+        e, error == MIC_BUFFER_OVERRUN
+               ? "Audio buffer filled during storage/display work. Partial WAV "
+                 "retained; recover it in Recorder."
+               : "Microphone capture interrupted. Partial WAV retained; "
+                 "recover it in Recorder.");
   size_t bytes =
       xStreamBufferReceive(mic_buffer, mono, capacity * 2,
                            mic_task_running ? pdMS_TO_TICKS(100) : 0);
@@ -220,9 +373,11 @@ int pos_microphone_read(int16_t *mono, size_t capacity, size_t *frames,
   return 0;
 }
 int pos_microphone_start(pos_error_t *e) {
-  if (input || output)
+  if (!claim(AUDIO_CAPTURE))
     return fail(e, "Audio is busy. Close playback or recording first.");
   mic_buffer = xStreamBufferCreate(MIC_BUFFER_BYTES, sizeof(int16_t));
+  if (!mic_buffer)
+    mic_buffer = xStreamBufferCreate(MIC_BUFFER_BYTES / 2, sizeof(int16_t));
   mic_exited = xSemaphoreCreateBinary();
   if (!mic_buffer || !mic_exited) {
     pos_microphone_stop();

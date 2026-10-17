@@ -17,9 +17,10 @@ class VisualTests(unittest.TestCase):
         self.assertEqual(p.returncode,0,p.stdout+p.stderr)
     def test_single_microphone_meter_uses_theme_and_grows_without_covering_controls(self):self.check('mic')
     def test_all_stripe_counts_and_white_selection_flash(self):self.check('stripes')
-    def test_folder_content_symbols_differ_and_focus_bounces(self):self.check('folders')
     def test_counter_button_squishes_and_number_jumps(self):self.check('counter')
     def test_fade_dims_every_channel_and_reaches_black_including_battery(self):self.check('fade')
     def test_spring_overshoots_and_settles_exactly(self):self.check('spring')
+
+    def test_stationary_focus_continuous_spring_momentum_and_cached_neighbors(self):self.check('ribbon')
 
     def test_music_progress_is_visible_and_does_not_cover_volume(self):self.check('music')

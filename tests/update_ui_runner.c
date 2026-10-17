@@ -190,23 +190,6 @@ int main(int argc, char **argv) {
     stored.format = 1;
     stored.sequence = 42;
     assert(!pos_update_source_load(&s) && s.sequence == 42 && *s.url && *s.key);
-    static const char legacy[] =
-        "https://raw.githubusercontent.com/thatsockmonke/POS/main/updates/"
-        "manifest.json";
-    assert(strstr(s.url, "/updates/latest.json"));
-    stored = s;
-    strcpy(stored.url, legacy);
-    assert(!pos_update_source_load(&s) && s.sequence == 42 &&
-           !strcmp(s.url, pos_update_official_url) &&
-           !strcmp(stored.url, legacy));
-    *stored.key = 0;
-    assert(!pos_update_source_load(&s) && !strcmp(s.url, legacy) && !*s.key &&
-           s.sequence == 42);
-    stored = s;
-    strcpy(stored.key, pos_update_official_key);
-    strcat(stored.key, "\n"); /* Preserve deliberately customized trust text. */
-    assert(!pos_update_source_load(&s) && !strcmp(s.url, legacy) &&
-           s.sequence == 42);
     pos_update_source_official(&s);
     stored = s;
     strcpy(stored.url, "https://custom.example.test/manifest.json");
