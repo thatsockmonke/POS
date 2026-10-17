@@ -33,6 +33,8 @@ int pos_microphone_read(int16_t *mono,size_t capacity,size_t *frames,pos_error_t
 /* Stop acquisition, retaining queued PCM. Read until frames == 0, then stop
  * to free the channel/buffer. This preserves the tail on pause and save. */
 void pos_microphone_end(void);
+/* Raw I2S peaks since the previous read, before gain; RIGHT feeds the WAV. */
+void pos_microphone_levels(unsigned *left, unsigned *right);
 void pos_microphone_stop(void);
 int pos_motion_start(pos_error_t *);
 int pos_motion_read(pos_imu_sample_t *,pos_error_t *);

@@ -3,20 +3,22 @@
 Target: `m5stack-cardputer-adv`, ESP32-S3. This is an explicit profile, not automatic
 revision detection. The constants below are verified against M5Stack source;
 physical signals, timing and calibration require bench checks. An initial user test
-confirmed USB backup/recovery, installer boot and SD detection, and reported an
-upside-down display. The corrected rotation still needs on-device confirmation.
+confirmed USB backup/recovery, installer boot and SD detection, and initially reported an upside-down display. The user later reported working
+installation/display/keyboard on 0.5.6-dev. Buffered capture in 0.5.7-dev eliminated
+the reported overrun but produced silent recordings; the channel/gain correction
+below still requires a physical recording/playback check.
 
 | Function | GPIO / configuration | Source |
 | --- | --- | --- |
 | SD SCK / MISO / MOSI / CS | 40 / 39 / 14 / 12, SPI3 at 10 MHz | M5Unified ADV pin table |
 | LCD SCK / MOSI / CS / DC / reset / backlight | 36 / 35 / 37 / 34 / 33 / 38, SPI2 at 20 MHz | M5GFX Cardputer/ADV ST7789 profile |
-| LCD geometry | 240x135 landscape; swap XY, mirror X only, gap 40/53, inversion | Stock M5GFX rotation 1; correction pending bench confirmation |
+| LCD geometry | 240x135 landscape; swap XY, mirror X only, gap 40/53, inversion | Stock M5GFX rotation 1; working orientation reported by user; full panel measurements pending |
 | ADV keyboard | TCA8418 0x34, SDA 8, SCL 9, 400 kHz, 7x8 matrix | M5Unified + M5Cardputer ADV reader |
 | Keyboard IRQ | GPIO 11 published; POS polls FIFO/status instead | M5Cardputer ADV reader |
 | System button | G0, active low | M5Unified ADV button configuration |
 | Battery | ADC1 GPIO 10, divider ratio 2; curve-fit calibration when available | M5Unified power profile |
 | USB | ESP32-S3 native USB Serial/JTAG console | ESP-IDF |
-| Microphone | ES8311 ADC data-in46, BCLK41/LRCK43; I2S1 16-bit stereo slots, left channel recorded as 16 kHz mono | Official ADV pin map + pinned M5Unified ADV mic profile |
+| Microphone | ES8311 ADC data-in46, BCLK41/LRCK43; I2S1 16-bit stereo slots, right channel recorded as 16 kHz mono, saturated 8x PCM gain | Official ADV pin map + pinned M5Unified ADV mic profile |
 | IR | GPIO44, emitter only; RMT 38 kHz carrier, standard 8-bit NEC TX | Official ADV pin map |
 | IMU | BMI270 I2C0x69 (0x68 fallback), SDA8/SCL9; 8 KiB configuration, 100 Hz, +/-4 g, +/-1000 degrees/s | Pinned M5Unified + Bosch register definitions |
 | Audio codec / I2S | ES8311 0x18 on SDA8/SCL9; BCLK41, LRCK43, data-out42; I2S1, 16-bit stereo slots | M5Unified ADV speaker profile |
@@ -146,11 +148,31 @@ measurement.
 ## Recorder / IR / IMU driver references and validation
 
 The microphone register profile is taken from `_microphone_enabled_cb_cardputer_adv`
-and its GPIO46/43/41 table in the pinned M5Unified source above. I2S clocks run
-before codec setup, one second of analog warm-up is discarded, and DMA receive
-queue overflow stops recording with an explicit error. Actual gain, channel,
-noise, clock ratio and coexistence need bench verification. DAC output is muted
-while recording; recording/playback cannot own I2S1 simultaneously.
+and its GPIO46/43/41 table in the pinned M5Unified source above. **Channel
+selection is also part of that reference:** `mic_config_t` defaults to
+`input_only_right`, and the ADV board setup does not override it. POS captures
+both 16-bit I2S slots and extracts the right slot; it previously extracted left,
+which could produce the reported silent WAV despite successful DMA transfers.
+
+The stock path's `magnification = 16`, `over_sampling = 1`, and
+`f_gain = magnification / (over_sampling * 2)` give effective 8x PCM gain. POS
+uses that gain with signed saturation, preserving the stock analog PGA and ADC
+volume. This does not copy M5Unified's software DC estimator/oversampling loop;
+the codec's digital DC cancellation remains enabled. No automatic channel
+selection or synthetic signal disguises a zero input. Raw L/R peaks in Recorder
+are measured before gain and distinguish quiet input from a percentage rounded
+to zero. Clock and ADC setup is read back at initialization; a mismatch stops
+with a codec error instead of claiming capture was configured.
+
+- [Pinned default right input and magnification](https://github.com/m5stack/M5Unified/blob/e125e73f28b6b83e621e48df432af426bb2ff935/src/utility/Mic_Class.hpp)
+- [Pinned slot-mask selection and effective gain](https://github.com/m5stack/M5Unified/blob/e125e73f28b6b83e621e48df432af426bb2ff935/src/utility/Mic_Class.inl)
+
+I2S clocks run before codec setup, and one second of analog warm-up is discarded.
+The dedicated task drains into a 32,000-byte mono stream buffer; SD writes and UI
+rendering run independently. Stop/pause drains the buffered tail before cleanup.
+DMA overflow or a full stream buffer remains an explicit error. Actual acoustic
+gain, noise, wiring/slot behavior and coexistence still require device testing.
+DAC output is muted while recording; recording/playback cannot own I2S1 together.
 
 BMI270 configuration bytes are vendored unchanged from the pinned
 [M5Unified configuration](https://github.com/m5stack/M5Unified/blob/e125e73f28b6b83e621e48df432af426bb2ff935/src/utility/imu/BMI270_config.inl).

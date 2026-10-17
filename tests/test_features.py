@@ -708,6 +708,13 @@ class FeatureTests(unittest.TestCase):
             samples = struct.unpack('<384h', wav.readframes(384))
             self.assertEqual(samples[256:], (1234,) * 128)
 
+    def test_recorder_reports_true_zero_input_without_faking_a_signal(self):
+        self.run_feature('recorder-ui-silent')
+        import wave
+        with wave.open(str(self.card/'Recordings/Recording-00001.wav'), 'rb') as wav:
+            self.assertEqual(wav.getnframes(), 200 * 256)
+            self.assertEqual(set(wav.readframes(wav.getnframes())), {0})
+
     def test_display_off_wakes_in_same_system_menu_and_consumes_enter_or_home(self):
         for key in ('enter', 'home'):
             with self.subTest(key=key):

@@ -161,7 +161,8 @@ int pos_ble_send(const char *relative, pos_io_progress_t progress, void *ctx,
   assert(relative && *relative);
   return 0;
 }
-static bool microphone_ended, microphone_tail_enabled;
+static bool microphone_ended, microphone_tail_enabled, microphone_silent;
+static bool mic_quiet_meter_seen, mic_silence_seen;
 static unsigned microphone_tail_frames;
 static const char *microphone_test_root;
 static unsigned brightness_applied;
@@ -229,6 +230,13 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout) {
 }
 void pos_device_show(const pos_view_t *view) {
   assert(!display_hidden);
+  if (!strcmp(view->lines[0], "Recorder")) {
+    if (strstr(view->lines[8], "0.7%") &&
+        strstr(view->lines[9], "Raw L:0 R:32"))
+      mic_quiet_meter_seen = true;
+    if (!strcmp(view->lines[2], "No input detected"))
+      mic_silence_seen = true;
+  }
   if (display_off_count && !strcmp(view->lines[0], "System")) {
     assert(view->selected_row == 6); /* Turn display off remains selected. */
     display_wake_seen = true;
@@ -1166,20 +1174,26 @@ static int apps_ui(const char *root, const char *mode) {
     assert(!strcmp(ui_last.lines[0], "Audio Player"));
     return 0;
   }
-  if (!strcmp(mode, "recorder-ui-home") || !strcmp(mode, "recorder-ui-tail")) {
+  if (!strcmp(mode, "recorder-ui-home") || !strcmp(mode, "recorder-ui-tail") ||
+      !strcmp(mode, "recorder-ui-silent")) {
     microphone_test_root = root;
+    microphone_silent = !strcmp(mode, "recorder-ui-silent");
     microphone_tail_enabled = !strcmp(mode, "recorder-ui-tail");
     push_key(POS_KEY_ENTER, 0);
-    idle_event();
+    unsigned reads = microphone_silent ? 200 : 1;
+    for (unsigned i = 0; i < reads; ++i)
+      idle_event();
     push_key(POS_KEY_HOME, 0);
     pos_ui_recorder(root);
-    assert(microphone_starts == 1 && microphone_reads == 1 &&
+    assert(microphone_starts == 1 && microphone_reads == reads &&
            microphone_stops && pos_home_pending());
     char file[POS_FS_PATH];
     assert(!pos_fs_join(file, root, "Recordings/Recording-00001.wav"));
     struct stat st;
     assert(!stat(file, &st) &&
-           st.st_size == 44 + 512 + (microphone_tail_enabled ? 256 : 0));
+           st.st_size ==
+               44 + reads * 512 + (microphone_tail_enabled ? 256 : 0));
+    assert(microphone_silent ? mic_silence_seen : mic_quiet_meter_seen);
     return 0;
   }
   if (!strncmp(mode, "music-ui-", 9)) {
@@ -1496,8 +1510,12 @@ int pos_microphone_read(int16_t *m, size_t capacity, size_t *n,
     ++ui_next;
   *n = capacity;
   for (size_t i = 0; i < capacity; ++i)
-    m[i] = (int16_t)i;
+    m[i] = microphone_silent ? 0 : (int16_t)i;
   return 0;
+}
+void pos_microphone_levels(unsigned *left, unsigned *right) {
+  *left = 0;
+  *right = microphone_silent ? 0 : 32;
 }
 void pos_microphone_end(void) {
   microphone_ended = true;

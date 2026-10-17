@@ -1,10 +1,10 @@
-# POS feature status — 0.5.7-dev
+# POS feature status — 0.5.8-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
 are evidence of software behavior; installation and normal display/keyboard operation were reported working by the
-user on 0.5.6-dev. New recording/display-off changes still require physical
-validation; other peripherals retain the limits below.
+user on 0.5.6-dev. The user reports 0.5.7-dev no longer overruns but records silence. New right-channel
+capture/gain corrections and display-off still require physical validation; other peripherals retain the limits below.
 
 | Area | Current implementation | Remaining work |
 | --- | --- | --- |
@@ -30,7 +30,7 @@ validation; other peripherals retain the limits below.
 | GPS/LoRa cap | Verified published pins, Semtech driver, shared SPI, UART NMEA location service, Settings detection/enablement panel and GPS-based Maps gate | Actual cap/revision/peripheral coexistence validation |
 | Range test / messaging | Radio messaging, IDs, bounded retries/duplicate suppression, verified SD outbox, opt-in location and range-test CSVs with packet IDs/GPS/RSSI/SNR | Physical range measurements; future coverage visualizations |
 | Maps/navigation | GPS-presence gate defined; Maps app not implemented | On-device region selection, automatic Wi-Fi downloads, offline maps and navigation; no separate computer required |
-| Recorder / IR / IMU | Dedicated streamed PCM WAV Recorder, interrupted WAV recovery, Files-only Audio Player; shared ES8311 microphone with a dedicated capture task and 32,000-byte/one-second mono buffer, pre-capture WAV creation, BMI270 configuration/scaled readings and 38 kHz NEC IR transmit; Settings screens | User reported an overrun in the former synchronous capture path; new buffered capture needs a physical retest. Microphone channel/gain/timing, IMU orientation/calibration and IR waveform validation; no built-in IR receiver |
+| Recorder / IR / IMU | Dedicated streamed PCM WAV Recorder, interrupted WAV recovery, Files-only Audio Player; shared ES8311 microphone with a dedicated capture task and 32,000-byte/one-second mono buffer, pre-capture WAV creation, right-slot extraction, saturated 8x PCM gain, codec readback and raw L/R/decimal peak diagnostics, BMI270 configuration/scaled readings and 38 kHz NEC IR transmit; Settings screens | User reports buffering stopped overruns in 0.5.7-dev but recorded silence. The 0.5.8-dev right-slot/gain correction needs a physical retest. Microphone channel/gain/timing, IMU orientation/calibration and IR waveform validation; no built-in IR receiver |
 | Developer tools / wireless deploy | `posctl flash` with matching verified factory backup/readback; streamed `files`; temporary LAN `deploy` requests through the signed HTTPS updater, target/build-bound evidence checks and boot confirmation polling | Recovery/OTA physical tests must pass before firmware deployment; manually reopen a temporary session after reboot for verification. No always-on deployment server |
 
 No LoRa range, RAM size after networking, SD throughput, battery accuracy or

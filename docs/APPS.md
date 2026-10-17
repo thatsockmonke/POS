@@ -296,7 +296,11 @@ All working text and indexes remain ordinary readable files if POS stops working
 
 Open **Recorder** from the launcher, then **Start recording**. Recorder shows a
 RECORDING label, elapsed recorded time, file size and peak
-level. Space pauses/resumes; Enter or Escape stops and saves; Fn+Space saves and
+level (one decimal place). Raw L/R show the largest input samples in each
+readout window, before gain. The right channel feeds the WAV with saturated 8x
+PCM gain, matching M5Unified's effective default mono gain. Several all-zero
+readouts show **No input detected**, without stopping or inventing audio.
+Space pauses/resumes; Enter or Escape stops and saves; Fn+Space saves and
 closes. Pauses are omitted from recorded duration. Resuming discards analog warm-up.
 Only this foreground app records; there is no background microphone capture.
 

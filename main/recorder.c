@@ -48,7 +48,7 @@ static void record(const char *root) {
   }
   bool paused = false, failed = false, done = false;
   uint32_t displayed = UINT32_MAX;
-  unsigned peak = 0;
+  unsigned peak = 0, silent_readouts = 0;
   while (!done && !pos_home_pending()) {
     pos_event_t event;
     if (pos_device_event(&event, paused ? 50 : 0) && event.pressed) {
@@ -87,14 +87,23 @@ static void record(const char *root) {
     }
     uint32_t seconds = pos_recorder_frames(r) / POS_RECORD_RATE;
     if (seconds != displayed) {
+      unsigned raw_left = 0, raw_right = 0;
+      pos_microphone_levels(&raw_left, &raw_right);
+      silent_readouts =
+          !paused && !peak && !raw_right ? silent_readouts + 1 : 0;
       pos_view_clear(v, "Recorder");
-      pos_view_line(v, 2, "%s", paused ? "Paused" : "RECORDING");
+      pos_view_line(v, 2, "%s",
+                    paused                 ? "Paused"
+                    : silent_readouts >= 3 ? "No input detected"
+                                           : "RECORDING");
       const char *name = strrchr(pos_recorder_path(r), '/');
       pos_view_line(v, 4, "%s", name ? name + 1 : pos_recorder_path(r));
       pos_view_line(v, 6, "%lu:%02lu  %lu KiB", (unsigned long)seconds / 60,
                     (unsigned long)seconds % 60,
                     (unsigned long)pos_recorder_frames(r) * 2 / 1024);
-      pos_view_line(v, 8, "Mic peak: %u%%", peak * 100 / 32768);
+      unsigned tenths = peak * 1000 / 32768;
+      pos_view_line(v, 8, "Mic peak: %u.%u%%", tenths / 10, tenths % 10);
+      pos_view_line(v, 9, "Raw L:%u R:%u", raw_left, raw_right);
       pos_view_line(v, 10, "Space: pause / resume");
       pos_view_line(v, 12, "Enter / Esc: stop & save");
       pos_view_line(v, 14, "Fn+Space: save & close");
@@ -147,7 +156,9 @@ void pos_ui_recorder(const char *root) {
       pos_ui_notice(
           "Recorder controls",
           "Enter starts recording. Space pauses/resumes. Enter or Esc stops "
-          "and saves. Fn+Space saves and closes. Recordings are standard 16 "
+          "and saves. Fn+Space saves and closes. Raw L/R show input peaks "
+          "before gain; the right channel is recorded. Recordings are standard "
+          "16 "
           "kHz mono WAV files. Interrupted .wav.part files remain in "
           "Recordings for recovery. Audio output is exclusive with recording.");
   }
