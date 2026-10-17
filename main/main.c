@@ -308,7 +308,7 @@ static int archive_system(const char *root, const char *system,
   }
   pos_fs_join(work->metadata, system, "signed-update.json");
   if (pos_update_authenticate(work->metadata, work->source.key, &u, NULL) ||
-      strcmp(u->package->id, p->id)) {
+      !pos_package_equivalent(u->package, p)) {
     pos_update_free(u);
     u = NULL;
     char archived[160];
@@ -316,11 +316,32 @@ static int archive_system(const char *root, const char *system,
              p->id);
     pos_fs_join(work->path, root, archived);
     if (!pos_update_authenticate(work->path, work->source.key, &u, NULL) &&
-        !strcmp(u->package->id, p->id))
+        pos_package_equivalent(u->package, p))
       strcpy(work->metadata, work->path);
     else {
       pos_update_free(u);
       u = NULL;
+    }
+    if (!u) {
+      pos_history_entry_t *entries = calloc(16, sizeof(*entries));
+      unsigned count = 0;
+      if (entries &&
+          !pos_history_list(root, work->source.key, entries, 16, &count, NULL))
+        for (unsigned i = 0; i < count; ++i) {
+          char candidate[180];
+          snprintf(candidate, sizeof(candidate),
+                   POS_HISTORY_ROOT "/%s/manifest.json", entries[i].id);
+          pos_fs_join(work->path, root, candidate);
+          if (!pos_update_authenticate(work->path, work->source.key, &u,
+                                       NULL) &&
+              pos_package_equivalent(u->package, p)) {
+            strcpy(work->metadata, work->path);
+            break;
+          }
+          pos_update_free(u);
+          u = NULL;
+        }
+      free(entries);
     }
     /* Existing update checks retain their signed envelopes, including the
      * installation immediately before firmware-history support. */
@@ -337,7 +358,7 @@ static int archive_system(const char *root, const char *system,
             continue;
           if (!pos_update_authenticate(work->path, work->source.key, &u,
                                        NULL) &&
-              !strcmp(u->package->id, p->id)) {
+              pos_package_equivalent(u->package, p)) {
             strcpy(work->metadata, work->path);
             break;
           }
@@ -363,7 +384,7 @@ static int archive_system(const char *root, const char *system,
         bad = pos_update_authenticate(work->metadata, work->source.key, &u, e);
     }
   }
-  if (!u || strcmp(u->package->id, p->id))
+  if (!u || !pos_package_equivalent(u->package, p))
     bad = -1;
   if (!bad)
     bad = pos_history_capture_from(root, system, work->metadata,

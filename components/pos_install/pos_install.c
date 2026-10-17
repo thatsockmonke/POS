@@ -452,3 +452,14 @@ int pos_cleanup_package(const char *root, const pos_package_t *p, pos_error_t *e
     rmdir(source); /* best effort: leave all unlisted files untouched */
     return 0;
 }
+
+int pos_package_equivalent(const pos_package_t *a,const pos_package_t *b) {
+    if(!a||!b||strcmp(a->version,b->version)||a->firmware.size!=b->firmware.size||
+       strcmp(a->firmware.path,b->firmware.path)||strcmp(a->firmware.sha256,b->firmware.sha256)||a->count!=b->count)return 0;
+    for(size_t i=0;i<a->count;++i) {
+        size_t j=0;
+        while(j<b->count&&strcmp(a->files[i].path,b->files[j].path))++j;
+        if(j==b->count||a->files[i].size!=b->files[j].size||strcmp(a->files[i].sha256,b->files[j].sha256))return 0;
+    }
+    return 1;
+}

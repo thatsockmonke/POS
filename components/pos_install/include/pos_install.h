@@ -60,3 +60,6 @@ int pos_hash_file_progress(const char *path, uint32_t size, char hex[65],
 int pos_hash_data(const void *data, size_t size, char hex[65]);
 
 int pos_parse_manifest(const char *,size_t,pos_package_t **,pos_error_t *);
+
+/* Compare authenticated package content independently of JSON whitespace/order. */
+int pos_package_equivalent(const pos_package_t *,const pos_package_t *);

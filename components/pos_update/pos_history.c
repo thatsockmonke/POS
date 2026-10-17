@@ -246,12 +246,12 @@ int pos_history_capture_from(const char *root, const char *system,
             pos_update_authenticate(signed_file, key, &u, e);
   if (bad)
     goto done;
-  if (strcmp(installed->id, u->package->id)) {
+  if (!pos_package_equivalent(installed, u->package)) {
     bad = fail(e, "Signed history metadata does not match the running System.");
     goto done;
   }
   char relative[100];
-  snprintf(relative, sizeof(relative), POS_HISTORY_ROOT "/%s", installed->id);
+  snprintf(relative, sizeof(relative), POS_HISTORY_ROOT "/%s", u->package->id);
   if (pos_fs_join(final, root, relative)) {
     bad = 1;
     goto done;
@@ -259,11 +259,11 @@ int pos_history_capture_from(const char *root, const char *system,
   pos_update_t *existing = NULL;
   if (!load_entry(final, key, &existing, true, NULL)) {
     pos_update_free(existing);
-    bad = prune(root, key, installed->id, preserve_id, e);
+    bad = prune(root, key, u->package->id, preserve_id, e);
     goto done;
   }
   snprintf(relative, sizeof(relative), POS_HISTORY_ROOT "/.%s.part",
-           installed->id);
+           u->package->id);
   if (pos_fs_join(stage, root, relative) || pos_fs_mkdirs(stage)) {
     bad = 1;
     goto done;
@@ -292,15 +292,15 @@ int pos_history_capture_from(const char *root, const char *system,
   }
   unlink(normalized);
   if (pos_fs_join(file, stage, "firmware.bin") ||
-      copy_stream(NULL, file, &installed->firmware, read, ctx, platform, e)) {
+      copy_stream(NULL, file, &u->package->firmware, read, ctx, platform, e)) {
     bad = 1;
     goto done;
   }
-  for (size_t i = 0; !bad && i < installed->count; ++i) {
+  for (size_t i = 0; !bad && i < u->package->count; ++i) {
     char part[POS_PATH_MAX + 9];
-    snprintf(part, sizeof(part), "payload/%s", installed->files[i].path);
+    snprintf(part, sizeof(part), "payload/%s", u->package->files[i].path);
     if (pos_fs_join(file, stage, part) ||
-        checked_path(from, system, installed->files[i].path + 7)) {
+        checked_path(from, system, u->package->files[i].path + 7)) {
       bad = 1;
       break;
     }
@@ -309,16 +309,16 @@ int pos_history_capture_from(const char *root, const char *system,
     bad = pos_fs_mkdirs(file);
     *slash = '/';
     if (!bad)
-      bad = copy_stream(from, file, &installed->files[i], NULL, NULL, platform,
+      bad = copy_stream(from, file, &u->package->files[i], NULL, NULL, platform,
                         e);
   }
   if (!bad) {
     pos_fs_join(file, stage, "complete");
     if (pos_fs_lstat(file, &st))
-      bad = pos_fs_write_new(file, installed->id, 64);
+      bad = pos_fs_write_new(file, u->package->id, 64);
     else {
       char hash[65], expected[65];
-      bad = pos_hash_data(installed->id, 64, expected) ||
+      bad = pos_hash_data(u->package->id, 64, expected) ||
             pos_hash_file(file, 64, hash) || strcmp(hash, expected);
     }
     pos_update_t *verified = NULL;
@@ -328,7 +328,7 @@ int pos_history_capture_from(const char *root, const char *system,
     if (!bad)
       bad = rename(stage, final);
     if (!bad)
-      bad = prune(root, key, installed->id, preserve_id, e);
+      bad = prune(root, key, u->package->id, preserve_id, e);
   }
 done:
   pos_package_free(installed);
@@ -389,7 +389,7 @@ int pos_history_rollback(const char *root, const char *id, const char *key,
     if (!bad)
       bad = checked_path(current, root, "POS/System/installed.pos") ||
             pos_load_manifest(current, &before, e);
-    if (!bad && !strcmp(before->id, u->package->id))
+    if (!bad && pos_package_equivalent(before, u->package))
       bad = fail(e, "This firmware/System pair is already installed.");
     if (!bad) {
       u->firmware = strcmp(before->version, u->package->version) != 0;

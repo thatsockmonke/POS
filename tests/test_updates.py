@@ -269,3 +269,12 @@ class UpdateTests(unittest.TestCase):
         self.write('POS/.pos-transaction',hashlib.sha256(raw).hexdigest().encode())
         result=self.run_c('history-rollback',self.card,identity,self.public,'-',expected=1)
         self.assertEqual(result.stdout.strip(),'0 0')
+
+    def test_history_matches_usb_whitespace_manifest_to_signed_ota_package(self):
+        meta,binary,identity=self.history_seed()
+        installed=self.card/'POS/System/installed.pos';package=json.loads(installed.read_bytes())
+        pretty=json.dumps(package,indent=2).encode()+b'\n';installed.write_bytes(pretty)
+        self.write('POS/.pos-transaction',hashlib.sha256(pretty).hexdigest().encode())
+        self.assertNotEqual(hashlib.sha256(pretty).hexdigest(),identity)
+        self.history_capture(meta,binary)
+        self.assertTrue((self.card/'POS/.History'/identity/'complete').exists())
