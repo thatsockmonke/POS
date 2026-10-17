@@ -66,6 +66,7 @@ jobs:
           python tools/posctl.py preview --screen files --output dist/files.png
           python tools/posctl.py preview --screen background --output dist/background.png
           python tools/posctl.py preview --screen counter --output dist/counter.png
+          python tools/posctl.py preview --screen maps --output dist/maps.png
           python tools/posctl.py preview --screen ui --animate --output dist/ui-animation.png
       - uses: actions/upload-artifact@v4
         with:

@@ -31,6 +31,8 @@ pos_expansion_status_t pos_expansion_status(void);
 int pos_expansion_configure(bool enable, uint32_t frequency_hz, bool transmit,
                             pos_error_t *e);
 bool pos_expansion_maps_available(void);
+/* Lightweight GPS snapshot: map polling does not copy radio queues. */
+pos_location_t pos_expansion_location(void);
 int pos_expansion_send(uint8_t type, uint32_t destination, const char *text,
                        bool share_location, pos_error_t *e);
 int pos_expansion_retry(pos_error_t *e);

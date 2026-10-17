@@ -568,7 +568,22 @@ pos_expansion_status_t pos_expansion_status(void) {
   return s;
 }
 bool pos_expansion_maps_available(void) {
-  return pos_expansion_status().gps_detected;
+  bool detected = false;
+  if (snapshots) {
+    xSemaphoreTake(snapshots, portMAX_DELAY);
+    detected = published.gps_detected;
+    xSemaphoreGive(snapshots);
+  }
+  return detected;
+}
+pos_location_t pos_expansion_location(void) {
+  pos_location_t location = {0};
+  if (snapshots) {
+    xSemaphoreTake(snapshots, portMAX_DELAY);
+    location = published.location;
+    xSemaphoreGive(snapshots);
+  }
+  return location;
 }
 int pos_expansion_configure(bool allow, uint32_t hz, bool tx, pos_error_t *e) {
   if (hz < 868000000 || hz > 923000000)

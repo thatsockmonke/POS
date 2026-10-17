@@ -4,9 +4,9 @@
 #include <string.h>
 
 const char *const pos_launcher_names[POS_LAUNCHER_APP_COUNT] = {
-    "Counter", "Settings",   "Diagnostics", "Files",      "Recovery",
-    "About",   "Background", "Text Editor", "Wi-Fi",      "Music",
-    "Share",   "Location",   "Radio",       "Range Test", "Recorder"};
+    "Counter",    "Settings",    "Diagnostics", "Files", "Recovery", "About",
+    "Background", "Text Editor", "Wi-Fi",       "Music", "Share",    "Location",
+    "Radio",      "Range Test",  "Recorder",    "Maps"};
 
 int pos_launcher_action(const pos_event_t *event) {
   if (!event || !event->pressed ||

@@ -1,4 +1,4 @@
-POS 0.6.2-dev - Pan Operating System
+POS 0.6.3-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -23,7 +23,7 @@ Music: MP3 / PCM 16-bit WAV. Space pause, Left/Right tracks, Up/Down volume, R s
 Share: local save, Wi-Fi, or numeric-paired BLE. Accept each incoming file.
 GPS/LoRa: Settings > Expansion hardware shows presence and feature enablement.
 Radio/Range require a detected, enabled cap; GPS presence separately gates Maps.
-Maps itself remains future work. TX consent resets on reboot; location is opt-in.
+Maps downloads small OSM road regions over Wi-Fi, compiles on-device, and works offline. TX consent resets on reboot; location is opt-in.
 Radio uses the POS protocol, not Meshtastic. Match frequency/settings on peers.
 Range CSVs: POS/Users/Owner/RangeTests. Outbox/messages: POS/Users/Owner/Radio.
 Games and the POS terminal are removed from scope. Physical hardware is unverified.
@@ -47,7 +47,7 @@ migrate without deleting originals. Future schemas are preserved and refused.
 Settings > Developer deployment: temporary trusted-LAN session, signed HTTPS
 updates only, on-device approval and physical recovery/OTA evidence required.
 After firmware reboot reopen the session to verify; no always-on deployment service.
-Maps/navigation and Meshtastic compatibility remain future work.
+Turn-by-turn/offline routing, map search/names and Meshtastic remain future work.
 
 Computer installation: download pos-setup and follow EASY_INSTALL.md.
 Crostini shared folders support copy only; raw formatting/USB need OS access.
@@ -66,3 +66,7 @@ Known Networks has Connect, Forget, Auto-connect and explicit old-vault import; 
 Settings > System > Firmware history: up to 15 signed firmware/System pairs in POS/.History.
 Updates from this version archive the current pair; Import previous installation can recover a matching prior OTA/System.
 Factory recovery and both OTA runtime slots are retained. Flash images never execute from SD.
+
+0.6.3: Maps app, GPS/coordinate regions, Wi-Fi downloads, offline pan/zoom/follow.
+Enter sets a session waypoint: straight-line guidance only, not road routing.
+Map data: (c) OpenStreetMap contributors / ODbL 1.0; keep original .osm files.

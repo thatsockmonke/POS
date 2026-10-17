@@ -58,3 +58,11 @@ M5Stack's unchanged 8192-byte configuration array from M5Unified commit
 Only the C declaration/header guard was adapted. The upstream MIT LICENSE is
 retained alongside it and shipped in bundles as `licenses/M5Stack-MIT.txt`.
 The POS C initialization/scaling driver is separate from the M5Unified C++ classes.
+
+**Downloaded map data:** © OpenStreetMap contributors,
+https://www.openstreetmap.org/copyright, under ODbL 1.0,
+https://opendatacommons.org/licenses/odbl/1-0/. Map downloads and derived databases
+have this license independently of the POS code. Original OSM XML is retained
+beside the compact map. Attribution, provider details and sharing instructions
+are in `docs/MAPS.md` and visible in the Maps app. No third-party map dataset is
+bundled in the firmware; the Maps preview uses a generated example grid.

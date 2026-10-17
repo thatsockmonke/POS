@@ -31,5 +31,5 @@ class VisualTests(unittest.TestCase):
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
         asset=module.artwork()
         self.assertEqual(asset,(ROOT/'sd-payload/System/Assets/apps.icons').read_bytes())
-        self.assertEqual(len(asset),1924);self.assertEqual(asset[:4],b'POI1')
-        self.assertEqual(len(set(asset[4+i*128:4+(i+1)*128] for i in range(15))),15)
+        self.assertEqual(len(asset),2052);self.assertEqual(asset[:4],b'POI1')
+        self.assertEqual(len(set(asset[4+i*128:4+(i+1)*128] for i in range(16))),16)

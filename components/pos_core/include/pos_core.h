@@ -76,6 +76,11 @@ typedef struct {
   bool black_background;
   int selected_tile;
   uint32_t icons[7][32]; /* Visible three plus two neighbors on each side. */
+  /* Borrowed map raster; submit a non-map view before releasing it. */
+  const uint8_t *map_pixels;
+  uint32_t map_generation;
+  bool map_fix, map_waypoint;
+  int16_t map_gps_x, map_gps_y, map_target_x, map_target_y;
   bool solid_color;
   uint16_t color_rgb565;
   bool boot_splash;

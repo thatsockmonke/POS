@@ -1,4 +1,4 @@
-# POS feature status — 0.6.2-dev
+# POS feature status — 0.6.3-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -10,7 +10,7 @@ layouts and display-off still require physical validation; other peripherals ret
 | --- | --- | --- |
 | Boot appearance | Black start; pink, yellow and blue slide in with each starting halfway through the previous stripe; large POS fades in after the flag completes, holds 1 second, then normal boot | Observe orientation/color on actual ADV |
 | Display/input | ST7789 output, TCA8418 decode, arrow-key/context routing, global Home, held recovery shortcut, nonblocking USB fallback | Verify all 56 positions, wiring, timing and stalled-app recovery physically |
-| Core/UI/apps | Central event loop, native 32×32 icons, fifteen-app ribbon, one foreground app, lifecycle/cleanup, stationary focus with an elapsed-time spring ribbon, optimized scanlines and partial/pipelined LCD transfers, zoom/fade entry/return, shared wallpaper accents and paginated menus; launcher workspace is heap-owned | Additional scoped apps; physical stack/heap measurements |
+| Core/UI/apps | Central event loop, native 32×32 icons, sixteen-app ribbon, one foreground app, lifecycle/cleanup, stationary focus with an elapsed-time spring ribbon, optimized scanlines and partial/pipelined LCD transfers, zoom/fade entry/return, shared wallpaper accents and paginated menus; launcher workspace is heap-owned | Additional scoped apps; physical stack/heap measurements |
 | Background app | 1-12 horizontal stripes, visual arrow-key picker, Q/E hue, Shift fine steps, live striped canvas, white selection pulse, S to save and protected persistence | Optional richer styling later |
 | Setup/settings | Direct profile/brightness/date-time/background controls, regional/custom POSIX timezones, manual validated UTC, SNTP, preference reset confirmation and remembered menu selection and manual LCD/backlight-off with consumed wake input; checksummed redundant settings | Physical UX/time-sync validation; preset rule changes when legislation changes |
 | SD/files | Safe file manager, previews/editor/music, restored text list/actions, create/rename, copy/cut/paste, streamed verified folder copies, Trash/restore and confirmed permanent deletion | Optional sorting/search refinements; real-card performance |
@@ -29,7 +29,7 @@ layouts and display-off still require physical validation; other peripherals ret
 | BLE/shared transfer | POS peer discovery, encrypted numeric-comparison pairing, accept/reject, chunk ACK/retry, resume, SHA-256 and lost-final-ACK recovery; common local/Wi-Fi/BLE Share entry point | Physical peer interoperability/throughput validation; third-party clients |
 | GPS/LoRa cap | Verified published pins, Semtech driver, shared SPI, UART NMEA location service, Settings detection/enablement panel and GPS-based Maps gate | Actual cap/revision/peripheral coexistence validation |
 | Range test / messaging | Radio messaging, IDs, bounded retries/duplicate suppression, verified SD outbox, opt-in location and range-test CSVs with packet IDs/GPS/RSSI/SNR | Physical range measurements; future coverage visualizations |
-| Maps/navigation | GPS-presence gate defined; Maps app not implemented | On-device region selection, automatic Wi-Fi downloads, offline maps and navigation; no separate computer required |
+| Maps/navigation | GPS-gated Maps app; on-device GPS/coordinate region selection, explicit provider choice, bounded verified HTTPS downloads, streamed on-device compilation, paged SD catalog, offline road/path maps, pan/zoom, GPS follow and session waypoint distance/bearing; no separate computer required | Road names/search, route caching, turn-by-turn routing and a fully offline routing graph; physical GPS/TLS/SD/UI validation. See [MAPS.md](MAPS.md) |
 | Recorder / IR / IMU | Dedicated streamed PCM WAV Recorder, interrupted WAV recovery, Files-only Audio Player; shared ES8311 microphone with a dedicated capture task and 64,000-byte/two-second mono buffer (32,000-byte fallback), pre-capture WAV creation, right-slot extraction, saturated 8x PCM gain, codec readback and saved live 1x–64x gain and a clean themed mono meter, BMI270 configuration/scaled readings and 38 kHz NEC IR transmit; Settings screens | User confirms the 0.5.8-dev microphone works; new gain/UI changes need retesting. Microphone channel/gain/timing, IMU orientation/calibration and IR waveform validation; no built-in IR receiver |
 | Developer tools / wireless deploy | `posctl flash` with matching verified factory backup/readback; streamed `files`; temporary LAN `deploy` requests through the signed HTTPS updater, target/build-bound evidence checks and boot confirmation polling | Recovery/OTA physical tests must pass before firmware deployment; manually reopen a temporary session after reboot for verification. No always-on deployment server |
 
@@ -51,10 +51,14 @@ save migrations are implemented and removed below. Hardware validation remains s
 installable app/package management and automatic power management are removed from
 scope; existing legacy user folders are never erased.
 
-- Offline maps and navigation, with region selection and automatic Wi-Fi downloads directly on the device.
+- Further maps/navigation: road names and search, cached routes, turn-by-turn directions and fully offline routing. On-device region downloads, offline road maps and straight-line GPS waypoint guidance are implemented in 0.6.3-dev.
 - Meshtastic compatibility: messaging, encrypted channels, mesh routing and voluntarily shared locations.
 
 0.6.2-dev fixes zero-tick audio handoff, adds randomized cues/startup melody,
 optimizes the ribbon and text editor, adds Known Networks and signed SD firmware
 history. See [the full bug report](BUG_REPORT_0.6.2.md) for causes, verification and
 hardware limitations. This release does not reduce the safe internal OTA layout.
+
+0.6.3-dev begins the Maps roadmap; it does not claim complete navigation. Unused
+TLS server handshakes are excluded to preserve the existing OTA slot/recovery
+layout; validated HTTPS clients and temporary LAN HTTP sharing remain.

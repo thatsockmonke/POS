@@ -2,6 +2,7 @@
 #include "pos_core.h"
 #include "pos_fs.h"
 #include "pos_launcher.h"
+#include "pos_maps.h"
 #include "pos_recovery.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,7 +24,30 @@ static int progress(void *ctx, const char *phase, const char *name,
 static int preview(const char *root, const char *output, unsigned screen,
                    unsigned frame) {
   pos_view_t v;
-  if (screen == 1) {
+  static uint8_t map_pixels[POS_MAP_PIXELS];
+  if (screen == 8) {
+    /* Deterministic example roads, rendered with the actual device compositor.
+     */
+    memset(map_pixels, 0, sizeof(map_pixels));
+    for (int y = 0; y < POS_MAP_HEIGHT; ++y)
+      for (int x = 0; x < 240; ++x)
+        if ((x + y / 2) % 46 < 2 || (y - x / 4 + 240) % 27 < 2) {
+          unsigned point = y * 240 + x;
+          map_pixels[point / 8] |= 1u << (point % 8);
+        }
+    pos_view_clear(&v, "Maps / North up");
+    v.black_background = true;
+    v.map_pixels = map_pixels;
+    v.map_fix = v.map_waypoint = true;
+    v.map_gps_x = 105;
+    v.map_gps_y = 60;
+    v.map_target_x = 164;
+    v.map_target_y = 26;
+    pos_view_line(&v, 1, "283m NE 60 deg");
+    pos_view_line(&v, 13, "34.05220 -118.24370");
+    pos_view_line(&v, 14, "+/- zoom C:GPS Enter:menu");
+    pos_view_line(&v, 15, "(c) OpenStreetMap contributors");
+  } else if (screen == 1) {
     uint32_t hold;
     if (!pos_boot_frame(frame, &v, &hold))
       return 2;
@@ -81,8 +105,8 @@ static int preview(const char *root, const char *output, unsigned screen,
   } else {
     pos_background_t background;
     pos_background_defaults(&background);
-    pos_launcher_view(root, "PANPUTER", &background, POS_LAUNCHER_APP_COUNT - 1,
-                      &v);
+    pos_launcher_view(root, "PANPUTER", &background,
+                      screen == 7 ? 14 : POS_LAUNCHER_APP_COUNT - 1, &v);
     if (screen == 7) {
       unsigned f = frame >= 18 ? (frame - 18) % 6 : 0;
       int spring = pos_motion_spring(f);
@@ -168,6 +192,8 @@ int main(int argc, char **argv) {
     }
     return 0;
   }
+  if (!strcmp(command, "maps-preview"))
+    return argc == 4 ? preview(root, argv[3], 8, 0) : 2;
   const char *visuals[] = {"recorder-preview", "files-preview",
                            "background-preview", "counter-preview"};
   for (unsigned i = 0; i < 4; ++i)

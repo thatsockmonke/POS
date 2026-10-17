@@ -35,7 +35,7 @@ class FeatureTests(unittest.TestCase):
         cls.runner=Path(cls.compilation.name)/"features"
         sdk=Path(os.environ.get("IDF_PATH","/workspace/pos-cloud/esp-idf-v5.5.5"));cjson=sdk/"components/json/cJSON"
         sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/settings.c",ROOT/"main/browser.c",ROOT/"main/background.c",ROOT/"main/editor.c",ROOT/"main/wifi.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
-        sources += [ROOT/"main/files.c",ROOT/"main/music.c",ROOT/"main/recorder.c",ROOT/"main/instruments.c",ROOT/"main/sharing.c",ROOT/"main/expansion.c"]
+        sources += [ROOT/"main/files.c",ROOT/"main/music.c",ROOT/"main/recorder.c",ROOT/"main/instruments.c",ROOT/"main/sharing.c",ROOT/"main/expansion.c",ROOT/"main/maps.c"]
         for component in ("pos_core","pos_recovery","pos_update"):
             sources.extend((ROOT/"components"/component).glob("*.c"))
         command=["gcc","-std=c11","-D_POSIX_C_SOURCE=200809L","-Wall","-Wextra","-Werror","-g","-fsanitize=undefined","-fno-sanitize-recover=all"]
@@ -57,6 +57,26 @@ class FeatureTests(unittest.TestCase):
     def run_feature(self,command,*args,expected=0,card=None):
         result=subprocess.run([str(self.runner),str(card or self.card),command,*map(str,args)],capture_output=True,text=True)
         self.assertEqual(result.returncode,expected,result.stdout+result.stderr);return result
+
+    def test_maps_missing_receiver_and_no_fix_have_distinct_guidance(self):
+        self.run_feature("maps-ui-missing")
+        self.run_feature("maps-ui-no-fix")
+
+    def test_map_download_compiles_on_device_without_computer_and_retains_osm(self):
+        self.run_feature("maps-ui-download")
+        self.assertTrue((self.card/"POS/Maps/region-13572468.osm").exists())
+        self.assertEqual((self.card/"POS/Maps/region-13572468.pmap").read_bytes()[:4],b"PMP1")
+        self.assertIn("Open Database License",(self.card/"POS/Maps/Map-data-license.txt").read_text())
+
+    def test_map_view_exits_home_and_releases_borrowed_framebuffer(self):
+        import struct,zlib
+        header=bytearray(64);header[:4]=b"PMP1"
+        struct.pack_into("<iiII",header,4,34050500,-118247500,1000,1)
+        header[24:29]=b"Local"
+        body=struct.pack("<iiii",34050000,-118248000,34051000,-118247000)
+        struct.pack_into("<I",header,20,zlib.crc32(header+body))
+        self.write("POS/Maps/local.pmap",header+body)
+        self.run_feature("maps-ui-open")
 
     def seed(self):
         self.files={"Documents/Stevie.txt":b"words\n"*20000,"Music/song.dat":bytes(range(256))*70,"POS/Users/Owner/Saves/game.bin":b"save", "loose file.txt":b"loose"}

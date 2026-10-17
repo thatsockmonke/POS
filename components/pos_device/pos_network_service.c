@@ -279,7 +279,7 @@ static int https_once(const char *url, const char *method, const char *body,
         e, "Sync time first so HTTPS certificate dates can be validated.");
   esp_http_client_config_t config = {.url = url,
                                      .crt_bundle_attach = esp_crt_bundle_attach,
-                                     .timeout_ms = 12000,
+                                     .timeout_ms = !strncmp(destination, "POS/Maps/", 9) ? 30000 : 12000,
                                      .buffer_size = 4096,
                                      .disable_auto_redirect = true,
                                      .keep_alive_enable = false,
@@ -292,6 +292,7 @@ static int https_once(const char *url, const char *method, const char *body,
   esp_http_client_set_method(client, !strcmp(method, "POST") ? HTTP_METHOD_POST
                                                              : HTTP_METHOD_GET);
   esp_http_client_set_header(client, "Accept-Encoding", "identity");
+  esp_http_client_set_header(client, "User-Agent", "POS/0.6 (https://github.com/thatsockmonke/POS)");
   if (type)
     esp_http_client_set_header(client, "Content-Type", type);
   int result = -1;

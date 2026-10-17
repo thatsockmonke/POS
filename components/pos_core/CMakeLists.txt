@@ -1,4 +1,4 @@
-idf_component_register(SRCS "pos_core.c" "pos_settings.c" "pos_fs.c" "pos_render.c" "pos_background.c" "pos_launcher.c" "pos_editor.c" "pos_network.c" "pos_files.c" "pos_share.c" "pos_location.c" "pos_radio.c" "pos_music.c"
+idf_component_register(SRCS "pos_core.c" "pos_settings.c" "pos_fs.c" "pos_render.c" "pos_background.c" "pos_launcher.c" "pos_editor.c" "pos_network.c" "pos_files.c" "pos_share.c" "pos_location.c" "pos_maps.c" "pos_radio.c" "pos_music.c"
     INCLUDE_DIRS "include" REQUIRES pos_install json mbedtls)
 target_sources(${COMPONENT_LIB} PRIVATE "pos_visual.c" "pos_capabilities.c" "pos_battery.c" "pos_timezone.c" "pos_diagnostics.c" "pos_recorder.c" "pos_instruments.c" "pos_appdata.c")
 target_compile_options(${COMPONENT_LIB} PRIVATE -fstack-usage)

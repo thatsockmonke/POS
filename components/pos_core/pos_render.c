@@ -152,6 +152,18 @@ static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
   uint16_t picker;
   if (v->color_picker && picker_pixel(v, x, y, &picker))
     return picker;
+  if (v->map_pixels && y >= 16 && y < 104) {
+    int my = y - 16;
+    if (v->map_fix && abs(x - v->map_gps_x) + abs(my - v->map_gps_y) <= 4)
+      return 0x259f;
+    if (v->map_waypoint &&
+        abs(x - v->map_target_x) + abs(my - v->map_target_y) == 5)
+      return 0xf911;
+    if ((x == 120 && abs(my - 44) <= 3) || (my == 44 && abs(x - 120) <= 3))
+      return 0xfec0;
+    unsigned p = (unsigned)(my * 240 + x);
+    return (v->map_pixels[p / 8] >> (p % 8)) & 1 ? 0xce79 : 0x0842;
+  }
   uint16_t visual;
   if (pos_visual_pixel(v, x, y, &visual))
     return visual;

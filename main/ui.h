@@ -54,3 +54,5 @@ void pos_ui_files_from(const char *root,const char *folder);
 void pos_ui_instruments(void);
 
 void pos_ui_deploy(const char *root);
+
+void pos_ui_maps(const char *root);

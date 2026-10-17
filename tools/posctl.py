@@ -126,7 +126,7 @@ def make_bundle(build_root: Path, payload: Path, output: Path) -> Path:
         shutil.copyfile(ROOT / "docs/INSTALL.md", stage / "INSTALL.md")
         for name in ("RECOVERY.md", "HARDWARE.md", "HARDWARE_VALIDATION.md", "FORMAT.md", "VALIDATION.md"):
             shutil.copyfile(ROOT / "docs" / name, stage / name)
-        for name in ("STATUS.md", "DOWNLOADS.md", "APPS.md", "PROTOCOLS.md", "UPDATES.md", "DEVELOPMENT.md", "MIGRATIONS.md", "EASY_INSTALL.md", "FIRMWARE_HISTORY.md", "BUG_REPORT_0.6.2.md"):
+        for name in ("STATUS.md", "DOWNLOADS.md", "APPS.md", "PROTOCOLS.md", "UPDATES.md", "DEVELOPMENT.md", "MIGRATIONS.md", "EASY_INSTALL.md", "FIRMWARE_HISTORY.md", "BUG_REPORT_0.6.2.md", "MAPS.md"):
             shutil.copyfile(ROOT / "docs" / name, stage / name)
         # USB commands work with pip-installed esptool; no SDK/build is required.
         (stage / "tools").mkdir()
@@ -336,7 +336,7 @@ def preview(output: Path, screen: str = "launcher", animate: bool = False) -> No
                     sequence += 1
         else:
             ppm = directory / "preview.ppm"
-            subprocess.run([helper, payload, {"boot": "boot-preview", "picker": "color-preview", "launcher": "preview", "recorder":"recorder-preview", "files":"files-preview", "background":"background-preview", "counter":"counter-preview", "ui":"preview"}[screen],
+            subprocess.run([helper, payload, {"boot": "boot-preview", "picker": "color-preview", "launcher": "preview", "recorder":"recorder-preview", "files":"files-preview", "background":"background-preview", "counter":"counter-preview", "ui":"preview", "maps":"maps-preview"}[screen],
                             str(ppm)], check=True)
             png += chunk(b"IDAT", pixels(ppm))
         png += chunk(b"IEND", b"")
@@ -519,7 +519,7 @@ def main() -> int:
     p.add_argument("--output", type=Path, required=True)
     p = commands.add_parser("preview", help="Render the actual portable launcher primitives to PNG")
     p.add_argument("--output", type=Path, required=True)
-    p.add_argument("--screen", choices=["launcher", "boot", "picker", "recorder", "files", "background", "counter", "ui"], default="launcher")
+    p.add_argument("--screen", choices=["launcher", "boot", "picker", "recorder", "files", "background", "counter", "ui", "maps"], default="launcher")
     p.add_argument("--animate", action="store_true", help="Export the boot sequence as an animated PNG")
     p = commands.add_parser("recovery", help="Run POS's portable backup/restore services on a Linux SD mount")
     p.add_argument("action", choices=["scan", "backup", "backup-set", "resume-backup", "verify", "restore"])

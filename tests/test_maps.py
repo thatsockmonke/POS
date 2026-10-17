@@ -1,0 +1,71 @@
+from pathlib import Path
+import os
+import struct
+import subprocess
+import tempfile
+import unittest
+import urllib.parse
+import zlib
+ROOT=Path(__file__).resolve().parents[1]
+
+def osm(points=None):
+    points=points or [(34.050,-118.248),(34.051,-118.247),(34.050,-118.247)]
+    return ('<?xml version="1.0"?><osm version="0.6"><way id="1">'+''.join(f'<nd ref="{i}" lat="{lat}" lon="{lon}"/>' for i,(lat,lon) in enumerate(points))+'<tag k="highway" v="residential"/><tag k="name" v="Test &amp; Road"/></way></osm>').encode()
+
+class MapTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.build=tempfile.TemporaryDirectory(prefix='pos-maps-build-')
+        cls.runner=Path(cls.build.name)/'maps'
+        sources=['tests/maps_runner.c']+['components/pos_core/'+p for p in ('pos_maps.c','pos_fs.c','pos_core.c','pos_render.c','pos_background.c','pos_visual.c')]
+        subprocess.run(['gcc','-std=c11','-D_POSIX_C_SOURCE=200809L','-Wall','-Wextra','-Werror','-g','-fsanitize=undefined','-fno-sanitize-recover=all','-I',str(ROOT/'components/pos_core/include'),'-I',str(ROOT/'components/pos_install/include'),*map(lambda p:str(ROOT/p),sources),'-lm','-o',str(cls.runner)],check=True)
+    @classmethod
+    def tearDownClass(cls):cls.build.cleanup()
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory(prefix='pos-map-');self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name);self.raw=self.root/'region.osm';self.map=self.root/'region.pmap'
+    def run_map(self,*args,ok=True):
+        p=subprocess.run([str(self.runner),*map(str,args)],capture_output=True,text=True)
+        self.assertEqual(p.returncode,0 if ok else 1,p.stdout+p.stderr);return p.stdout
+    def compile(self,data=None):
+        self.raw.write_bytes(osm() if data is None else data);return self.run_map('compile',self.raw,self.map)
+    def test_compile_preserves_portable_source_and_checksums_header_and_geometry(self):
+        self.compile();self.assertEqual(self.raw.read_bytes(),osm());data=self.map.read_bytes()
+        self.assertEqual(data[:4],b'PMP1');self.assertEqual(len(data),64+2*16)
+        expected=struct.unpack_from('<I',data,20)[0];self.assertEqual(zlib.crc32(data[:20]+b'\0'*4+data[24:]),expected)
+        self.assertGreater(int(self.run_map('raster',self.map)),0)
+    def test_does_not_connect_separate_ways(self):
+        data=b'<osm version="0.6">'+b''.join(b'<way id="1"><nd lat="34.05" lon="-118.248"/><nd lat="34.051" lon="-118.247"/></way>' for _ in range(2))+b'</osm>'
+        self.compile(data);self.assertEqual(len(self.map.read_bytes()),64+2*16)
+    def test_corrupt_header_geometry_truncation_and_trailing_data_refused(self):
+        self.compile();original=self.map.read_bytes()
+        for data in (original[:-1],original+b'x',original[:25]+b'X'+original[26:],original[:70]+bytes([original[70]^1])+original[71:]):
+            self.map.write_bytes(data);self.run_map('raster',self.map,ok=False)
+    def test_malformed_or_unusable_responses_never_publish_a_map(self):
+        for data in (b'',b'<html>Error</html>',osm()[:-6],osm()+b'oops',b'<osm version="0.6"><remark>timeout</remark></osm>',osm().replace(b'34.05',b'nan'),osm().replace(b'-118.',b'-999.'),b'<osm version="0.6"></osm>',osm().replace(b'lat=',b'notlat=')):
+            with self.subTest(data=data[:70]):
+                self.raw.write_bytes(data);self.run_map('compile',self.raw,self.map,ok=False);self.assertFalse(self.map.exists())
+                self.map.with_suffix('.pmap.part').unlink(missing_ok=True)
+    def test_cancellation_and_existing_files_are_preserved(self):
+        self.raw.write_bytes(osm());self.run_map('compile',self.raw,self.map,'cancel',ok=False);self.assertFalse(self.map.exists())
+        part=self.map.with_suffix('.pmap.part');before=part.read_bytes()
+        self.run_map('compile',self.raw,self.map,ok=False);self.assertEqual(part.read_bytes(),before)
+        part.unlink();self.compile();before=self.map.read_bytes();self.run_map('compile',self.raw,self.map,ok=False);self.assertEqual(self.map.read_bytes(),before)
+        self.run_map('raster',self.map,'cancel',ok=False)
+    def test_oversized_download_and_excessive_geometry_are_refused(self):
+        self.raw.write_bytes(b' '*(2*1024*1024+1));self.run_map('compile',self.raw,self.map,ok=False)
+        self.raw.write_bytes(b'<osm version="0.6"><way id="1">'+b'<nd lat="34.05" lon="-118.24"/><nd lat="34.051" lon="-118.241"/>'*15001+b'</way></osm>')
+        self.run_map('compile',self.raw,self.map,ok=False);self.assertFalse(self.map.exists())
+    def test_long_attributes_quotes_and_nd_boundaries(self):
+        self.compile(osm().replace(b'<tag k="name" v="Test &amp; Road"/>',b'<tag k="name" v="'+b'a'*500+b'"/>').replace(b'lat="34.05"',b"lat = '34.05'"))
+        self.assertGreater(int(self.run_map('raster',self.map)),0)
+    def test_query_is_bounded_encoded_and_contains_no_personal_identifiers(self):
+        url=self.run_map('query').strip();self.assertLess(len(url),512)
+        q=urllib.parse.parse_qs(urllib.parse.urlparse(url).query)['data'][0]
+        self.assertIn('[maxsize:67108864]',q);self.assertIn('way["highway"]',q);self.assertTrue(q.endswith('out geom;'))
+        for provider in (1,2):self.run_map("query",34,0,1000,provider)
+        self.run_map("query",34,0,1000,3,ok=False)
+        for args in [('nan',0,1000),(81,0,1000),(0,180,1000),(0,0,5000),(0,0,0)]:self.run_map('query',*args,ok=False)
+    def test_north_up_projection_bearing_and_marker_rendering(self):self.run_map('geometry')
+    def test_extremely_long_segments_clip_in_bounded_time(self):
+        self.compile(osm([(-80,-179),(80,179)]));self.run_map('raster',self.map)

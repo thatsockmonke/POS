@@ -121,10 +121,9 @@ The panel separately shows:
 - **GPS detected:** valid, checksum-verified GNSS RMC/GGA/GSV sentences have arrived
   recently. An initialized UART alone does not count as detection.
 - **GPS fix:** a current valid position, which is separate from receiver presence.
-- **Maps GPS gate:** unavailable without a detected GPS; ready for a Maps app when
-  GPS is detected even if it is still waiting for a position fix. Maps/navigation
-  itself is not implemented in this release. The `pos_expansion_maps_available`
-  capability API enforces that prerequisite for future Maps integration.
+- **Maps GPS gate:** unavailable without a detected GPS; available when
+  GPS is detected, even while waiting for a position fix. The Maps app enforces
+  this prerequisite; see [Maps](MAPS.md) for regional downloads and offline guidance.
 
 GPS is independent of the LoRa enable switch. A receiver without a fix can be
 detected; stale fixes stop being valid after five seconds, and receiver presence
@@ -375,3 +374,11 @@ Credentials are authenticated encrypted NVS blobs with a random per-device key.
 The key is also on the device's NVS: this prevents casual plaintext disclosure,
 not extraction by an attacker who can read unencrypted physical flash. Credentials
 and device keys are never put on SD or in a filesystem backup. No eFuses are burned.
+
+## Maps (0.6.3-dev)
+
+A sixteenth launcher app adds on-device region selection, bounded Wi-Fi downloads,
+SD-backed offline road maps and north-up GPS waypoint guidance. Arrows pan, +/-
+zooms, C follows GPS, Enter chooses a destination at the crosshair. Global Home
+releases the viewport. See [MAPS.md](MAPS.md) for exact controls, attribution,
+provider choice and the remaining routing limitations.

@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.6.2-dev is an **experimental foundation**, not the complete master roadmap.
+POS 0.6.3-dev is an **experimental foundation**, not the complete master roadmap.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
 flashing, peripherals, factory boot recovery and electrical power-loss behavior
 have not been tested here. Read [STATUS.md](STATUS.md) before choosing to install.
@@ -19,9 +19,9 @@ including Chromebook shared-folder/USB limits. The detailed manual route follows
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.6.2-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.6.3-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.6.2-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.6.3-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -42,10 +42,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.6.2-dev.zip.sha256
-mkdir pos-0.6.2-dev
-unzip pos-0.6.2-dev.zip -d pos-0.6.2-dev
-cd pos-0.6.2-dev
+sha256sum -c pos-0.6.3-dev.zip.sha256
+mkdir pos-0.6.3-dev
+unzip pos-0.6.3-dev.zip -d pos-0.6.3-dev
+cd pos-0.6.3-dev
 sha256sum -c SHA256SUMS
 ```
 
@@ -211,7 +211,7 @@ with the final runtime. Close the serial program and reset/power-cycle if needed
 After a verified normal boot, POS removes only known, unchanged obsolete installer
 files. A pending/failed restore retains the installation media. Unknown files and
 backups are not recursively deleted. The SD is the system drive: leave it inserted
-for normal use. Maps/navigation remain future work. See [APPS.md](APPS.md) for Files, Music,
+for normal use. Small offline road maps and straight-line waypoint guidance are available in Maps. See [MAPS.md](MAPS.md). See [APPS.md](APPS.md) for Files, Music,
 BLE sharing and the LoRa/GPS cap.
 
 ## 7. Normal use and recovery
@@ -404,7 +404,7 @@ Read [APPS.md](APPS.md) for full controls, formats and recovery behavior.
   locally permitted LoRa frequency; attach the correct antenna before enabling
   transmit. TX consent lasts only for the session. GPS detection does not require
   a position fix, and remains independent of the LoRa switch. Maps stays gated
-  when GPS is absent; the Maps application is not implemented yet.
+  when GPS is absent. Open Maps to choose/download regions directly over Wi-Fi.
 - **Radio / Range Test:** use matching POS peers and frequency settings. Received
   messages and outbox files live under Owner/Radio; range CSVs under Owner/RangeTests.
   The Range Test sender requires the receiver's node ID and sends probes at

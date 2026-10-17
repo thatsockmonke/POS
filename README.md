@@ -4,7 +4,15 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.6.2-dev fixes Recorder playback and improves launcher, editor and Wi-Fi use.**
+**0.6.3-dev starts on-device offline maps and GPS waypoint guidance.**
+Open **Maps → Download a region**, choose a GPS/coordinate center and area, and
+save a road map over Wi-Fi. **Saved regions** works offline with arrow-key pan,
+zoom, GPS follow and distance/bearing to a chosen point. GPS cap detection is
+required; turn-by-turn routing and road-name search remain future work.
+See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.6.3-dev/maps.png). The complete Maps roadmap is
+not finished by this first milestone.
+
+Earlier Recorder playback, launcher, editor and Wi-Fi improvements remain:
 The launcher keeps its selection box fixed while crisp 32×32 icons slide on an
 elapsed-time spring. Partial redraws, a direct ribbon rasterizer and alternating
 DMA buffers reduce display work; arrow input continues throughout movement.
@@ -36,7 +44,7 @@ Upgrade through **0.6.0-dev** first if using an older installation. Active updat
 metadata stays at exactly seven fields; the old bridge feed remains frozen.
 Black-start flag/logo boot, microphone gain and themed app visuals remain.
 
-[Animated UI preview](downloads/0.6.2-dev/ui-animation.png) · [Recorder](downloads/0.6.2-dev/recorder.png) · [Files](downloads/0.6.2-dev/files.png) · [Background](downloads/0.6.2-dev/background.png) · [Counter](downloads/0.6.2-dev/counter.png)
+[Animated UI preview](downloads/0.6.3-dev/ui-animation.png) · [Recorder](downloads/0.6.3-dev/recorder.png) · [Files](downloads/0.6.3-dev/files.png) · [Background](downloads/0.6.3-dev/background.png) · [Counter](downloads/0.6.3-dev/counter.png)
 
 Previews use the actual portable renderer with example state; they are not
 hardware recordings or device frame-rate measurements.
@@ -81,7 +89,7 @@ Implemented:
   and blue starts when yellow is halfway. Once all stripes are complete, large centered
   **POS** lettering fades in, holds for one second, then normal boot continues.
 - Native ST7789 display output and TCA8418 ADV keyboard input, with USB fallback.
-- A fifteen-app horizontal launcher with black icons outlined in white, streamed from SD.
+- A sixteen-app horizontal launcher with black icons outlined in white, streamed from SD.
   Left/Right moves the ribbon; Up or Enter opens the centered app. Only one foreground app runs.
 - Background app: 1-12 horizontal stripes, visual arrow-key color picker, Q/E hue,
   Shift fine adjustments, a live striped canvas and S to save.
@@ -118,7 +126,7 @@ Implemented:
   timed unicast probes. Unknown coordinates and unavailable signal values stay blank.
 - Settings > Expansion hardware shows cap/GPS detection, fix, feature enablement
   and transmit permission. Radio/Range require a detected, enabled cap. Maps has a
-  GPS-presence gate; the Maps app itself is still future work. Location sharing
+  GPS-presence gate and offers on-device regional downloads and offline waypoint guidance. Location sharing
   requires explicit consent. Transmit consent resets after reboot.
 - Always-visible black battery box: percentage left of a changing icon, smoothing,
   hysteresis, unknown state and a sustained-voltage near-full indication. This is
@@ -151,14 +159,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.6.2-dev/launcher.png)
-![Color picker](downloads/0.6.2-dev/color-picker.png)
+![Launcher](downloads/0.6.3-dev/launcher.png)
+![Color picker](downloads/0.6.3-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.6.2-dev/boot-animation.png)
+![POS boot animation](downloads/0.6.3-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.6.2-dev/boot-splash.png)
+[Final splash frame](downloads/0.6.3-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -175,7 +183,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.2-dev --zip-output dist/pos-0.6.2-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.3-dev --zip-output dist/pos-0.6.3-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png

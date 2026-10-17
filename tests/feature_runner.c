@@ -25,6 +25,8 @@
 #include <sys/resource.h>
 #include <time.h>
 
+uint32_t esp_random(void) { return 0x13572468u; }
+static bool maps_download_test, maps_guidance_seen;
 static pos_event_t ui_events[512];
 static unsigned ui_next, ui_count, ui_frames;
 static bool secret_leaked, notice_tail_seen, selection_seen;
@@ -57,6 +59,7 @@ void pos_audio_stop(void) {
   ++audio_stops;
 }
 pos_expansion_status_t pos_expansion_status(void) { return fake_expansion; }
+pos_location_t pos_expansion_location(void) {return fake_expansion.location;}
 int pos_expansion_configure(bool enabled, uint32_t hz, bool tx,
                             pos_error_t *e) {
   if (enabled && !fake_expansion.cap_detected) {
@@ -253,6 +256,10 @@ void pos_device_show(const pos_view_t *view) {
     assert(view->selected_row == 6); /* Turn display off remains selected. */
     display_wake_seen = true;
   }
+  if (view->map_pixels && view->map_fix && view->map_waypoint) {
+    assert(strstr(view->lines[1], "deg"));
+    maps_guidance_seen = true;
+  }
   ++ui_frames;
   ui_last = *view;
   if (check_black_screens) {
@@ -389,6 +396,18 @@ int pos_network_https(const char *url, const char *method, const char *body,
   (void)ctx;
   strcpy(error->message, "simulated transport failure");
   return -1;
+}
+int pos_network_https_limit(const char *u, const char *m, const char *b,
+ const char *t, const char *r, const char *d, const char *h,
+ pos_io_progress_t p, void *c, pos_error_t *e, uint32_t limit) {
+ assert(limit == 2u * 1024u * 1024u);
+ if (maps_download_test) {
+   assert(strstr(u, "https://maps.mail.ru/") == u && !strcmp(m, "GET"));
+   char full[POS_FS_PATH]; assert(!pos_fs_join(full,r,d));
+   const char *xml="<osm version=\"0.6\"><way id=\"1\"><nd lat=\"34.050\" lon=\"-118.248\"/><nd lat=\"34.051\" lon=\"-118.247\"/></way></osm>";
+   return pos_fs_write_new(full,xml,strlen(xml));
+ }
+ return pos_network_https(u,m,b,t,r,d,h,p,c,e);
 }
 int pos_network_share_start(const char *root, const char *file, char key[17]) {
   (void)root;
@@ -1054,7 +1073,7 @@ static int picker_tests(void) {
   return 0;
 }
 static int launcher_tests(const char *root) {
-  assert(POS_LAUNCHER_APP_COUNT == 15);
+  assert(POS_LAUNCHER_APP_COUNT == 16);
   pos_event_t event = {POS_KEY_UP, 0, true};
   assert(pos_launcher_action(&event) == POS_KEY_ENTER);
   event.key = POS_KEY_ENTER;
@@ -1279,6 +1298,53 @@ static int core_tests(void) {
 }
 
 static int apps_ui(const char *root, const char *mode) {
+  if (!strcmp(mode, "maps-ui-missing")) {
+    push_key(POS_KEY_ENTER, 0);
+    pos_ui_maps(root);
+    assert(!strcmp(ui_last.lines[0], "Maps need the GPS cap"));
+    assert(ui_next == ui_count);
+    return 0;
+  }
+  if (!strcmp(mode, "maps-ui-no-fix")) {
+    fake_expansion.gps_detected = fake_expansion.maps_available = true;
+    choose(1); /* Download */
+    push_key(POS_KEY_ENTER, 0); /* Around GPS */
+    push_key(POS_KEY_ENTER, 0); /* No fix notice */
+    push_key(POS_KEY_ESCAPE, 0);
+    pos_ui_maps(root);
+    assert(ui_next == ui_count);
+    assert(!strcmp(ui_last.lines[0], "Maps"));
+    return 0;
+  }
+  if (!strcmp(mode, "maps-ui-download")) {
+    maps_download_test = true;fake_network.connected = true;
+    fake_expansion.gps_detected = fake_expansion.maps_available = fake_expansion.location.fix = true;
+    fake_expansion.location.latitude = 34.0505;fake_expansion.location.longitude = -118.2475;
+    choose(1);choose(0);choose(0);push_key(POS_KEY_ENTER,0);choose(0);
+    push_key(POS_KEY_ESCAPE,0); /* Close review */
+    choose(0);idle_event(); /* Download and compile complete before later keys */
+    push_key(POS_KEY_ESCAPE,0);push_key(POS_KEY_HOME,0);
+    pos_ui_maps(root);assert(ui_next == ui_count && pos_home_pending());
+    return 0;
+  }
+  if (!strcmp(mode, "maps-ui-open")) {
+    fake_expansion.gps_detected = fake_expansion.maps_available = fake_expansion.location.fix = true;
+    fake_expansion.location.latitude = 34.0505;
+    fake_expansion.location.longitude = -118.2475;
+    push_key(POS_KEY_ENTER, 0); /* Saved regions */
+    push_key(POS_KEY_ENTER, 0); /* Local */
+    idle_event(); /* Raster progress cannot consume later navigation. */
+    push_key(POS_KEY_RIGHT, 0);
+    idle_event();
+    push_key(POS_KEY_ENTER, 0);choose(0); /* Guide to panned crosshair */
+    idle_event();
+    push_key('c', 0);idle_event(); /* Follow live GPS */
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_maps(root);
+    assert(ui_next == ui_count && pos_home_pending());
+    assert(!ui_last.map_pixels && maps_guidance_seen); /* Drop borrowed memory before freeing. */
+    return 0;
+  }
   if (!strcmp(mode, "hardware-ui-missing")) {
     fake_expansion.frequency_hz = 915000000;
     push_key(POS_KEY_ENTER, 0);
@@ -1511,6 +1577,8 @@ int main(int argc, char **argv) {
     return wifi_ui_tests(argv[1], argv[2]);
   if (!strcmp(argv[2], "picker"))
     return picker_tests();
+  if (!strncmp(argv[2], "maps-ui-", 8))
+    return apps_ui(argv[1], argv[2]);
   if (!strcmp(argv[2], "launcher"))
     return launcher_tests(argv[1]);
   if (!strncmp(argv[2], "background-", 11))

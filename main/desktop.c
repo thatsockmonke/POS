@@ -645,6 +645,13 @@ static void recorder_foreground(void *state) {
   (void)state;
 #endif
 }
+static void maps_foreground(void *state) {
+#ifndef POS_INSTALLER
+  pos_ui_maps((*(services_t **)state)->root);
+#else
+  (void)state;
+#endif
+}
 static void recovery_foreground(void *state) {
   recovery(*(services_t **)state);
 }
@@ -727,6 +734,11 @@ static const pos_app_t modal_apps[] = {{.name = "Settings",
                                         .state_size = sizeof(services_t *),
                                         .initialize = service_init,
                                         .foreground = recorder_foreground,
+                                        .render = modal_render},
+                                       {.name = "Maps",
+                                        .state_size = sizeof(services_t *),
+                                        .initialize = service_init,
+                                        .foreground = maps_foreground,
                                         .render = modal_render}};
 
 #ifndef POS_INSTALLER

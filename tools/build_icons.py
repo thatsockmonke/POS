@@ -5,7 +5,7 @@ import math, struct
 
 def artwork():
     icons=[]
-    for kind in range(15):
+    for kind in range(16):
         p=[[0]*32 for _ in range(32)]
         def disk(cx,cy,r,v=1):
             for y in range(32):
@@ -66,12 +66,18 @@ def artwork():
             line(8,26,8,8,2);line(8,26,26,26,2)
             for a,b in zip([(10,22),(14,18),(18,20),(24,10)],[(14,18),(18,20),(24,10),(27,13)]):line(*a,*b,2)
             disk(8,7,2)
-        else: # microphone capsule / cradle
+        elif kind==14: # microphone capsule / cradle
             rect(12,7,20,17);disk(16,7,4);disk(16,17,4)
             line(8,15,8,19,2);line(24,15,24,19,2)
             for n in range(25):
                 a=n*math.pi/24;disk(16+8*math.cos(a),19+6*math.sin(a),1)
             line(16,25,16,29,2);line(11,29,21,29,2)
+        else: # folded map, with a route and location marker
+            line(4,8,11,5,2);line(11,5,21,9,2);line(21,9,28,6,2)
+            line(4,8,4,26,2);line(28,6,28,24,2)
+            line(4,26,11,23,2);line(11,23,21,27,2);line(21,27,28,24,2)
+            line(11,5,11,23,1);line(21,9,21,27,1)
+            line(7,20,16,14,2);line(16,14,24,18,2);disk(24,18,2.3)
         icons.append(b''.join(struct.pack('<I',sum(v<<x for x,v in enumerate(row))) for row in p))
     return b'POI1'+b''.join(icons)
 if __name__=='__main__':
