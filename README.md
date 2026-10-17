@@ -4,11 +4,13 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.5.6-dev makes the USB installer distinguish original recovery backups from
-snapshots of an older POS installation. Invalid Y/N answers are retried, and
-the on-device installer shows its own firmware version.**
-The display, black setup screens and stock ADV keyboard corrections from
-0.5.5-dev are included. They still need confirmation after a completed USB flash.
+**0.5.7-dev fixes Recorder capture stalls and adds Settings → System / software
+update → Turn display off.** Microphone capture now runs in a separate task with
+one second of bounded mono buffering, and the WAV is created before capture
+starts. LCD/backlight can be switched off while POS and charging continue; a
+normal key or short G0 press wakes back to the same System menu, consuming that
+press. The user reports successful installation and working display/keyboard on
+0.5.6-dev. The new recording timing and display-off behavior await device testing.
 
 ## Download and install
 
@@ -120,14 +122,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.5.6-dev/launcher.png)
-![Color picker](downloads/0.5.6-dev/color-picker.png)
+![Launcher](downloads/0.5.7-dev/launcher.png)
+![Color picker](downloads/0.5.7-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.5.6-dev/boot-animation.png)
+![POS boot animation](downloads/0.5.7-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.5.6-dev/boot-splash.png)
+[Final splash frame](downloads/0.5.7-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -144,7 +146,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.6-dev --zip-output dist/pos-0.5.6-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.7-dev --zip-output dist/pos-0.5.7-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png

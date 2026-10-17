@@ -1,26 +1,23 @@
-POS 0.5.6-dev clarifies the installer recovery step that prevented the new
-0.5.5-dev firmware from being flashed in the reported Crostini attempt.
+POS 0.5.7-dev fixes microphone capture starvation and adds manual display-off.
 
-- Backup menus distinguish POS snapshots from original saved software. Previously
-  observed original recovery backups are labelled clearly. A recognized POS
-  snapshot is preserved, but cannot be restored as proof of factory recovery.
-  The separate backup-restore menu can still restore those POS snapshots.
-- Invalid Y/N input, including the reported `t`, is re-prompted. Explicit No and
-  cancellation still stop; a typo cannot silently end a successful recovery test.
-- Prompts distinguish preparing the SD, restoring saved software, and actually
-  flashing the NEW POS installer. The firmware version is printed before writing
-  and after verified completion. The on-device installer now displays its own
-  version; POS_BUILD prints role/version on USB at startup.
-- The display rotation, black setup screens and stock ADV Fn-key behavior from
-  0.5.5-dev are retained. The new user log shows an old POS snapshot was restored
-  and the wizard stopped before its FLASH step; it did not test the 0.5.5-dev
-  firmware on the device. No additional speculative driver change is included.
-- Existing 0.5.5-dev SD media can be used with this new executable by selecting
-  --release v0.5.5-dev and Flash Cardputer only. Use the original pre-POS factory
-  backup, not another snapshot of the old POS installer. EASY_INSTALL.md explains
-  the exact distinction and the known original backup from the reported session.
+- Recorder creates and syncs its WAV header before enabling the microphone.
+  A dedicated higher-priority task drains I2S into a bounded 32,000-byte mono
+  PCM buffer (one second at 16 kHz). SD writes, syncs and UI rendering no longer
+  prevent I2S reads. Capture errors or a prolonged full buffer still stop with
+  a recoverable partial WAV; errors are never hidden by dropping samples.
+  Pause and save stop acquisition and drain queued PCM before freeing the
+  buffer/channel, preserving the recorded tail.
+- Settings > System / software update > Turn display off switches off the LCD
+  and backlight while the device, charging and services continue. A normal key
+  or short G0 press restores the previous brightness and the same System menu
+  selection. Wake input is consumed, including Home, and automatic battery
+  redraw cannot turn the hidden display back on. Existing held recovery works.
+- System submenu selection is remembered across its actions. Docs describe
+  display-off, recovery of existing partial WAVs and signed on-device updates.
+- User reports successful 0.5.6-dev installation and working display/keyboard.
+  New microphone timing and LCD-off behavior still need physical confirmation.
 
-Both firmware roles build and host tests cover POS snapshot recognition,
-confirmation typos, recovery evidence, USB ordering, physical key mapping and
-black setup screens. New physical display/input confirmation still requires
-completing the USB flash. Experimental prerelease.
+Host regressions exercise the actual capture task with simulated UI/SD stalls,
+ordered PCM, buffer saturation, read/DMA errors, allocation/task failures,
+restart cleanup, and System-menu wake behavior. Both ESP32-S3 roles are built.
+Experimental prerelease; keep the verified original USB recovery backup.

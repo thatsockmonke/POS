@@ -48,7 +48,8 @@ static adc_cali_handle_t calibration;
 static uint16_t *stripe;
 static pos_view_t previous;
 static bool previous_valid, backlight, wifi_initialized, wifi_started;
-static bool serial_input;
+static bool serial_input, display_hidden;
+static unsigned display_brightness;
 static void (*sleep_hook)(void);
 static RTC_NOINIT_ATTR uint32_t boot_magic, boot_attempts, force_recovery;
 #define BOOT_MAGIC 0x504f5332u
@@ -148,10 +149,37 @@ static void input_task(void *unused) {
 void pos_device_brightness(unsigned percent) {
   if (percent > 100)
     percent = 100;
+  display_brightness = percent;
+  if (display_hidden)
+    percent = 0;
   if (backlight) {
     ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, percent * 1023 / 100);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
   }
+}
+
+int pos_device_display_enabled(bool enabled) {
+  if (!info.display_ok || !backlight)
+    return -1;
+  if (enabled == !display_hidden)
+    return 0;
+  unsigned brightness = display_brightness;
+  if (!enabled)
+    pos_device_brightness(0);
+  if (esp_lcd_panel_disp_on_off(panel, enabled) != ESP_OK) {
+    /* A failed wake must not keep suppressing input and future redraws. */
+    if (enabled) {
+      display_hidden = false;
+      previous_valid = false;
+    }
+    pos_device_brightness(brightness);
+    return -1;
+  }
+  display_hidden = !enabled;
+  pos_device_brightness(brightness);
+  /* The LCD retains the menu in RAM. No CPU sleep, service shutdown, NVS
+   * write or reboot occurs here. */
+  return 0;
 }
 
 int pos_device_init(void) {
@@ -268,10 +296,11 @@ int pos_device_init(void) {
 bool pos_device_event(pos_event_t *event, uint32_t timeout_ms) {
   bool received = events && xQueueReceive(events, event,
                                           pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
-  if (received && event->pressed && event->key == POS_KEY_HOME)
+  if (!display_hidden && received && event->pressed &&
+      event->key == POS_KEY_HOME)
     pos_home_request();
   pos_health_tick();
-  if (previous_valid &&
+  if (!display_hidden && previous_valid &&
       (uint64_t)esp_timer_get_time() / 1000 - battery_refresh >= 5000)
     pos_device_show(&previous);
   return received;
@@ -301,6 +330,8 @@ void pos_device_boot_flash(void) {
 }
 
 void pos_device_show(const pos_view_t *input) {
+  if (display_hidden)
+    return;
   uint64_t now = esp_timer_get_time() / 1000;
   if (!battery_refresh || now - battery_refresh >= 5000) {
     pos_battery_sample(&battery, pos_device_battery_mv(), now);
@@ -519,13 +550,22 @@ int pos_device_set_time_utc(const char *text) {
   return settimeofday(&value, NULL);
 }
 
-int pos_device_i2c_read_block(uint8_t address,uint8_t reg,uint8_t *data,size_t size) {
-  i2c_master_dev_handle_t device=shared_i2c(address);
-  return device && size && size<=32 && i2c_master_transmit_receive(device,&reg,1,data,size,100)==ESP_OK?0:-1;
+int pos_device_i2c_read_block(uint8_t address, uint8_t reg, uint8_t *data,
+                              size_t size) {
+  i2c_master_dev_handle_t device = shared_i2c(address);
+  return device && size && size <= 32 &&
+                 i2c_master_transmit_receive(device, &reg, 1, data, size,
+                                             100) == ESP_OK
+             ? 0
+             : -1;
 }
-int pos_device_i2c_write_block(uint8_t address,uint8_t reg,const uint8_t *data,size_t size) {
-  i2c_master_dev_handle_t device=shared_i2c(address); uint8_t bytes[33];
-  if (!device || !size || size>32) return -1;
-  bytes[0]=reg; memcpy(bytes+1,data,size);
-  return i2c_master_transmit(device,bytes,size+1,100)==ESP_OK?0:-1;
+int pos_device_i2c_write_block(uint8_t address, uint8_t reg,
+                               const uint8_t *data, size_t size) {
+  i2c_master_dev_handle_t device = shared_i2c(address);
+  uint8_t bytes[33];
+  if (!device || !size || size > 32)
+    return -1;
+  bytes[0] = reg;
+  memcpy(bytes + 1, data, size);
+  return i2c_master_transmit(device, bytes, size + 1, 100) == ESP_OK ? 0 : -1;
 }

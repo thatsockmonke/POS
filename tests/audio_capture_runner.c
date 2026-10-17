@@ -1,0 +1,280 @@
+/* Run the real device capture code against a timed I2S producer and bounded
+ * pthread-backed FreeRTOS primitives. A millisecond models a 256-frame block;
+ * the simulated UI/SD stall exceeds all six hardware DMA blocks. */
+#include "audio_test_port.h"
+#include "pos_peripherals.h"
+#include <assert.h>
+#include <pthread.h>
+#include <stdatomic.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+struct test_stream {
+  pthread_mutex_t lock;
+  unsigned char *bytes;
+  size_t capacity, count, read, write;
+};
+struct test_sem {
+  pthread_mutex_t lock;
+  pthread_cond_t ready;
+  bool signalled;
+};
+static pthread_t foreground, worker;
+static bool worker_created, fail_alloc, fail_task;
+static atomic_uint blocks;
+static atomic_bool fail_read;
+static unsigned allocated, channels;
+static uint16_t sample;
+static i2s_event_callbacks_t callbacks;
+static void delay(void) {
+  struct timespec t = {0, 1000000};
+  nanosleep(&t, NULL);
+}
+static void wait_blocks(unsigned n) {
+  for (unsigned i = 0; i < 2000 && atomic_load(&blocks) < n; ++i)
+    delay();
+  assert(atomic_load(&blocks) >= n);
+}
+int pos_device_i2c_write(uint8_t a, uint8_t r, uint8_t v) {
+  (void)a;
+  (void)r;
+  (void)v;
+  return 0;
+}
+int i2s_new_channel(const i2s_chan_config_t *c, i2s_chan_handle_t *tx,
+                    i2s_chan_handle_t *rx) {
+  (void)c;
+  assert(!channels);
+  ++channels;
+  if (tx)
+    *tx = (void *)1;
+  if (rx)
+    *rx = (void *)1;
+  return ESP_OK;
+}
+int i2s_channel_init_std_mode(i2s_chan_handle_t h, const i2s_std_config_t *c) {
+  (void)h;
+  (void)c;
+  return 0;
+}
+int i2s_channel_register_event_callback(i2s_chan_handle_t h,
+                                        const i2s_event_callbacks_t *c,
+                                        void *ctx) {
+  (void)h;
+  (void)ctx;
+  callbacks = *c;
+  return 0;
+}
+int i2s_channel_enable(i2s_chan_handle_t h) {
+  (void)h;
+  return 0;
+}
+int i2s_channel_disable(i2s_chan_handle_t h) {
+  (void)h;
+  return 0;
+}
+int i2s_del_channel(i2s_chan_handle_t h) {
+  (void)h;
+  assert(channels);
+  --channels;
+  return 0;
+}
+int i2s_channel_read(i2s_chan_handle_t h, void *data, size_t bytes, size_t *n,
+                     unsigned timeout) {
+  (void)h;
+  (void)timeout;
+  bool capture = !pthread_equal(pthread_self(), foreground);
+  if (capture) {
+    delay();
+    if (atomic_load(&fail_read))
+      return -1;
+  }
+  int16_t *stereo = data;
+  for (size_t i = 0; i < bytes / 4; ++i) {
+    stereo[i * 2] = (int16_t)sample++;
+    stereo[i * 2 + 1] = -1234;
+  }
+  *n = bytes;
+  if (capture)
+    atomic_fetch_add(&blocks, 1);
+  return 0;
+}
+int i2s_channel_write(i2s_chan_handle_t h, const void *p, size_t n,
+                      size_t *written, unsigned t) {
+  (void)h;
+  (void)p;
+  (void)t;
+  *written = n;
+  return 0;
+}
+StreamBufferHandle_t xStreamBufferCreate(size_t n, size_t trigger) {
+  (void)trigger;
+  if (fail_alloc)
+    return NULL;
+  struct test_stream *s = calloc(1, sizeof(*s));
+  assert(s);
+  s->bytes = malloc(n);
+  assert(s->bytes);
+  s->capacity = n;
+  pthread_mutex_init(&s->lock, NULL);
+  ++allocated;
+  return s;
+}
+size_t xStreamBufferSend(StreamBufferHandle_t s, const void *p, size_t n,
+                         unsigned timeout) {
+  (void)timeout;
+  pthread_mutex_lock(&s->lock);
+  size_t count = n < s->capacity - s->count ? n : s->capacity - s->count;
+  for (size_t i = 0; i < count; ++i) {
+    s->bytes[s->write] = ((const unsigned char *)p)[i];
+    s->write = (s->write + 1) % s->capacity;
+  }
+  s->count += count;
+  pthread_mutex_unlock(&s->lock);
+  return count;
+}
+size_t xStreamBufferReceive(StreamBufferHandle_t s, void *p, size_t n,
+                            unsigned timeout) {
+  for (unsigned attempt = 0;; ++attempt) {
+    pthread_mutex_lock(&s->lock);
+    size_t count = n < s->count ? n : s->count;
+    for (size_t i = 0; i < count; ++i) {
+      ((unsigned char *)p)[i] = s->bytes[s->read];
+      s->read = (s->read + 1) % s->capacity;
+    }
+    s->count -= count;
+    pthread_mutex_unlock(&s->lock);
+    if (count || attempt >= timeout)
+      return count;
+    delay();
+  }
+}
+void vStreamBufferDelete(StreamBufferHandle_t s) {
+  pthread_mutex_destroy(&s->lock);
+  free(s->bytes);
+  free(s);
+  --allocated;
+}
+SemaphoreHandle_t xSemaphoreCreateBinary(void) {
+  struct test_sem *s = calloc(1, sizeof(*s));
+  assert(s);
+  pthread_mutex_init(&s->lock, NULL);
+  pthread_cond_init(&s->ready, NULL);
+  ++allocated;
+  return s;
+}
+int xSemaphoreGive(SemaphoreHandle_t s) {
+  pthread_mutex_lock(&s->lock);
+  s->signalled = true;
+  pthread_cond_signal(&s->ready);
+  pthread_mutex_unlock(&s->lock);
+  return pdTRUE;
+}
+int xSemaphoreTake(SemaphoreHandle_t s, unsigned timeout) {
+  (void)timeout;
+  pthread_mutex_lock(&s->lock);
+  while (!s->signalled)
+    pthread_cond_wait(&s->ready, &s->lock);
+  s->signalled = false;
+  pthread_mutex_unlock(&s->lock);
+  return pdTRUE;
+}
+void vSemaphoreDelete(SemaphoreHandle_t s) {
+  if (worker_created) {
+    pthread_join(worker, NULL);
+    worker_created = false;
+  }
+  pthread_cond_destroy(&s->ready);
+  pthread_mutex_destroy(&s->lock);
+  free(s);
+  --allocated;
+}
+static void (*entry)(void *);
+static void *thread_entry(void *p) {
+  entry(p);
+  return NULL;
+}
+int xTaskCreate(void (*fn)(void *), const char *name, unsigned stack, void *ctx,
+                unsigned priority, void *handle) {
+  (void)name;
+  (void)stack;
+  (void)priority;
+  (void)handle;
+  if (fail_task)
+    return 0;
+  entry = fn;
+  assert(!pthread_create(&worker, NULL, thread_entry, ctx));
+  worker_created = true;
+  return pdPASS;
+}
+void vTaskDelete(void *h) {
+  (void)h;
+  pthread_exit(NULL);
+}
+int main(void) {
+  foreground = pthread_self();
+  pos_error_t e = {0};
+  int16_t mono[256];
+  size_t frames;
+  assert(!pos_microphone_start(&e));
+  assert(pos_audio_write(mono, 1, 16000, &e)); /* Capture/output exclusion. */
+  wait_blocks(20); /* UI + SD stall, over three times the DMA capacity. */
+  uint16_t expected = 63u * 256u;
+  for (unsigned i = 0; i < 20; ++i) {
+    assert(!pos_microphone_read(mono, 256, &frames, &e) && frames == 256);
+    for (size_t j = 0; j < frames; ++j)
+      assert((uint16_t)mono[j] == expected++);
+  }
+  pos_microphone_end();
+  unsigned captured = atomic_load(&blocks), delivered = 20 * 256;
+  for (;;) {
+    assert(!pos_microphone_read(mono, 256, &frames, &e));
+    if (!frames)
+      break;
+    for (size_t j = 0; j < frames; ++j)
+      assert((uint16_t)mono[j] == expected++);
+    delivered += (unsigned)frames;
+  }
+  assert(delivered == captured * 256); /* Save every buffered tail frame. */
+  pos_microphone_stop();
+  assert(!allocated && !channels && !worker_created);
+  /* A prolonged storage stall is reported, never silently dropped. */
+  atomic_store(&blocks, 0);
+  assert(!pos_microphone_start(&e));
+  wait_blocks(63);
+  for (unsigned i = 0; i < 20; ++i)
+    delay();
+  assert(pos_microphone_read(mono, 256, &frames, &e));
+  assert(strstr(e.message, "SD could not keep up") && frames == 0);
+  pos_microphone_stop();
+  assert(!allocated && !channels);
+  /* Failed allocation/task creation and I2S errors release all resources. */
+  fail_alloc = true;
+  assert(pos_microphone_start(&e));
+  fail_alloc = false;
+  assert(!allocated && !channels);
+  fail_task = true;
+  assert(pos_microphone_start(&e));
+  fail_task = false;
+  assert(!allocated && !channels);
+  atomic_store(&fail_read, true);
+  assert(!pos_microphone_start(&e));
+  for (unsigned i = 0; i < 20; ++i)
+    delay();
+  assert(pos_microphone_read(mono, 256, &frames, &e));
+  pos_microphone_stop();
+  atomic_store(&fail_read, false);
+  assert(!allocated && !channels);
+  assert(!pos_microphone_start(&e));
+  callbacks.on_recv_q_ovf((void *)1, NULL, NULL);
+  for (unsigned i = 0; i < 20; ++i)
+    delay();
+  assert(pos_microphone_read(mono, 256, &frames, &e));
+  pos_microphone_stop();
+  pos_microphone_stop();
+  assert(!allocated && !channels);
+  puts("Delayed consumers preserve ordered PCM; overruns/errors stop; restarts "
+       "and cleanup pass.");
+  return 0;
+}

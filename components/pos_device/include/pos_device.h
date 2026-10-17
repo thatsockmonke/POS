@@ -2,8 +2,8 @@
 #include "pos_core.h"
 #include <stdint.h>
 /* Internal I2C shared with keyboard, audio codec and cap IO expander. */
-int pos_device_i2c_read(uint8_t address,uint8_t reg,uint8_t *data);
-int pos_device_i2c_write(uint8_t address,uint8_t reg,uint8_t data);
+int pos_device_i2c_read(uint8_t address, uint8_t reg, uint8_t *data);
+int pos_device_i2c_write(uint8_t address, uint8_t reg, uint8_t data);
 typedef struct {
   bool display_ok, keyboard_ok, wifi_connected;
   uint32_t keys, frame_us, boot_ms, firmware_bytes;
@@ -16,6 +16,9 @@ void pos_device_boot_flash(void);
 bool pos_device_event(pos_event_t *event, uint32_t timeout_ms);
 void pos_device_show(const pos_view_t *view);
 void pos_device_brightness(unsigned percent);
+/* LCD/backlight only; CPU, charging and services continue. While hidden,
+ * events are delivered without global Home or automatic battery redraw. */
+int pos_device_display_enabled(bool enabled);
 int pos_device_battery_mv(
     void); /* calibrated millivolts, 0 means unavailable */
 pos_device_info_t pos_device_info(void);
@@ -33,5 +36,5 @@ void pos_device_keyboard_begin(void);
 
 int pos_device_set_time_utc(const char *text);
 
-int pos_device_i2c_read_block(uint8_t,uint8_t,uint8_t *,size_t);
-int pos_device_i2c_write_block(uint8_t,uint8_t,const uint8_t *,size_t);
+int pos_device_i2c_read_block(uint8_t, uint8_t, uint8_t *, size_t);
+int pos_device_i2c_write_block(uint8_t, uint8_t, const uint8_t *, size_t);

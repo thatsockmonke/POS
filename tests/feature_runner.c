@@ -161,9 +161,24 @@ int pos_ble_send(const char *relative, pos_io_progress_t progress, void *ctx,
   assert(relative && *relative);
   return 0;
 }
+static bool microphone_ended, microphone_tail_enabled;
+static unsigned microphone_tail_frames;
+static const char *microphone_test_root;
 static unsigned brightness_applied;
-static bool safe_requested;
+static bool safe_requested, display_hidden, display_wake_seen;
+static unsigned display_off_count;
 void pos_device_brightness(unsigned percent) { brightness_applied = percent; }
+int pos_device_display_enabled(bool enabled) {
+  assert(enabled == display_hidden);
+  display_hidden = !enabled;
+  if (!enabled) {
+    ++display_off_count;
+    assert(ui_next < ui_count && ui_events[ui_next].key == INT_MIN);
+    ++ui_next; /* Input after the screen is off, rather than queued activation.
+                */
+  }
+  return 0;
+}
 int pos_device_battery_mv(void) { return 3800; }
 int pos_device_set_time_utc(const char *text) {
   int64_t epoch;
@@ -208,11 +223,16 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout) {
     return false;
   }
   *event = ui_events[ui_next++];
-  if (event->pressed && event->key == POS_KEY_HOME)
+  if (!display_hidden && event->pressed && event->key == POS_KEY_HOME)
     pos_home_request();
   return true;
 }
 void pos_device_show(const pos_view_t *view) {
+  assert(!display_hidden);
+  if (display_off_count && !strcmp(view->lines[0], "System")) {
+    assert(view->selected_row == 6); /* Turn display off remains selected. */
+    display_wake_seen = true;
+  }
   ++ui_frames;
   ui_last = *view;
   if (check_black_screens) {
@@ -708,11 +728,19 @@ static int settings_ui_tests(const char *root, const char *mode) {
     choose(15);
     push_key(POS_KEY_ESCAPE, 0);
     push_key(POS_KEY_ESCAPE, 0);
+  } else if (!strncmp(mode, "settings-ui-display-", 20)) {
+    choose(6);
+    choose(3);
+    idle_event();
+    push_key(strstr(mode, "home") ? POS_KEY_HOME : POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ESCAPE, 0); /* Return from System after wake. */
+    push_key(POS_KEY_ESCAPE, 0);
   } else {
     choose(6);
     choose(2);
     choose(1);
     push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ESCAPE, 0);
     push_key(POS_KEY_ESCAPE, 0);
   }
   pos_ui_settings(root, &s);
@@ -725,6 +753,9 @@ static int settings_ui_tests(const char *root, const char *mode) {
     assert(!strcmp(s.timezone, "NPT-5:45"));
   if (!strcmp(mode, "settings-ui-safe"))
     assert(safe_requested);
+  if (!strncmp(mode, "settings-ui-display-", 20))
+    assert(display_off_count == 1 && display_wake_seen && !display_hidden &&
+           !pos_home_pending());
   assert(brightness_applied == s.brightness);
   return 0;
 }
@@ -1129,17 +1160,27 @@ static int apps_ui(const char *root, const char *mode) {
            fake_expansion.maps_available && maps_ready_seen);
     return 0;
   }
-  if (!strcmp(mode,"audio-ui-file-eof")) {
-    pos_ui_music_file(root,"Music/tone.wav");
+  if (!strcmp(mode, "audio-ui-file-eof")) {
+    pos_ui_music_file(root, "Music/tone.wav");
     assert(audio_writes && !audio_active && audio_stops && !pos_home_pending());
-    assert(!strcmp(ui_last.lines[0],"Audio Player")); return 0;
+    assert(!strcmp(ui_last.lines[0], "Audio Player"));
+    return 0;
   }
-  if (!strcmp(mode,"recorder-ui-home")) {
-    push_key(POS_KEY_ENTER,0); idle_event(); push_key(POS_KEY_HOME,0);
+  if (!strcmp(mode, "recorder-ui-home") || !strcmp(mode, "recorder-ui-tail")) {
+    microphone_test_root = root;
+    microphone_tail_enabled = !strcmp(mode, "recorder-ui-tail");
+    push_key(POS_KEY_ENTER, 0);
+    idle_event();
+    push_key(POS_KEY_HOME, 0);
     pos_ui_recorder(root);
-    assert(microphone_starts==1 && microphone_reads==1 && microphone_stops && pos_home_pending());
-    char file[POS_FS_PATH]; assert(!pos_fs_join(file,root,"Recordings/Recording-00001.wav"));
-    struct stat st; assert(!stat(file,&st) && st.st_size==44+512); return 0;
+    assert(microphone_starts == 1 && microphone_reads == 1 &&
+           microphone_stops && pos_home_pending());
+    char file[POS_FS_PATH];
+    assert(!pos_fs_join(file, root, "Recordings/Recording-00001.wav"));
+    struct stat st;
+    assert(!stat(file, &st) &&
+           st.st_size == 44 + 512 + (microphone_tail_enabled ? 256 : 0));
+    return 0;
   }
   if (!strncmp(mode, "music-ui-", 9)) {
     advance_after_audio = true;
@@ -1244,7 +1285,8 @@ int main(int argc, char **argv) {
     for (unsigned i = 0; i < 8; ++i) {
       for (unsigned j = 0; j < 3; ++j) {
         assert(write(descriptors[1], sequences[i] + j, 1) == 1);
-        assert(pos_console_poll(descriptors[0]) == (j == 2 ? arrows[i % 4] : -1));
+        assert(pos_console_poll(descriptors[0]) ==
+               (j == 2 ? arrows[i % 4] : -1));
       }
     }
     assert(write(descriptors[1], "\033[3~wasdWASD", 12) == 12);
@@ -1425,10 +1467,56 @@ int main(int argc, char **argv) {
 }
 
 void pos_ui_deploy(const char *root) { (void)root; }
-int pos_microphone_start(pos_error_t *e) { (void)e; ++microphone_starts; return 0; }
-int pos_microphone_read(int16_t *m,size_t capacity,size_t *n,pos_error_t *e) { (void)e; ++microphone_reads; if(ui_next<ui_count && ui_events[ui_next].key==INT_MIN) ++ui_next; *n=capacity; for(size_t i=0;i<capacity;++i) m[i]=(int16_t)i; return 0; }
+int pos_microphone_start(pos_error_t *e) {
+  (void)e;
+  if (microphone_test_root) {
+    char path[POS_FS_PATH];
+    assert(!pos_fs_join(path, microphone_test_root,
+                        "Recordings/Recording-00001.wav.part"));
+    struct stat st;
+    assert(!stat(path, &st) &&
+           st.st_size == 44); /* Header synced before I2S. */
+  }
+  ++microphone_starts;
+  microphone_ended = false;
+  return 0;
+}
+int pos_microphone_read(int16_t *m, size_t capacity, size_t *n,
+                        pos_error_t *e) {
+  (void)e;
+  if (microphone_ended) {
+    *n = microphone_tail_frames < capacity ? microphone_tail_frames : capacity;
+    for (size_t i = 0; i < *n; ++i)
+      m[i] = 1234;
+    microphone_tail_frames -= (unsigned)*n;
+    return 0;
+  }
+  ++microphone_reads;
+  if (ui_next < ui_count && ui_events[ui_next].key == INT_MIN)
+    ++ui_next;
+  *n = capacity;
+  for (size_t i = 0; i < capacity; ++i)
+    m[i] = (int16_t)i;
+  return 0;
+}
+void pos_microphone_end(void) {
+  microphone_ended = true;
+  microphone_tail_frames = microphone_tail_enabled ? 128 : 0;
+}
 void pos_microphone_stop(void) { ++microphone_stops; }
-int pos_motion_start(pos_error_t *e) { (void)e; return 0; }
-int pos_motion_read(pos_imu_sample_t *s,pos_error_t *e) { (void)e; memset(s,0,sizeof(*s)); return 0; }
+int pos_motion_start(pos_error_t *e) {
+  (void)e;
+  return 0;
+}
+int pos_motion_read(pos_imu_sample_t *s, pos_error_t *e) {
+  (void)e;
+  memset(s, 0, sizeof(*s));
+  return 0;
+}
 void pos_motion_stop(void) {}
-int pos_infrared_send(uint8_t a,uint8_t c,pos_error_t *e) { (void)a;(void)c;(void)e; return 0; }
+int pos_infrared_send(uint8_t a, uint8_t c, pos_error_t *e) {
+  (void)a;
+  (void)c;
+  (void)e;
+  return 0;
+}

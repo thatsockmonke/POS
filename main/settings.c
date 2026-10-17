@@ -124,6 +124,57 @@ static void battery_details(void) {
       mv);
   pos_ui_notice("Battery indicator", body);
 }
+static void display_off(void) {
+  /* Discard the activation key's queued repeats/releases before arming wake. */
+  pos_event_t event;
+  while (pos_device_event(&event, 0))
+    ;
+  if (pos_home_pending())
+    return;
+  if (pos_device_display_enabled(false)) {
+    pos_ui_notice("Display unavailable",
+                  "The display could not be switched off.");
+    return;
+  }
+  /* Read normally for health checks, but hidden-device events cannot request
+   * Home or redraw the battery. Consume the wake press instead of routing it.
+   */
+  while (!pos_device_event(&event, 100) || !event.pressed)
+    ;
+  if (pos_device_display_enabled(true))
+    pos_ui_notice("Display unavailable", "The display could not be restored.");
+}
+static void system_settings(const char *root) {
+  int selected = 0;
+  while (!pos_home_pending()) {
+    const char *items[] = {"Software Update", "Crash reports",
+                           "Safe mode on next boot", "Turn display off",
+                           "Back"};
+    int action = pos_ui_menu_from("System", items, 5, selected);
+    if (action < 0 || action == 4)
+      return;
+    selected = action;
+    if (action == 0)
+      pos_ui_updates(root);
+    if (action == 1)
+      pos_ui_browse(root, "POS/Users/Owner/Diagnostics/Crashes");
+    if (action == 2) {
+      const char *options[] = {"Cancel", "Enable safe mode next boot"};
+      if (pos_ui_menu("Safe mode", options, 2) == 1) {
+        if (pos_health_request_safe(true))
+          pos_ui_notice("Safe mode not saved",
+                        "Boot preference could not be saved to NVS. Try "
+                        "again without erasing stored data.");
+        else
+          pos_ui_notice("Safe mode requested",
+                        "The next restart opens recovery before optional "
+                        "services. No restart was forced.");
+      }
+    }
+    if (action == 3)
+      display_off();
+  }
+}
 void pos_ui_settings(const char *root, pos_settings_t *settings) {
   int selected = 0;
   while (!pos_home_pending()) {
@@ -155,28 +206,8 @@ void pos_ui_settings(const char *root, pos_settings_t *settings) {
       pos_ui_wifi(root);
     if (choice == 5)
       pos_ui_expansion(root);
-    if (choice == 6) {
-      const char *system[] = {"Software Update", "Crash reports",
-                              "Safe mode on next boot", "Back"};
-      int action = pos_ui_menu("System", system, 4);
-      if (action == 0)
-        pos_ui_updates(root);
-      if (action == 1)
-        pos_ui_browse(root, "POS/Users/Owner/Diagnostics/Crashes");
-      if (action == 2) {
-        const char *options[] = {"Cancel", "Enable safe mode next boot"};
-        if (pos_ui_menu("Safe mode", options, 2) == 1) {
-          if (pos_health_request_safe(true))
-            pos_ui_notice("Safe mode not saved",
-                          "Boot preference could not be saved to NVS. Try "
-                          "again without erasing stored data.");
-          else
-            pos_ui_notice("Safe mode requested",
-                          "The next restart opens recovery before optional "
-                          "services. No restart was forced.");
-        }
-      }
-    }
+    if (choice == 6)
+      system_settings(root);
     if (choice == 7)
       battery_details();
     if (choice == 8) {

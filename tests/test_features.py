@@ -700,4 +700,18 @@ class FeatureTests(unittest.TestCase):
             wav.setparams((1,2,22050,0,'NONE','not compressed'));wav.writeframes(struct.pack('<2048h',*[i%1000 for i in range(2048)]))
         self.run_feature('audio-ui-file-eof')
 
+    def test_recorder_saves_buffered_tail_on_home_and_creates_header_before_capture(self):
+        self.run_feature('recorder-ui-tail')
+        import wave
+        with wave.open(str(self.card/'Recordings/Recording-00001.wav'), 'rb') as wav:
+            self.assertEqual(wav.getnframes(), 384)
+            samples = struct.unpack('<384h', wav.readframes(384))
+            self.assertEqual(samples[256:], (1234,) * 128)
+
+    def test_display_off_wakes_in_same_system_menu_and_consumes_enter_or_home(self):
+        for key in ('enter', 'home'):
+            with self.subTest(key=key):
+                self.run_feature('settings-ui-display-' + key)
+
+
 if __name__=="__main__":unittest.main()

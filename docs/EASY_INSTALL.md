@@ -8,7 +8,7 @@ manual flash addresses or an understanding of partitions.
 
 ## Start here
 
-1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.6-dev).
+1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.7-dev).
 2. Download **`pos-setup`**. This is the executable wizard, not the Source code ZIP.
    Its optional `pos-setup.sha256` checksum is beside it. The complete POS ZIP
    also includes a copy of the wizard.
@@ -203,7 +203,7 @@ installs the already-prepared 0.5.5-dev software; formatting/re-copying is unnec
 ### Upgrading the prepared installer after the upside-down-screen fix
 
 The display/keyboard fix was introduced in **both 0.5.5-dev firmware roles**
-and is included in 0.5.6-dev. Refresh the
+and is included in 0.5.7-dev. Refresh the
 SD package as well as the USB installer; using `--release v0.5.3-dev` would keep
 installing the old firmware.
 
@@ -214,7 +214,7 @@ If the card has only the old installer files and you have **not installed POS**:
    **pos-install-old** (or another unused name). Keep the old files; formatting
    is unnecessary. Preserve any `pos-install.copying` folder under another name too.
 3. Download this release's **pos-setup**, replace the old executable and run it
-   with `--release v0.5.6-dev`. Choose **2. Prepare the microSD only** and select
+   with `--release v0.5.7-dev`. Choose **2. Prepare the microSD only** and select
    the card's shared top-level folder. It copies and verifies the matching package.
 4. Eject the card, put it into the powered-off ADV, connect the ADV and share its
    USB connection with Linux. Run the same command and choose **3. Flash Cardputer
@@ -230,7 +230,7 @@ With the paths used in the reported Crostini session, run:
 
 ```sh
 chmod +x "/mnt/shared/MyFiles/Downloads/pos-setup"
-"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.5.6-dev --sd-folder "/mnt/shared/removable/POS Drive"
+"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.5.7-dev --sd-folder "/mnt/shared/removable/POS Drive"
 ```
 
 If the card already contains an installed **/POS** tree, keep it and your files.
@@ -242,8 +242,8 @@ Optional commands for troubleshooting:
 
 ```sh
 ~/pos-setup --download-only                 # Download/verify without device changes
-~/pos-setup --release v0.5.6-dev             # Use a specific published version
-~/pos-setup --bundle /path/pos-0.5.6-dev.zip # Use a ZIP and matching .sha256 offline
+~/pos-setup --release v0.5.7-dev             # Use a specific published version
+~/pos-setup --bundle /path/pos-0.5.7-dev.zip # Use a ZIP and matching .sha256 offline
 ~/pos-setup --sd-folder '/mnt/chromeos/removable/YOUR CARD'
 ```
 
@@ -261,3 +261,34 @@ and choose **Download and install verified update**. The official feed and trust
 key are included. Firmware updates restart; keep power and the SD connected and
 let POS run normally for at least 60 seconds. Asset updates do not reflash firmware.
 You do not need the Linux installer again for compatible future updates.
+
+## Updating a working POS installation
+
+If POS is installed and working, use **Settings → System / software update →
+Software Update → Check for Updates** to install the latest signed update over
+Wi-Fi. This updates the runtime and matching System files without reformatting
+SD or repeating USB factory recovery. Keep power and SD connected and allow the
+new runtime to remain running normally for at least 60 seconds after reboot.
+See [UPDATES.md](UPDATES.md) for network setup and recovery details. Physical OTA
+and rollback validation is still pending; retain the verified USB recovery backup.
+
+## Turn the display off while charging
+
+Open **Settings → System / software update → Turn display off**. The LCD and its
+backlight switch off; POS, charging and enabled services keep running. Press a
+normal keyboard key or briefly press G0 to return to the same System menu with
+**Turn display off** still selected. The wake press is consumed. Your saved
+brightness is restored. This is a manual display control, not device sleep or
+an automatic power-management service. Do not hold G0: its existing long-press
+recovery shortcut still applies.
+
+## Recorder overrun fix
+
+0.5.7-dev separates microphone capture from SD writes and screen rendering,
+with one second of bounded mono PCM buffering. WAV creation/header sync happens
+before capture starts. A card that cannot keep up for longer than that buffer
+can still stop recording rather than silently discard audio. In Recorder,
+choose **Recover interrupted WAV**, select the file ending **.wav.part** in
+**Recordings**, and confirm recovery; it verifies whole PCM frames and never
+replaces an existing completed WAV. Test the new release on your card before
+relying on it for an important recording.

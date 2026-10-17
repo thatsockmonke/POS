@@ -4,6 +4,23 @@
 #include "ui.h"
 #include <stdlib.h>
 #include <string.h>
+static int save_capture_tail(pos_recorder_t *r, pos_error_t *e) {
+  pos_microphone_end();
+  int result = 0;
+  for (;;) {
+    int16_t samples[256];
+    size_t n = 0;
+    if (pos_microphone_read(samples, 256, &n, e) ||
+        (n && pos_recorder_write(r, samples, n, e))) {
+      result = -1;
+      break;
+    }
+    if (!n)
+      break;
+  }
+  pos_microphone_stop();
+  return result;
+}
 static void record(const char *root) {
   pos_error_t e = {0};
   pos_view_t *v = calloc(1, sizeof(*v));
@@ -15,15 +32,17 @@ static void record(const char *root) {
   pos_view_line(v, 4, "Starting microphone...");
   pos_view_line(v, 6, "16 kHz mono PCM WAV");
   pos_device_show(v);
-  if (pos_microphone_start(&e)) {
-    pos_ui_notice("Microphone unavailable", e.message);
+  /* Directory scans, file creation and header fsync happen before I2S starts.
+   */
+  pos_recorder_t *r = pos_recorder_open(root, &e);
+  if (!r) {
+    pos_ui_notice("Cannot record", e.message);
     free(v);
     return;
   }
-  pos_recorder_t *r = pos_recorder_open(root, &e);
-  if (!r) {
-    pos_microphone_stop();
-    pos_ui_notice("Cannot record", e.message);
+  if (pos_microphone_start(&e)) {
+    pos_recorder_close(r);
+    pos_ui_notice("Microphone unavailable", e.message);
     free(v);
     return;
   }
@@ -38,9 +57,12 @@ static void record(const char *root) {
         done = true;
       if (event.key == ' ') {
         paused = !paused;
-        if (paused)
-          pos_microphone_stop();
-        else if (pos_microphone_start(&e)) {
+        if (paused) {
+          if (save_capture_tail(r, &e)) {
+            failed = true;
+            break;
+          }
+        } else if (pos_microphone_start(&e)) {
           failed = true;
           break;
         }
@@ -81,6 +103,8 @@ static void record(const char *root) {
       peak = 0;
     }
   }
+  if (!failed && !paused && save_capture_tail(r, &e))
+    failed = true;
   pos_microphone_stop();
   pos_view_clear(v, "Saving recording");
   pos_view_line(v, 5, "Verifying WAV on SD...");
