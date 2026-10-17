@@ -1,4 +1,4 @@
-# POS feature status — 0.6.4-dev
+# POS feature status — 0.6.6-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -62,6 +62,20 @@ hardware limitations. This release does not reduce the safe internal OTA layout.
 TLS server handshakes are excluded to preserve the existing OTA slot/recovery
 layout; validated HTTPS clients and temporary LAN HTTP sharing remain.
 
-0.6.4-dev implements the requested road search, cached routes, turn-by-turn prompts
+0.6.6-dev implements the requested road search, cached routes, turn-by-turn prompts
 and fully offline regional routing. Unsupported rules fail conservatively; this
 is not universal OSM/vehicle coverage. No partition migration is required.
+
+## 0.6.6-dev maintenance bridge
+
+Based on 0.6.4-dev with the manifest/update-history allocation fix only. Compact
+file-record storage, exact-size manifest loading, released redundant JSON/package
+objects, allocation-failure cleanup tests and update heap logging. No numeric-gain
+or world-map feature changes. Wire formats, signatures, metadata, anti-rollback,
+partitions and recovery policy remain unchanged. Physical heap verification pending.
+
+Release hold: the user explicitly requires 0.6.6-dev to remain the newest
+release until they report installing this updater fix. The following full release
+(numeric gain, world map and provider investigation) must not be tagged/published
+before that confirmation. `.github/release-hold.json` enforces this in tag CI;
+remove it only after the user's explicit confirmation.

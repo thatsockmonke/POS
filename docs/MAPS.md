@@ -1,4 +1,4 @@
-# Offline maps and navigation — POS 0.6.4-dev
+# Offline maps and navigation — POS 0.6.6-dev
 
 POS can search downloaded road names, calculate routes entirely on Panputer,
 save/resume routes, and show GPS turn guidance without Internet. Region choice,

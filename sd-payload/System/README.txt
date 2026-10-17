@@ -1,4 +1,4 @@
-POS 0.6.4-dev - Pan Operating System
+POS 0.6.6-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -76,3 +76,6 @@ Enter on a map: select travel mode, search or route to the crosshair.
 Yellow route, next-turn arrow/road name, remaining distance and off-route guidance.
 Redownload old 0.6.3 regions for routing restrictions. Cached old road views remain.
 Conditional/via-way rules are blocked conservatively; real signs take priority.
+
+0.6.6 maintenance: exact-size manifest buffers/record arrays and lower-memory
+update/history verification. App behavior remains as 0.6.4; new full features follow.

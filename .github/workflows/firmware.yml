@@ -44,6 +44,7 @@ jobs:
           printf 'version=%s\n' "$pos_version" >> "$GITHUB_OUTPUT"
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             test "$GITHUB_REF_NAME" = "v$pos_version"
+            python3 tools/check_release_hold.py "$GITHUB_REF_NAME"
           fi
       - name: Build both firmware roles and run host tests
         run: |

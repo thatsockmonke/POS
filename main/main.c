@@ -501,7 +501,8 @@ int pos_device_install_update(const char *root, const pos_update_t *u,
   heap_report();
   if (archive_current(root, &hooks.platform, NULL, error) ||
       pos_update_apply(root, u, &hooks, error)) {
-    ESP_LOGE(TAG, "Update stopped: %s", error->message);
+    ESP_LOGE(TAG, "Update stopped: %s",
+             error ? error->message : "No error details");
     heap_report();
     return -1;
   }
