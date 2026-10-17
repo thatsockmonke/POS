@@ -25,11 +25,12 @@ import zipfile
 import pos_setup_storage as storage
 from pos_setup_storage import SetupError
 
-VERSION = "0.6.7-dev"
+VERSION = "0.6.9-dev"
 REPOSITORY = "thatsockmonke/POS"
 MAX_DOWNLOAD = 256 * 1024 * 1024
 MAX_UNPACK = 256 * 1024 * 1024
 ESPTOOL = "4.12.0"
+verbose_usb = False
 
 
 def say(message=""):
@@ -52,9 +53,9 @@ def ask(question: str, *, default=False) -> bool:
 def choose(title: str, items: list[str]) -> int:
     say("\n" + title)
     for i, item in enumerate(items, 1):
-        say(f"  {i}. {item}")
+        say(f"{i}. {item}")
     while True:
-        answer = input("Choose a number (or Q to cancel): ").strip()
+        answer = input("Choose a number (Ctrl+C to cancel): ").strip()
         if answer.lower() in ("q", "quit"):
             raise SetupError("Cancelled. Completed backups/downloads have been kept.")
         if answer.isdigit() and 1 <= int(answer) <= len(items):
@@ -314,7 +315,7 @@ def extract_verified(archive: Path, state: Path) -> tuple[Path, dict]:
     return target, manifest
 
 
-def ensure_esptool(state: Path) -> None:
+def ensure_esptool(state: Path, action: str | None = None) -> None:
     try:
         from importlib.metadata import version
         import esptool
@@ -328,17 +329,24 @@ def ensure_esptool(state: Path) -> None:
     if python.exists():
         checked = subprocess.run([str(python), "-c", f"import esptool,serial;from importlib.metadata import version;assert version('esptool')=='{ESPTOOL}'"], capture_output=True)
         if not checked.returncode:
-            os.execv(str(python), [str(python), str(Path(sys.argv[0]).absolute()), *sys.argv[1:]])
-    say("USB flashing needs a small Python helper (esptool). It does not need ESP-IDF or a compiler.")
-    if not ask("Download/install the USB helper in POS's private folder?", default=True):
+            restart_with_helper(python, action)
+    say("USB flashing needs a small helper, installed once in POS Setup's folder.")
+    if not ask("Install the USB helper?", default=True):
         raise SetupError("USB setup cancelled; you can still prepare the SD card without it.")
     created = subprocess.run([sys.executable, "-m", "venv", str(venv)], capture_output=True, text=True)
     if created.returncode:
         install_linux_tools(["python3-venv"])
         subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True)
-    subprocess.run([str(python), "-m", "pip", "--isolated", "install", "--index-url", "https://pypi.org/simple", "esptool==" + ESPTOOL], check=True)
-    say("USB helper ready. Restarting the wizard with it...")
-    os.execv(str(python), [str(python), str(Path(sys.argv[0]).absolute()), *sys.argv[1:]])
+    subprocess.run([str(python), "-m", "pip", "--isolated", "install", "--quiet", "--disable-pip-version-check", "--index-url", "https://pypi.org/simple", "esptool==" + ESPTOOL], check=True)
+    say("USB helper ready. Continuing...")
+    restart_with_helper(python, action)
+
+
+def restart_with_helper(python: Path, action: str | None) -> None:
+    arguments = [str(python), str(Path(sys.argv[0]).absolute()), *sys.argv[1:]]
+    if action is not None:
+        arguments += ["--resume-action", action]
+    os.execv(str(python), arguments)
 
 
 def serial_port() -> str:
@@ -385,10 +393,15 @@ def hardware_command_live(port: str, *arguments: str) -> str:
     try:
         for line in usb_output_lines(process.stdout):
             output = (output + line + "\n")[-65536:]
-            if "%" not in line or time.monotonic()-displayed >= 1 or re.search(r"\b100\s*%", line):
-                say("  " + line)
-                if "%" in line:
-                    displayed = time.monotonic()
+            percent = re.search(r"\b(\d+)\s*%", line)
+            if verbose_usb:
+                if not percent or time.monotonic()-displayed >= 1 or int(percent[1]) == 100:
+                    say("  " + line)
+                    if percent:
+                        displayed = time.monotonic()
+            elif percent and (time.monotonic()-displayed >= 1 or int(percent[1]) == 100):
+                say("  " + percent[1] + "%")
+                displayed = time.monotonic()
         if process.wait():
             raise USBCommandError("USB operation failed. Check the data cable and Linux USB sharing.\n" + output[-2500:])
         return output
@@ -479,14 +492,14 @@ def backup_and_recovery(state: Path) -> tuple[str, Path]:
     folder = private_directory(state / "backups")
     previous = saved_backups(folder, probe["device_id"])
     if previous:
-        say("For factory recovery, select the earliest ORIGINAL pre-POS backup. Making a new snapshot copies whatever is on the device now; it does not install the downloaded POS firmware.")
+        say("Choose your original pre-POS backup. A new snapshot saves the software currently installed.")
     choice = choose("Choose the ORIGINAL recovery backup (earliest first)", [recovery_backup_label(p) for p in previous]+["Make a NEW snapshot of current software (may already be POS)"]) if previous else 0
     if choice < len(previous):
         backup = previous[choice]
         say("Using your existing verified backup: " + str(backup))
     else:
         backup = folder / ("panputer-" + probe["device_id"].replace(":", "") + "-" + str(time.time_ns()) + ".bin")
-        say("Making a private full-flash backup of the software currently on your Cardputer. The entire flash is read twice and the copies must match. This is the manufacturer's factory software only if it is still installed.")
+        say("Backing up the installed software and verifying two full reads. Keep any earlier factory backup.")
         with live_usb():
             try:
                 posctl.factory_backup(port, backup)
@@ -504,13 +517,13 @@ def backup_and_recovery(state: Path) -> tuple[str, Path]:
     if version:
         raise SetupError("This backup contains POS " + version + ", not the original factory software. "
                          "It is safely kept as a POS snapshot, but cannot prove factory recovery. "
-                         "Rerun Flash Cardputer only and select the earliest pre-POS backup instead. No restore or POS installer flash was attempted.")
-    say("Next, restore the selected saved software and confirm the ORIGINAL manufacturer software boots. The NEW POS USB installer is flashed AFTER this recovery check; downloaded SD files do not change the current firmware.")
+                         "Choose Flash Cardputer and select the earliest pre-POS backup instead. No restore or POS installer flash was attempted.")
+    say("First, restore this backup and check that the original M5Stack software boots. POS is flashed afterward.")
     if not ask("Restore the verified original backup now?", default=True):
         raise SetupError("POS flashing paused. Your backup is kept; complete recovery verification before installing.")
     with live_usb():
         posctl.factory_restore(port, backup, True)
-    say("\nSaved software restored and readback verified. The NEW POS installer has NOT been flashed yet. Power-cycle the ADV if needed.")
+    say("Backup restored and verified. Restart Panputer if needed; POS is not flashed yet.")
     if not ask("Can you SEE the original M5Stack factory software (not the POS Installer menu)?"):
         raise SetupError("Factory boot was not confirmed. POS has not been flashed; keep the backup and resolve recovery first.")
     report = {"format": 1, "device_id": probe["device_id"], "backup_sha256": posctl.sha256(backup),
@@ -590,19 +603,15 @@ def flash(bundle: Path, state: Path, port: str, backup: Path) -> None:
         raise SetupError("Flash cancelled. The prepared card and original backup are kept.")
     image = bundle / "pos-installer-usb.bin"
     version = json.loads((bundle / "card/pos-install/manifest.pos").read_text())["version"]
-    say("NOW flashing the new POS " + version + " USB installer. This is separate from preparing the microSD or restoring your backup.")
+    say("Flashing POS " + version + " installer and verifying...")
     args = argparse.Namespace(confirm_flash=True, image=image, sha256=posctl.sha256(image), factory_backup=backup, port=port)
-    say("Writing the POS installer over USB and verifying flash readback...")
     with live_usb():
         pos_deploy.flash(args, posctl)
-    say("\nNEW POS " + version + " installer USB flash and readback completed. The on-device POS installation is NEXT:")
-    say("  1. Power Panputer off and on, leaving its microSD inserted.")
-    say("  2. On its screen choose 'Install POS / resume' with Up/Down and Enter.")
-    say("     ADV menus: ; (Up), . (Down), no Fn needed. Enter selects.")
-    say("     If keeping an existing POS system, choose 'Back up & reinstall' instead.")
-    say("  3. Type INSTALL and press Enter. Leave power/card connected while it works.")
-    say("  4. When it says installation is complete, power off and on again.")
-    say("  5. Set your name/preferences; Wi-Fi can be skipped. Leave this SD inserted for normal use.")
+    say("\nUSB installer verified. Finish on Panputer:")
+    say("1. Restart with the prepared SD inserted. Choose 'Install POS / resume'.")
+    say("2. Type INSTALL. Keep power/card connected, then restart when prompted.")
+    say("3. Complete setup. Leave the SD inserted for normal use.")
+    say("Keeping an existing POS system? Choose 'Back up & reinstall' instead and follow its backup/REINSTALL prompts.")
     say("Your backup: " + str(backup))
     say("Full instructions: " + str(bundle / "INSTALL.md"))
 
@@ -629,15 +638,19 @@ def doctor(state: Path) -> None:
 
 
 def main(argv=None) -> int:
+    global verbose_usb
     parser = argparse.ArgumentParser(description="Guided POS installer for Linux and Chromebook Linux. Run without arguments for the menu.")
     parser.add_argument("--version", action="version", version="POS Setup " + VERSION)
     parser.add_argument("--doctor", action="store_true", help="Read-only check of Linux/Crostini card/USB access")
     parser.add_argument("--download-only", action="store_true", help="Download and verify the latest published POS, including development releases")
-    parser.add_argument("--release", help="Choose a specific release, e.g. v0.6.7-dev")
+    parser.add_argument("--release", help="Choose a specific release, e.g. v0.6.9-dev")
+    parser.add_argument("--verbose", action="store_true", help="Show detailed USB diagnostics")
+    parser.add_argument("--resume-action", choices=("flash", "restore"), help=argparse.SUPPRESS)
     parser.add_argument("--bundle", type=Path, help="Use an already downloaded POS ZIP plus matching .sha256 file")
     parser.add_argument("--sd-folder", type=Path, help="Offer this mounted/shared card folder (copy only; never formats)")
     parser.add_argument("--work-dir", type=Path, default=Path.home()/".local/share/pos-setup", help="Private download/backup folder; default ~/.local/share/pos-setup")
     args = parser.parse_args(argv)
+    verbose_usb = args.verbose
     try:
         if not sys.platform.startswith("linux"):
             raise SetupError("This tool is for Linux, including Chromebook's Linux development environment.")
@@ -649,8 +662,9 @@ def main(argv=None) -> int:
         if not args.download_only and not sys.stdin.isatty():
             raise SetupError("Open a terminal and run ./pos-setup interactively. Formatting/flashing cannot be approved through a pipe or --yes flag.")
         state = private_directory(args.work_dir.expanduser())
-        say("\nPOS Setup — guided Panputer installation")
-        say("Cardputer ADV only. Firmware goes over USB; the microSD holds the POS installation files.")
+        if not args.resume_action:
+            say("\nPOS Setup — guided Panputer installation")
+            say("Cardputer ADV only. Firmware goes over USB; the microSD holds the POS installation files.")
         if args.download_only:
             archive, version = download_release(GitHub(), state, args.release) if not args.bundle else (args.bundle.expanduser(), None)
             bundle, manifest = extract_verified(archive, state)
@@ -658,13 +672,11 @@ def main(argv=None) -> int:
                 raise SetupError("Downloaded release tag and firmware version differ; installation stopped.")
             say("Verified POS " + manifest["version"] + ": " + str(bundle))
             return 0
-        action = choose("What would you like to do?", ["Install POS: prepare microSD + flash Cardputer", "Prepare the microSD only", "Flash Cardputer only (microSD already prepared)", "Restore a saved backup (original firmware or POS snapshot)", "Show connection help / read-only doctor"])
-        if action == 4:
-            doctor(state)
-            return 0
-        if action != 1:
-            ensure_esptool(state)
-        if action == 3:
+        action = (1 if args.resume_action == "flash" else 2) if args.resume_action else choose(
+            "What would you like to do?", ["Prepare the microSD", "Flash Cardputer", "Restore backup"])
+        if action != 0:
+            ensure_esptool(state, "flash" if action == 1 else "restore")
+        if action == 2:
             import posctl
             port = serial_port()
             with live_usb():
@@ -676,13 +688,13 @@ def main(argv=None) -> int:
             if ask("Restore the selected saved software to the matching Cardputer? This replaces its internal flash; it does not install the downloaded POS release."):
                 with live_usb():
                     posctl.factory_restore(port, backup, True)
-                say("Selected backup restored and readback verified. The downloaded POS installer was not flashed. Power-cycle and observe the saved software boot.")
+                say("Backup restored and verified. Restart Panputer to check it boots.")
             return 0
         archive, version = download_release(GitHub(interactive=True), state, args.release) if not args.bundle else (args.bundle.expanduser(), None)
         bundle, manifest = extract_verified(archive, state)
         if version and manifest["version"] != version:
             raise SetupError("Downloaded release tag and firmware version differ; installation stopped.")
-        if action in (0, 2):
+        if action == 1:
             import posctl
             # Full image checksum/digest validation before card erasure or any USB write.
             import pos_deploy
@@ -692,12 +704,12 @@ def main(argv=None) -> int:
                 app = Path(tmp)/"installer.bin"; app.write_bytes((bundle/"pos-installer-usb.bin").read_bytes()[0x10000:])
                 posctl.verify_image(app)
             port, backup = backup_and_recovery(state)
-        if action in (0, 1):
+        if action == 0:
             prepare_card(bundle/"card/pos-install", state, args.sd_folder)
-        if action in (0, 2):
+        if action == 1:
             flash(bundle, state, port, backup)
         else:
-            say("\nSD preparation complete. Next run pos-setup → Flash Cardputer only, or use a Linux computer with USB access. On-device install steps are in " + str(bundle/"INSTALL.md"))
+            say("\nSD ready. Eject it, then run POS Setup again and choose 2. Flash Cardputer.")
         return 0
     except (SetupError, ValueError, OSError, KeyError, zipfile.BadZipFile, subprocess.CalledProcessError) as error:
         say("\nPOS Setup stopped: " + str(error))

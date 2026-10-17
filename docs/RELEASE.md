@@ -1,38 +1,48 @@
-# POS 0.6.8-dev
+# POS 0.6.9-dev
 
-Both map views already supported arrow-key pan and +/- zoom. This release adds
-adjustable pan distance and makes the controls easier to discover.
+POS Setup now has a short three-choice menu, avoids duplicate startup screens
+and shows concise progress. Maps can delete a downloaded region with confirmation
+and recovery through Trash. Includes the 0.6.8 pan-step improvements.
 
-- **Arrows:** pan without Fn. Moving manually pauses GPS follow.
-- **P:** cycle **Normal → Large → Fine → Normal**. The current movement per
-  press is shown on screen and scales with zoom. The choice is shared between
-  both map views during this boot; reboot resets Normal.
-- **+** or **=** zooms in; **−** zooms out.
-- **C:** recenter and follow GPS. World recentering now handles offsets smaller
-  than one pixel, too. A current fix is required for a truthful live position.
-- **0:** fit the whole planet (world view only). **Enter:** map menu.
+## Installation tool
 
-Regional Fine/Normal/Large steps are 1/16, 1/4 and 1/2 of visible map width
-(62.5/250/500 m at a 1 km view). World steps are 7.5/30/60 degrees divided by
-zoom. Changing the step updates labels without another SD raster read.
+```text
+What would you like to do?
+1. Prepare the microSD
+2. Flash Cardputer
+3. Restore backup
+Choose a number (Ctrl+C to cancel):
+```
 
-## Installation and updates
+Preparing the card and flashing are separate steps, convenient with one USB port.
+If the USB helper needs installing, POS Setup resumes the chosen action without
+repeating the menu/banner. Routine USB output shows progress; --verbose enables
+technical details and --doctor retains read-only connection help. Backup hashes,
+matching-device checks, factory recovery/boot confirmation, explicit format/flash
+consent, firmware verification and flash readback remain.
 
-Use **Settings → System → Software Update** for the signed 0.6.8-dev update.
-No SD formatting, map redownload, settings migration or partition change is
-required. The matching USB installer and SD package are also included for a
-fresh installation; use this release's **pos-setup** and [EASY_INSTALL.md](EASY_INSTALL.md).
-If an older updater still cannot load its manifest, use the existing
-[USB/recovery instructions](UPDATER_HEAP.md). All 0.6.7 features and its memory fix
-remain. Firmware and installed SD System versions are verified together.
+Download this release's **pos-setup** to get the simpler desktop tool. An on-device
+OTA update does not replace the executable already downloaded on your computer.
+See [EASY_INSTALL.md](EASY_INSTALL.md) for the short guide.
 
-## Validation
+## Maps
 
-Regression tests exercise both real map UIs: all four arrow directions, pan-step
-cycling/wrap, scaled movement, +/=/- zoom, world reset, GPS recenter/follow,
-metadata-only redraw when pressing P and cleanup on Home. Both firmware roles
-build successfully and all **384 host tests pass**. A simulated package
-backup/reinstall/restore preserves user data and validates the new System hashes.
-Signed release
-files, versions and payload hashes are verified. Physical Cardputer/GPS/SD
-performance and on-device key feel still need hardware validation.
+**Saved regions → choose a region → Enter → Delete region**. Keep region is the
+default. Confirmation moves its map, sources, graph and saved routes to
+**Files → Trash**. Other regions, similarly named notes, attribution and the
+world overview are retained. Restore through Trash, or permanently delete there
+to reclaim SD space. Active routes close before their files move. The catalog
+file moves last; failures retain remaining originals and recoverable Trash files.
+
+## Update and validation
+
+Use Settings → System → Software Update for the signed device update. No format,
+map redownload, settings conversion or partition migration is required. Both
+firmware roles, host regression tests and matching installer/SD packages are
+checked before publication. All **396 host tests pass**, both firmware builds
+fit the existing partitions, and simulated backup/reinstall/restore passes.
+Tests cover the three action paths, cancellation,
+helper resume, quiet/verbose diagnostics, region deletion, restoration, canceled
+and blocked deletion, unrelated-file protection and deletion with an active route.
+Physical USB/Cardputer/FAT32/card-removal/power-loss behavior remains unverified
+in the cloud.

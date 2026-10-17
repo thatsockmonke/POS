@@ -332,9 +332,83 @@ class SetupTests(unittest.TestCase):
         with patch.object(wizard.subprocess,"Popen",return_value=process),patch.object(wizard.time,"monotonic",return_value=100),patch.object(wizard,"say") as say:
             text=wizard.hardware_command_live("mock-port","read_flash","0","ALL","unused.bin")
         displayed="\n".join(call.args[0] for call in say.call_args_list)
-        self.assertIn("4096 (0 %)",displayed);self.assertIn("4194304 (100 %)",displayed)
+        self.assertIn("0%",displayed);self.assertIn("100%",displayed)
+        self.assertNotIn("esptool.py",displayed);self.assertNotIn("4194304",displayed)
         self.assertLess(say.call_count,10);self.assertNotIn("?",displayed);self.assertNotIn("\b",text)
         self.assertIn("4091904 (99 %)",text)
+
+    def test_main_has_three_actions_and_sd_preparation_never_initializes_usb(self):
+        archive=self.bundle()
+        output=io.StringIO()
+        with patch.object(os,'geteuid',return_value=1000),patch.object(sys.stdin,'isatty',return_value=True), \
+             patch('builtins.input',return_value='1') as answer,patch('sys.stdout',output), \
+             patch.object(wizard,'prepare_card') as prepare,patch.object(wizard,'ensure_esptool') as usb:
+            self.assertEqual(wizard.main(['--bundle',str(archive),'--work-dir',str(self.state)]),0)
+        text=output.getvalue()
+        self.assertEqual(text.count('POS Setup — guided Panputer installation'),1)
+        self.assertIn('1. Prepare the microSD\n2. Flash Cardputer\n3. Restore backup',text)
+        self.assertNotIn('4.',text);self.assertNotIn('Install POS: prepare',text)
+        self.assertIn('Ctrl+C',answer.call_args.args[0])
+        prepare.assert_called_once();usb.assert_not_called()
+
+    def test_helper_restart_preserves_selected_action_and_original_arguments(self):
+        python=self.state/'usb-helper/bin/python'
+        with patch.object(sys,'argv',['/tmp/pos-setup','--release','v0.6.9-dev']), \
+             patch.object(os,'execv',side_effect=SystemExit(88)) as execute:
+            with self.assertRaises(SystemExit):wizard.restart_with_helper(python,'flash')
+        self.assertEqual(execute.call_args.args,(str(python),[str(python),'/tmp/pos-setup','--release','v0.6.9-dev','--resume-action','flash']))
+
+    def test_missing_usb_helper_installs_quietly_then_resumes_the_selected_action(self):
+        with patch('importlib.metadata.version',return_value='0'),patch.object(wizard,'ask',return_value=True), \
+             patch.object(wizard.subprocess,'run',return_value=SimpleNamespace(returncode=0)) as run, \
+             patch.object(sys,'argv',['/tmp/pos-setup','--work-dir',str(self.state)]), \
+             patch.object(os,'execv',side_effect=SystemExit(88)) as execute:
+            with self.assertRaises(SystemExit):wizard.ensure_esptool(self.state,'flash')
+        install=run.call_args.args[0]
+        self.assertIn('--quiet',install);self.assertIn('--isolated',install)
+        self.assertIn('esptool==4.12.0',install)
+        self.assertEqual(execute.call_args.args[1][-2:],['--resume-action','flash'])
+
+    def test_resumed_flash_has_no_second_banner_or_menu_and_does_not_prepare_card(self):
+        archive=self.bundle();output=io.StringIO()
+        with patch.object(os,'geteuid',return_value=1000),patch.object(sys.stdin,'isatty',return_value=True), \
+             patch('sys.stdout',output),patch('builtins.input',side_effect=AssertionError('menu repeated')), \
+             patch.object(wizard,'ensure_esptool') as helper,patch.object(wizard,'prepare_card') as prepare, \
+             patch('pos_deploy.verify_installer'),patch.object(posctl,'verify_image'), \
+             patch.object(wizard,'backup_and_recovery',return_value=('mock-port',self.root/'factory.bin')) as recovery, \
+             patch.object(wizard,'flash') as flash:
+            self.assertEqual(wizard.main(['--bundle',str(archive),'--work-dir',str(self.state),'--resume-action','flash']),0)
+        self.assertNotIn('POS Setup —',output.getvalue());self.assertNotIn('What would',output.getvalue())
+        helper.assert_called_once_with(self.state.absolute(),'flash')
+        recovery.assert_called_once();flash.assert_called_once();prepare.assert_not_called()
+
+    def test_restore_action_does_not_download_a_release(self):
+        backup=self.root/'factory.bin'
+        with patch.object(os,'geteuid',return_value=1000),patch.object(sys.stdin,'isatty',return_value=True), \
+             patch.object(wizard,'choose',side_effect=[2,0]),patch.object(wizard,'ask',return_value=True), \
+             patch.object(wizard,'ensure_esptool'),patch.object(wizard,'serial_port',return_value='mock-port'), \
+             patch.object(wizard,'saved_backups',return_value=[backup]),patch.object(wizard,'recovery_backup_label',return_value='Factory backup'), \
+             patch.object(posctl,'hardware_probe',return_value={'device_id':'example'}), \
+             patch.object(posctl,'factory_restore') as restore,patch.object(wizard,'download_release') as download:
+            self.assertEqual(wizard.main(['--work-dir',str(self.state)]),0)
+        restore.assert_called_once_with('mock-port',backup,True);download.assert_not_called()
+
+    def test_ctrl_c_at_menu_cancels_before_usb_or_card_work(self):
+        with patch.object(os,'geteuid',return_value=1000),patch.object(sys.stdin,'isatty',return_value=True), \
+             patch('builtins.input',side_effect=KeyboardInterrupt),patch.object(wizard,'prepare_card') as prepare, \
+             patch.object(wizard,'ensure_esptool') as usb:
+            self.assertEqual(wizard.main(['--work-dir',str(self.state)]),130)
+        prepare.assert_not_called();usb.assert_not_called()
+
+    def test_quiet_usb_keeps_probe_data_and_verbose_mode_shows_details(self):
+        for verbose in (False,True):
+            process=Mock();process.stdout=io.StringIO('MAC: aa:bb:cc:dd:ee:ff\nWriting 100%\n')
+            process.wait.return_value=0;process.poll.return_value=0
+            with patch.object(wizard,'verbose_usb',verbose),patch.object(wizard.subprocess,'Popen',return_value=process),patch.object(wizard,'say') as say:
+                result=wizard.hardware_command_live('mock-port','chip_id')
+            printed='\n'.join(call.args[0] for call in say.call_args_list)
+            self.assertIn('MAC: aa:bb:cc:dd:ee:ff',result)
+            self.assertEqual('MAC:' in printed,verbose);self.assertIn('100%',printed)
 
     def test_live_usb_preserves_fatal_reason_and_raises_retryable_error(self):
         process=Mock();process.stdout=io.StringIO("458752 (5 %)\b\b\nA fatal error occurred: Corrupt data, expected 0x1000 bytes but received 0xdac bytes\n")

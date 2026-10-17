@@ -1,12 +1,14 @@
 #include "esp_random.h"
 #include "esp_timer.h"
 #include "pos_device.h"
+#include "pos_files.h"
 #include "pos_maps.h"
 #include "pos_navigation.h"
 #include "pos_network_service.h"
 #include "pos_peripherals.h"
 #include "ui.h"
 #include <dirent.h>
+#include <errno.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -179,6 +181,125 @@ typedef struct {
   pos_nav_route_t *route;
   unsigned mode, segment;
 } workspace_t;
+typedef struct {
+  char folder[POS_FS_PATH], full[POS_FS_PATH];
+  char relative[241], entry[241];
+} deletion_t;
+static bool region_resource(const char *name, const char *map) {
+  size_t n = strlen(map), len = strlen(name);
+  if (n < 6 || strcmp(map + n - 5, ".pmap"))
+    return false;
+  if (!strcmp(name, map))
+    return true;
+  if (!strncmp(name, map, n)) {
+    const char *suffix = name + n;
+    if (!strcmp(suffix, ".pnav"))
+      return true;
+    if (strlen(suffix) == 15 && !strncmp(suffix, ".route-", 7) &&
+        strspn(suffix + 7, "0123456789abcdefABCDEF") == 8)
+      return true;
+  }
+  return len > n - 5 && !strncmp(name, map, n - 5) &&
+         (!strcmp(name + n - 5, ".osm") || !strcmp(name + n - 5, "-roads.osm"));
+}
+/* Preflight every member, then find one companion at a time. Reopening avoids
+ * depending on readdir position after FAT directory entries have been moved. */
+static int region_scan(const char *root, const char *map, deletion_t *w,
+                       bool first) {
+  DIR *d = opendir(w->folder);
+  if (!d)
+    return -1;
+  int count = 0;
+  for (;;) {
+    errno = 0;
+    struct dirent *item = readdir(d);
+    if (!item) {
+      if (errno)
+        count = -1;
+      break;
+    }
+    if (!region_resource(item->d_name, map) ||
+        (first && !strcmp(item->d_name, map)))
+      continue;
+    struct stat st;
+    if (snprintf(w->relative, sizeof(w->relative), "POS/Maps/%s",
+                 item->d_name) >= (int)sizeof(w->relative) ||
+        pos_fs_join(w->full, root, w->relative) || pos_fs_lstat(w->full, &st) ||
+        !S_ISREG(st.st_mode) || !pos_files_mutable(root, w->relative)) {
+      count = -1;
+      break;
+    }
+    ++count;
+    if (first)
+      break;
+  }
+  closedir(d);
+  return count;
+}
+static bool delete_region(const char *root, const char *path, const char *name,
+                          workspace_t *s) {
+  deletion_t *w = calloc(1, sizeof(*w));
+  if (!w) {
+    pos_ui_notice("Region kept", "Not enough memory to prepare deletion.");
+    return false;
+  }
+  bool deleted = false;
+  unsigned moved = 0;
+  pos_error_t e = {0};
+  const char *map = strrchr(path, '/');
+  if (!map || strlen(++map) > 63 || pos_fs_join(w->folder, root, "POS/Maps") ||
+      snprintf(w->relative, sizeof(w->relative), "POS/Maps/%s", map) >=
+          (int)sizeof(w->relative) ||
+      pos_fs_join(w->full, root, w->relative) || strcmp(w->full, path))
+    goto failed;
+  int count = region_scan(root, map, w, false);
+  if (count < 1)
+    goto failed;
+  char title[40], option[48];
+  snprintf(title, sizeof(title), "Delete: %.24s", name);
+  snprintf(option, sizeof(option), "Delete %u files to Trash", (unsigned)count);
+  const char *items[] = {"Keep region", option};
+  if (pos_ui_menu(title, items, 2) != 1)
+    goto done;
+  /* Release open graph/route handles before moving their files on FAT32. */
+  pos_nav_close(s->route);
+  s->route = NULL;
+  for (;;) {
+    int found = region_scan(root, map, w, true);
+    if (found < 0)
+      goto failed;
+    if (!found)
+      break;
+    if (pos_files_trash(root, w->relative, w->entry, &e))
+      goto failed;
+    ++moved;
+    if (pos_ui_progress(NULL, "Moving region to Trash", w->relative, moved,
+                        (unsigned)count))
+      goto failed;
+  }
+  /* Move the catalog file last. An interruption leaves a viewable region and
+   * already moved companions recoverable from their original-path metadata. */
+  snprintf(w->relative, sizeof(w->relative), "POS/Maps/%s", map);
+  if (pos_files_trash(root, w->relative, w->entry, &e))
+    goto failed;
+  deleted = true;
+  pos_ui_notice("Region deleted",
+                "Map, sources and saved routes moved to Files > Trash. Restore "
+                "them there, or delete them from Trash to free SD space.");
+  goto done;
+failed: {
+  char message[256];
+  snprintf(message, sizeof(message),
+           "Region retained. %u files moved to Trash; remaining files kept. "
+           "Restore moved files through Files > Trash. %.90s",
+           moved,
+           *e.message ? e.message : "Check the card and file permissions.");
+  pos_ui_notice("Deletion stopped", message);
+}
+done:
+  free(w);
+  return deleted;
+}
 static bool plan_route(const char *map, workspace_t *s, double start_lat,
                        double start_lon, double target_lat, double target_lon) {
   char *path = malloc(POS_FS_PATH);
@@ -309,7 +430,8 @@ static bool road_search(const char *map, workspace_t *s, double *lat,
   free(results);
   return selected;
 }
-static __attribute__((noinline)) void open_map(const char *path) {
+static __attribute__((noinline)) void open_map(const char *root,
+                                               const char *path) {
   pos_map_info_t m;
   pos_error_t e = {0};
   if (pos_map_inspect(path, &m, &e)) {
@@ -475,12 +597,20 @@ static __attribute__((noinline)) void open_map(const char *path) {
                s->mode == 1   ? "Walking"
                : s->mode == 2 ? "Cycling"
                               : "Driving");
-      const char *items[] = {"Route to map crosshair", "Search road name",
-                             "Resume saved route",     mode_label,
-                             "Clear guidance",         "Center saved region",
-                             "Straight-line guide",    "Map help",
-                             "Recalculate route",      "Back to map"};
-      int c = pos_ui_menu("Map options", items, 10);
+      const char *items[] = {"Route to map crosshair",
+                             "Search road name",
+                             "Resume saved route",
+                             mode_label,
+                             "Clear guidance",
+                             "Center saved region",
+                             "Straight-line guide",
+                             "Map help",
+                             "Recalculate route",
+                             "Delete region",
+                             "Back to map"};
+      int c = pos_ui_menu("Map options", items, 11);
+      if (c == 9 && delete_region(root, path, m.name, s))
+        break;
       if (c == 1) {
         if (road_search(path, s, &lat, &lon)) {
           follow = false;
@@ -541,7 +671,8 @@ static __attribute__((noinline)) void open_map(const char *path) {
       if (c == 7)
         pos_ui_notice(
             "Offline map controls",
-            "Arrows pan; +/- zoom; C follows GPS. Enter: road search, travel "
+            "Arrows pan; P changes step; +/- zoom; C follows GPS. Enter: road "
+            "search, travel "
             "mode, offline route planning and resume. Yellow line = route; "
             "arrow = next maneuver. Off route? Recalculate from a fresh fix. "
             "Route limits follow the downloaded graph and selected mode. Old "
@@ -599,6 +730,14 @@ static void saved(const char *root) {
       ++n;
     }
     unsigned next = n, previous = n;
+    if (!n && page) {
+      page = seen ? (seen - 1) / 8 : 0;
+      continue;
+    }
+    if (!n) {
+      pos_ui_notice("Saved regions", "No maps yet. Choose Download a region.");
+      break;
+    }
     if (more) {
       next = n;
       items[n++] = "Next page";
@@ -623,7 +762,7 @@ static void saved(const char *root) {
     char full[POS_FS_PATH], relative[120];
     snprintf(relative, sizeof(relative), "POS/Maps/%s", names[choice]);
     if (!pos_fs_join(full, root, relative))
-      open_map(full);
+      open_map(root, full);
   }
   closedir(d);
 }

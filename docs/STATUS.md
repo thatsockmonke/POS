@@ -1,4 +1,4 @@
-# POS development status — 0.6.8-dev
+# POS development status — 0.6.9-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -21,7 +21,7 @@ layouts and display-off still require physical validation; other peripherals ret
 | Diagnostics | Heap/stack, firmware/flash/SD, boot/frame metrics, battery ADC, raw keyboard coverage, SD test, app cycles, evidence tooling | Actual measured hardware baseline and battery calibration |
 | Wi-Fi | Shared scan/connect/status, device-key encrypted Known Networks, optional background auto-connect, SNTP, verified HTTPS GET/POST/downloads, temporary authenticated LAN file transfer | Physical radio/TLS interoperability validation, broader Share integration |
 | Firmware updates | Settings Software Update, built-in official feed/public key, trusted P-256 signatures, HTTPS, semantic versions, signed sequences, no minimum-version cutoff/display, strict seven-field metadata after the mandatory 0.6.0 transition, archived bridge feed, up to 15 signed firmware/System history pairs on SD and deliberate journaled rollback, bounded downloads, asset-only updates, previous-System journal recovery and inactive-slot write/readback; online OTA waits for a healthy 60-second UI interval | Official feed and pinned key included; physical TLS/OTA/rollback/power-cut validation |
-| Guided installer | Executable `pos-setup`: latest/private GitHub download, streamed checksum verification, card detection/FAT32 with exact erase confirmation, shared-folder route, factory backup/restore guidance, checked USB flash/readback and recovery menu | Crostini backup/restore and 0.5.6-dev installation/display/keyboard reported working. Exhaustive keys, power-loss/SD/OTA reliability remain to validate; shared folders cannot format a physical card |
+| Guided installer | Executable `pos-setup`: three-choice Prepare/Flash/Restore menu, concise USB progress, helper-action resume without duplicate menus, latest/private GitHub download, streamed checksum verification, card detection/FAT32 with exact erase confirmation, shared-folder route, factory backup/restore guidance, checked USB flash/readback and recovery menu | Crostini backup/restore and 0.5.6-dev installation/display/keyboard reported working. Exhaustive keys, power-loss/SD/OTA reliability remain to validate; shared folders cannot format a physical card |
 | USB developer tools | Build/package, checksum/backup-checked flash/readback, probe, detected-capacity double-read factory backup with bounded ROM fallback, matching-device restore/readback, logs and evidence reports | Factory restore/readback and observed boot reported; repeat with corrected verify-before-boot ordering |
 | Battery / recovery | Always-visible percentage/icon on black, smoothing/hysteresis and near-full voltage indication; RTC panic snapshot, persistent JSON crash logs, NVS failure counter and explicit Safe Mode exit; existing manual deep sleep retained | Battery percentage/full indication is an estimate; calibrate on hardware. Automatic power management is removed from scope |
 | Text editor / huge documents | SD-backed editor, bounded nearby-read cache, queued-typing batches, change-only rendering, confirmed Trash deletion and streamed saves/search/line navigation; 32-level session undo/redo, highlighted selection, SD clipboard, word/page/line/document navigation and recoverable drafts | Physical large-file responsiveness; session history restarts after reopening/recovery |
@@ -96,3 +96,18 @@ views during this boot, and reset to Normal after reboot. P refreshes labels
 without rebuilding the map raster. Arrow movement pauses GPS follow; C recenters
 on a current fix and resumes follow. World C now recenters even when the previous
 offset was smaller than one display pixel. See [MAPS.md](MAPS.md).
+
+## 0.6.9-dev installer and map management
+
+POS Setup has three main choices: Prepare the microSD, Flash Cardputer, Restore
+backup. Ctrl+C cancels; --doctor and --verbose retain optional connection/USB
+diagnostics. Installing the helper resumes the chosen action without repeating
+the banner/menu. Device identity, original factory recovery, hashes, formatting
+confirmation and verified flash readback remain required.
+
+Map options includes Delete region, with a default Keep region confirmation.
+The selected map, its matching OSM/normalized sources, graph and saved routes
+move to Files > Trash. Routes close before moving their files; the map catalog
+file moves last, and failures preserve originals or recoverable Trash entries.
+Other regions, unrelated names and the world asset remain. Empty pages rescan.
+Hardware FAT32/removal/power-cut behavior still requires physical validation.

@@ -75,6 +75,62 @@ class FeatureTests(unittest.TestCase):
         self.write('POS/Maps/local.pmap',header+body)
         self.run_feature('maps-ui-regional-controls')
 
+    def seed_delete_region(self):
+        header=bytearray(64);header[:4]=b'PMP1'
+        struct.pack_into('<iiII',header,4,34050500,-118247500,1000,1)
+        header[24:29]=b'Local'
+        body=struct.pack('<iiii',34050000,-118248000,34051000,-118247000)
+        struct.pack_into('<I',header,20,zlib.crc32(header+body))
+        files={'local.pmap':bytes(header+body),'local.osm':b'original OSM',
+               'local-roads.osm':b'normalized roads','local.pmap.pnav':b'graph',
+               'local.pmap.route-deadbeef':b'saved route'}
+        for name,data in files.items():self.write('POS/Maps/'+name,data)
+        return files
+
+    def test_maps_deletes_exact_region_companions_to_restorable_trash(self):
+        files=self.seed_delete_region()
+        other={'local-other.osm':b'keep source', 'local.pmap.route-deadbeef.notes':b'keep notes',
+               'locality.osm':b'keep other region', 'Map-data-license.txt':b'keep attribution'}
+        for name,data in other.items():self.write('POS/Maps/'+name,data)
+        self.run_feature('maps-ui-delete')
+        for name in files:self.assertFalse((self.card/'POS/Maps'/name).exists())
+        for name,data in other.items():self.assertEqual((self.card/'POS/Maps'/name).read_bytes(),data)
+        entries=list((self.card/'POS/Users/Owner/Trash').glob('item-*'))
+        self.assertEqual(len(entries),len(files))
+        for entry in entries:
+            original=json.loads((entry/'restore.json').read_text())['original']
+            self.assertEqual((entry/'data').read_bytes(),files[Path(original).name])
+            self.run_feature('file-restore',entry.relative_to(self.card))
+        for name,data in files.items():self.assertEqual((self.card/'POS/Maps'/name).read_bytes(),data)
+
+    def test_maps_delete_cancel_preserves_all_region_files(self):
+        files=self.seed_delete_region();self.run_feature('maps-ui-delete-cancel')
+        for name,data in files.items():self.assertEqual((self.card/'POS/Maps'/name).read_bytes(),data)
+        self.assertFalse((self.card/'POS/Users/Owner/Trash').exists())
+
+    def test_maps_delete_refuses_symlink_companion_before_moving_any_files(self):
+        files=self.seed_delete_region();p=self.card/'POS/Maps/local.osm';p.unlink()
+        outside=self.base/'outside.osm';outside.write_bytes(b'keep outside');p.symlink_to(outside)
+        self.run_feature('maps-ui-delete-protected')
+        self.assertEqual(outside.read_bytes(),b'keep outside');self.assertTrue(p.is_symlink())
+        for name,data in files.items():
+            if name!='local.osm':self.assertEqual((self.card/'POS/Maps'/name).read_bytes(),data)
+        self.assertFalse((self.card/'POS/Users/Owner/Trash').exists())
+
+    def test_maps_delete_trash_failure_keeps_region_and_companions(self):
+        files=self.seed_delete_region();self.write('POS/Users/Owner/Trash',b'not a directory')
+        self.run_feature('maps-ui-delete-trash-failure')
+        for name,data in files.items():self.assertEqual((self.card/'POS/Maps'/name).read_bytes(),data)
+
+    def test_maps_delete_closes_active_route_and_returns_safely(self):
+        self.run_feature('maps-ui-route-delete')
+        self.assertFalse((self.card/'POS/Maps/local.pmap').exists())
+        self.assertFalse((self.card/'POS/Maps/local.pmap.pnav').exists())
+        self.assertFalse(list((self.card/'POS/Maps').glob('local.pmap.route-*')))
+        originals={json.loads(p.read_text())['original'] for p in (self.card/'POS/Users/Owner/Trash').glob('*/restore.json')}
+        self.assertIn('POS/Maps/local.pmap.pnav',originals)
+        self.assertTrue(any('.route-' in p for p in originals))
+
     def test_custom_gain_entry_rejects_out_of_range_and_preserves_integer(self):
         self.run_feature('recorder-ui-custom')
         self.assertEqual(json.loads(self.run_feature('settings-read').stdout)['microphone_gain'],1537)

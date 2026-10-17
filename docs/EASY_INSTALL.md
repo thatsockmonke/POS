@@ -1,453 +1,86 @@
-# Easy installation: Linux or Chromebook Linux
+# Install POS on Linux or Chromebook Linux
 
-**Already running POS 0.6.7-dev?** Use **Settings → System → Software Update**
-for 0.6.8-dev. You do not need to format the card or download your maps again.
-In either map view: arrows pan, **P** changes the pan step, **+/-** zoom and
-**C** recenters/follows GPS. The step is shown on screen.
+You need a Cardputer ADV, USB data cable, FAT32 microSD and a card reader.
+Firmware goes over USB; the microSD holds the installation files and system drive.
 
-You need a **Cardputer ADV**, a USB **data** cable, a microSD card (64 GB is fine)
-and a reader for your computer. Back up anything important on the card first.
-The firmware goes into the Cardputer over USB. The microSD holds its installation
-files and becomes the POS system drive. You do not need ESP-IDF, a compiler,
-manual flash addresses or an understanding of partitions.
+## Download and run
 
-## Fresh install after an updater heap error (0.6.8-dev)
+Download **[pos-setup](https://github.com/thatsockmonke/POS/releases/download/v0.6.9-dev/pos-setup)**
+from the [0.6.9-dev release](https://github.com/thatsockmonke/POS/releases/tag/v0.6.9-dev).
+Replace an older copy. You need Python 3.10 or newer; no compiler is required.
 
-If choosing a clean start, copy any wanted SD files to your computer, then format
-that card as FAT32 in ChromeOS. This erases the card. Keep the original factory
-firmware `.bin` and `.json` backup on your computer. Download this release's
-`pos-setup`, replace the old copy and make the new executable runnable if needed.
-
-For one USB port, run the same command twice: first with the card connected and
-**2 — Prepare the microSD only**, then with the Cardputer connected and
-**3 — Flash Cardputer only**:
+For the Chromebook paths used in this project:
 
 ```sh
-"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.6.8-dev --sd-folder "/mnt/shared/removable/POS Drive"
+python3 "/mnt/shared/MyFiles/Downloads/pos-setup" --sd-folder "/mnt/shared/removable/POS Drive"
 ```
 
-Eject the card in ChromeOS Files after copying. Follow the original-factory
-backup/recovery checks during USB flashing. Insert the prepared card in the
-powered-off ADV, boot **Install POS / resume**, type **INSTALL**, and power-cycle
-when prompted. Complete setup and verify **0.6.8-dev** in System Information.
-Both firmware and SD System must match; the installer installs/verifies the pair.
-Copying new SD files alone does not update runtime firmware. The updater-fix bridge
-is not required before a fresh install. Wi-Fi/settings may reset with USB flashing.
+On another Linux computer, use `python3 /path/to/pos-setup`. Do not run it with sudo.
 
-For your wallpaper: **Background → P → Presets → Pansexual flag / Nonbinary flag**;
-**Enter** edits a stripe and **S** saves. Use **Esc** to discard a draft.
-
-## Start here
-
-1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.6.8-dev).
-2. Download **`pos-setup`**. This is the executable wizard, not the Source code ZIP.
-   Its optional `pos-setup.sha256` checksum is beside it. The complete POS ZIP
-   also includes a copy of the wizard.
-3. Put it in your Linux home folder. On a Chromebook, open **Files** and move the
-   download into **Linux files**. Enable the Linux development environment first
-   if you have not already done so.
-4. Open the Linux Terminal and run:
-
-   ```sh
-   chmod +x ~/pos-setup
-   ~/pos-setup
-   ```
-
-The tool requires Python 3.10 or newer, normally already provided by current
-Ubuntu/Debian and Crostini. If you saved it elsewhere, run it from that folder
-instead. **Do not run the wizard with `sudo`.** It asks for admin access only
-when installing missing support packages or formatting the selected card.
-
-Choose **1. Install POS: prepare microSD + flash Cardputer**, then follow the
-prompts. Everything is a numbered menu or a plain-English confirmation.
-
-## What the wizard does
-
-- Downloads the newest published POS version, including experimental development
-  releases. It skips drafts/incomplete releases and checks version numbers, not
-  just release dates. You see the selected version before installing.
-- Downloads the matching USB firmware and SD package together, verifies the ZIP
-  checksum, every bundled file and the SD manifest, and checks firmware versions.
-  It never executes Python/shell files from a downloaded bundle. This executable
-  contains the USB helpers it uses.
-- For a private repository, helps install GitHub CLI if needed, then offers its
-  normal browser sign-in. Sign in to the account that can open the POS repository.
-  POS Setup never asks you to paste a GitHub password/token. Public releases work
-  without GitHub sign-in. There is no need to make your repository public.
-- Offers a small private USB-helper installation when needed. This downloads
-  pinned esptool from PyPI into its own Python environment. It may restart the
-  menu once after that first-time setup; choose Install POS again.
-- Finds USB serial connections, asks you to select the Cardputer and checks its
-  chip/security state. Only the **ADV** hardware profile is supported.
-- Reads its complete existing flash **twice**, verifies the copies match, and
-  keeps a private backup on the computer. If a matching earlier verified backup
-  exists, you can choose it instead, including after an interrupted attempt.
-  A failed fast read restarts from byte zero with the ROM's smaller transfers;
-  the remaining pass uses ROM mode too. This can take several minutes. Two
-  complete, matching reads of the detected flash capacity are still mandatory.
-- Restores that verified backup and asks you to look at the Cardputer and confirm
-  its previous software boots. It cannot observe the screen for you. If that
-  recovery check fails, it stops before installing POS.
-- Detects candidate removable SD/USB disks and displays their device name,
-  capacity, reader model and filesystem. **It cannot distinguish every SD reader
-  from every USB drive, so select your microSD carefully.** Internal/system disks,
-  swap, active mapped storage and the disk holding the wizard/downloads/backups
-  are excluded. If active virtual-disk storage cannot be traced safely, direct
-  formatting is disabled. It rechecks device identity and mounts before disk writes.
-- Keeps an existing FAT32 card if you choose that option. Otherwise it offers
-  one FAT32 partition. Formatting **erases every file/partition on that card**;
-  you must type the exact displayed phrase, such as `ERASE /dev/sdb`. There is
-  no unattended `--yes` or automatic erase merely because a card was detected.
-- Copies the correctly nested `pos-install/` folder, syncs it, reads every file
-  back and checks its hash before marking it ready. Existing `/POS`, different
-  installer folders and interrupted copies are preserved rather than overwritten.
-- After you put the card into the powered-off ADV and reconnect USB, asks you to
-  type `FLASH`. It checks the installer images/layout and matching backup, writes
-  the USB installer at the correct address and verifies flash readback. Progress
-  is visible. Verification finishes while the device stays in the ROM downloader;
-  only then does the wizard reset it. This prevents first-boot settings writes
-  from interfering with the full-image comparison. It never uses a force flag, burns eFuses or erases the whole flash.
-
-Backups contain whatever software was on the Cardputer before that backup was
-made. A new backup is the manufacturer's factory software only if that software
-is still installed. Keep an earlier known-good factory backup; the wizard never
-deletes one to make room for a newer attempt.
-
-## Finish on the Cardputer
-
-After the wizard says the USB flash/readback succeeded:
-
-1. Power the Cardputer off and on with the prepared SD inserted.
-2. On its screen use **Up/Down** and **Enter** to choose **Install POS / resume**.
-   On the ADV, press **;** for Up or **.** for Down; no Fn needed in menus.
-3. Type **INSTALL** and press Enter. Keep power and SD connected while it works.
-4. When installation is complete, power it off and on again.
-5. Set your name and preferences. Wi-Fi can be skipped.
-
-Leave the card inserted during normal use. You do not flash the runtime binary
-yourself; the on-device installer installs it after verifying the SD system.
-
-## Chromebook / Crostini: what works and what can be blocked
-
-ChromeOS controls which devices Linux can access. Sharing a folder is different
-from passing through the physical storage device.
-
-- **SD already FAT32:** in ChromeOS Files, right-click the card → **Share with
-  Linux**. Run the wizard and choose **Prepare the microSD only**. It finds shared
-  cards under `/mnt/chromeos/removable/`; select your card's top-level folder.
-  Folder mode copies/verifies files, preserves other files and cannot format.
-- **SD is exFAT or its format is unknown:** Crostini generally cannot repartition
-  a card exposed only as a shared folder. In ChromeOS Files, use its format dialog
-  **only if it explicitly offers FAT32**. If it does not, run this wizard on a
-  normal Linux computer with a card reader and let it format the card there.
-  A shared folder may report `9p`/`virtiofs`; that does not prove the card is FAT32.
-  The wizard explicitly asks you to confirm FAT32 in this case.
-- **USB flashing:** connect the ADV, then check ChromeOS **Settings → Developers →
-  Linux development environment → Manage USB devices**. Share it with Linux if
-  listed. Use a USB data cable. If ChromeOS does not allow that device through,
-  the CLI cannot override ChromeOS; flash on another Linux computer instead.
-  A shared Cardputer folder cannot replace USB serial access.
-
-Run `~/pos-setup --doctor` for a **read-only** report: Linux/Crostini detection,
-visible serial paths, candidate cards and shared folders. It downloads nothing,
-installs nothing, mounts nothing and writes no firmware or card data.
-
-Google documents [Linux USB support limits](https://support.google.com/chromebook/answer/9145439)
-and [supported ChromeOS external filesystems](https://support.google.com/chromebook/answer/183093).
-Exact USB support varies by ChromeOS version and device policy; Crostini is not
-promised to support the entire format-and-flash path.
-
-## If something goes wrong
-
-The private working folder is **`~/.local/share/pos-setup`**:
-
-| Folder | Contents |
-| --- | --- |
-| `backups/` | Original `.bin`, matching `.json`, restore-readback and observed-boot records. Keep these! |
-| `downloads/` | Verified release ZIP and checksum; incomplete downloads keep a partial name. |
-| `unpacked/` | Matching firmware, SD files and full instructions. |
-| `usb-helper/` | Private Python environment for esptool. |
-
-The main menu includes **Restore a saved original/factory backup**. It discovers
-matching verified backups and checks device identity/hash again before restoring.
-It also accepts a saved `.bin` from another folder with its `.json` beside it.
-Use the ADV's documented G0/BOOT + power/reset procedure if normal USB download
-entry stops working; close serial monitors and check Linux permissions.
-
-If Linux reports serial permission denied, on Debian/Ubuntu run
-`sudo usermod -aG dialout "$USER"`, then log out/in (or restart Linux on Chromebook).
-This is a one-time Linux permission fix; it is not a reason to run the wizard as root.
-
-An interrupted SD copy stays **`pos-install.copying`** and is never offered as a
-completed install. Preserve/move that folder before retrying. A different existing
-`pos-install` or `/POS` installation is not overwritten. For an existing POS
-system, use [RECOVERY.md](RECOVERY.md) to back up/reinstall or the signed updater.
-
-### Backup stops with “Corrupt data” or the screen stays black
-
-This can happen during a fast esptool USB read through ChromeOS forwarding.
-Version 0.5.4-dev added one automatic ROM compatibility retry, using smaller
-request/response transfers instead of the fast streaming stub protocol. Progress
-is displayed as readable, rate-limited lines. The retry is slower; leave USB
-connected while it is making progress. Do not start another serial program.
-
-If the backup still stops, **no restore or POS firmware write has been attempted**.
-A `.part` / `.stub-failed` file is incomplete and cannot be used to restore.
-After the wizard has stopped, unplug USB, switch OFF, release G0/all keys,
-wait 10 seconds and switch ON. The previous firmware should boot; reconnect
-USB and share it with Linux again before retrying. If ROM reads also fail,
-try another data cable/port or a regular Linux computer: the tool cannot repair
-ChromeOS USB forwarding. Keep all completed backups.
-
-### New SD files prepared, but the old upside-down installer still boots
-
-Preparing the SD card does not reflash the software on the ESP32. The wizard
-first restores a saved recovery backup, asks you to confirm the original
-manufacturer software boots, and **only then** asks you to type **FLASH** to
-write the downloaded POS USB installer. If the wizard stops before that step,
-the new installer has not been flashed.
-
-In the reported 0.5.5-dev attempt, a new snapshot of an older POS installer was
-created and restored. The wizard then received `t` at its Y/N boot question and
-stopped. That explains why the old installer and its old input behavior remained.
-This is not evidence that the 0.5.5-dev driver changes were tested on the device.
-
-Use the **earliest original pre-POS factory backup**, not a fresh snapshot of
-POS. The updated wizard identifies POS snapshots by their application descriptor
-and refuses to treat them as factory recovery proof. Snapshots remain available
-in the separate restore menu. Previously observed original recovery backups are
-labelled clearly; the operator must still confirm the factory software is visible.
-Invalid Y/N input is now re-prompted instead of silently declining.
-
-For the reported device, the known original filename ends in
-**1792184685107168701.bin**. Keep it and its `.json`. When that original software
-has been restored and is visible, answer **Y** and continue to the **FLASH**
-prompt. Look for **NEW POS VERSION installer USB flash and readback completed**.
-New firmware also shows its version in the on-device installer title and prints
-`POS_BUILD` on USB at startup.
-
-A card already prepared with 0.5.5-dev can be kept: use the new pos-setup with
-`--release v0.5.5-dev`, choose **Flash Cardputer only**, and select that original
-backup. The repaired host prompts are embedded in the new executable. This
-installs the already-prepared 0.5.5-dev software; formatting/re-copying is unnecessary.
-
-### Upgrading the prepared installer after the upside-down-screen fix
-
-The display/keyboard fix was introduced in **both 0.5.5-dev firmware roles**
-and is included in 0.6.0-dev. Refresh the
-SD package as well as the USB installer; using `--release v0.5.3-dev` would keep
-installing the old firmware.
-
-If the card has only the old installer files and you have **not installed POS**:
-
-1. Power off the Cardputer and connect the card reader to your Chromebook.
-2. In ChromeOS Files, rename the card's top-level **pos-install** folder to
-   **pos-install-old** (or another unused name). Keep the old files; formatting
-   is unnecessary. Preserve any `pos-install.copying` folder under another name too.
-3. Download this release's **pos-setup**, replace the old executable and run it
-   with `--release v0.6.8-dev`. Choose **2. Prepare the microSD only** and select
-   the card's shared top-level folder. It copies and verifies the matching package.
-4. Eject the card, put it into the powered-off ADV, connect the ADV and share its
-   USB connection with Linux. Run the same command and choose **3. Flash Cardputer
-   only**. Select the earlier verified factory backup, rather than making a new
-   backup of the POS installer. Follow the restore/observed-factory-boot prompts,
-   then type FLASH when asked.
-5. On the Cardputer choose **Install POS / resume**, type **INSTALL**, and
-   power-cycle when prompted. Setup uses black screens. Navigate with the printed
-   arrows, without Fn in menus; Enter selects. Fn+backtick
-   goes back, and the printed Del key erases the previous character.
-
-With the paths used in the reported Crostini session, run:
-
-```sh
-chmod +x "/mnt/shared/MyFiles/Downloads/pos-setup"
-"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.6.8-dev --sd-folder "/mnt/shared/removable/POS Drive"
+```text
+What would you like to do?
+1. Prepare the microSD
+2. Flash Cardputer
+3. Restore backup
+Choose a number (Ctrl+C to cancel):
 ```
 
-If the card already contains an installed **/POS** tree, keep it and your files.
-Use the signed Software Update from the installed OS, or the documented backup
-and reinstall path. The card-preparation wizard intentionally refuses to overwrite
-an installed system. Keep the private factory `.bin` and its `.json` on Linux.
+## 1. Prepare the microSD
 
-Optional commands for troubleshooting:
+Connect the card and choose **1**. Select its top-level folder or removable drive.
+POS Setup downloads the latest complete release and checks the files before copying.
 
-```sh
-~/pos-setup --download-only                 # Download/verify without device changes
-~/pos-setup --release v0.6.8-dev             # Use a specific published version
-~/pos-setup --bundle /path/pos-0.6.8-dev.zip # Use a ZIP and matching .sha256 offline
-~/pos-setup --sd-folder '/mnt/chromeos/removable/YOUR CARD'
-```
+- Already FAT32? Keep it; formatting is unnecessary.
+- Need FAT32? Direct disk mode offers formatting with an exact erase confirmation.
+  **Formatting erases the selected card. Copy wanted files onto your computer first.**
+- Chromebook: share the card with Linux through ChromeOS Files. Shared-folder mode
+  copies only; confirm the card is already FAT32. It cannot format through a share.
 
-Published development bundles use checksums and GitHub HTTPS, not a signed USB
-bootstrap. Physical ADV USB recovery, SD removal/power-loss and actual Chromebook
-USB forwarding still require hardware testing. The wizard does not turn a software
-test into a claim that real hardware was validated. The longer [INSTALL.md](INSTALL.md)
-explains each underlying step if you need it.
+Eject the card in your computer's Files app after copying. One USB port is enough.
 
-## Future updates from Panputer
+## 2. Flash Cardputer
 
-Once 0.5.3-dev or newer is installed, use **Settings → System / software update →
-Software Update → Check for Updates**. Connect to Wi-Fi, review the new version,
-and choose **Download and install verified update**. The official feed and trusted
-key are included. Firmware updates restart; keep power and the SD connected and
-let POS run normally for at least 60 seconds. Asset updates do not reflash firmware.
-You do not need the Linux installer again for compatible future updates.
+Connect Panputer with a USB **data** cable, run the same command and choose **2**.
+On ChromeOS, share the Cardputer through Settings → Developers → Linux → USB devices
+if required. POS Setup can install its small USB helper once, then continues the
+selected action without showing the main menu again.
 
-## Updating a working POS installation
+Select the original pre-POS factory backup when offered. Keep its **.bin and .json**
+files on the computer. The wizard checks device identity, backup integrity and
+factory recovery before writing, then asks you to type **FLASH**.
+A new snapshot saves whatever software is installed now; it is not a substitute
+for an earlier original factory backup.
 
-If POS is installed and working, use **Settings → System / software update →
-Software Update → Check for Updates** to install the latest signed update over
-Wi-Fi. This updates the runtime and matching System files without reformatting
-SD or repeating USB factory recovery. Keep power and SD connected and allow the
-new runtime to remain running normally for at least 60 seconds after reboot.
-See [UPDATES.md](UPDATES.md) for network setup and recovery details. Physical OTA
-and rollback validation is still pending; retain the verified USB recovery backup.
+When USB flashing and readback verification finish:
 
-## Turn the display off while charging
+1. Restart Panputer with the prepared SD inserted.
+2. Select **Install POS / resume** and type **INSTALL**.
+3. Leave power/card connected. Restart when prompted and complete setup.
 
-Open **Settings → System / software update → Turn display off**. The LCD and its
-backlight switch off; POS, charging and enabled services keep running. Press a
-normal keyboard key or briefly press G0 to return to the same System menu with
-**Turn display off** still selected. The wake press is consumed. Your saved
-brightness is restored. This is a manual display control, not device sleep or
-an automatic power-management service. Do not hold G0: its existing long-press
-recovery shortcut still applies.
+Menu arrows work without Fn; Enter selects. Keep the SD inserted during normal use.
+The installer installs and verifies matching runtime firmware and SD System files.
+Internal Wi-Fi/settings can reset during USB flashing.
 
-## Recorder overrun fix
+**Keeping an installed POS system and its files?** Back up the card first and use
+**Back up & reinstall** on Panputer instead. Follow its backup/REINSTALL/restore
+prompts. See [the detailed installation guide](INSTALL.md) and [recovery guide](RECOVERY.md).
 
-0.5.7-dev separates microphone capture from SD writes and screen rendering,
-with bounded mono PCM buffering (two seconds preferred, one-second fallback). WAV creation/header sync happens
-before capture starts. A card that cannot keep up for longer than that buffer
-can still stop recording rather than silently discard audio. In Recorder,
-choose **Recover interrupted WAV**, select the file ending **.wav.part** in
-**Recordings**, and confirm recovery; it verifies whole PCM frames and never
-replaces an existing completed WAV. Test the new release on your card before
-relying on it for an important recording.
+## 3. Restore backup
 
-## Silent microphone / 0% peak
+Choose **3**, select the connected Cardputer and a matching saved backup, and
+confirm restoration. This restores saved software; it does not install a new POS
+release. Restored bytes are verified. Keep the original backup afterward.
 
-0.5.8-dev corrected the I2S channel selection, and the user confirms microphone
-input works. Current Recorder screens use one mono meter. If speech is too quiet,
-use Microphone gain below, then stop and play the new WAV from Files. **No input
-detected** means repeated zero samples, not merely a quiet percentage. Report the
-installed version and level if it remains silent. A file containing only zeros
-cannot have missing speech reconstructed. The temporary raw L/R readout in
-0.5.8-dev is no longer part of the normal Recorder screen.
+## Updates and connection help
 
-## Microphone gain and visual controls (since 0.5.9-dev)
+Already on 0.6.7-dev or later? Use **Settings → System → Software Update**.
+No card formatting or map redownload is required for 0.6.9-dev.
 
-The user confirmed microphone input works in 0.5.8-dev. If normal speech is too
-quiet, open **Recorder → Microphone gain**. Enter any whole number from **1 to 4096**
-(Ctrl+U clears the value; the default is 8). Try **128** or **256** for quiet speech.
-During recording, **Left/Right**
-changes gain live. Higher gain amplifies both speech and background noise. Lower
-it if **Clipping - lower gain** appears. This is digital PCM gain; it does not
-change the analog codec profile. Your preference is saved after capture stops.
+- **Ctrl+C** cancels. Completed backups/downloads and partial files are kept.
+- `--doctor`: read-only USB/card connection help; no writes or downloads.
+- `--verbose`: detailed USB diagnostics. Normal output shows concise progress.
+- `--release v0.6.9-dev`: select this version explicitly.
+- `--bundle /path/pos-0.6.9-dev.zip`: use a downloaded ZIP and its checksum offline.
 
-The Recorder now shows one mono microphone, one level bar, a percentage and gain.
-The icon/bar use your wallpaper stripe colors. Raw L/R are not shown in normal
-Recorder screens. **Space** pauses/resumes; **Enter/Escape** stops and saves.
-**Fn + apostrophe**, **Fn+Space** or a short **G0** press saves/closes the app.
-Keep G0 brief; holding it still requests recovery. New layouts and timing need a
-physical usability test on your device.
-
-**Background:** Up/Down selects a stripe, which briefly flashes white. Enter opens
-its color picker. Left/Right changes stripe count (1–12), **P** restores the pan
-preset to the draft, **S** saves, and Escape cancels. The draft is visible directly;
-there is no separate Preview button. Color picker controls remain arrows, Q/E for
-hue, Shift for fine steps, Enter to accept, Escape to cancel that color change.
-
-**Files:** the text browser is restored in 0.6.8-dev. Up/Down moves through
-names, Parent, Previous/Next and Folder actions; Enter opens a selected entry's
-actions. Choose Open folder, Play in Audio Player, or Open file → Text Editor.
-Copy/cut/paste, rename, Trash and explicit permanent deletion remain available.
-
-**Counter:** Enter, Space or Up adds one; Down subtracts one. The red button
-squishes and the number jumps, with the value saved on close. Music/Audio Player
-have a themed disc/progress display; existing playback controls remain.
-
-The launcher springs between icons, zooms/fades to black on opening and fades
-back to the selected icon on return. Motion is bounded, skips missed frames on
-slow renders, and retains one foreground app. The display streams scanlines;
-these changes do not allocate a whole-screen framebuffer.
-
-## Boot and arrow keys (since 0.5.10-dev)
-
-Boot starts black. Pink slides in first, yellow starts halfway through pink,
-then blue starts halfway through yellow. POS fades in once all three stripes
-are complete and holds for a second before startup continues.
-
-Press the printed arrow keys directly in menus, Files, Background/picker,
-Music and Recorder: **; Up**, **, Left**, **. Down**, **/ Right**. No Fn needed.
-Text entry keeps punctuation; use Fn+arrows to move the editor cursor. Shift
-still gives fine picker adjustment. Fn+arrows and USB arrows also keep working.
-Update normally through Settings → System → Software Update → Check for Updates;
-no card formatting is required.
-
-## Software Update (0.6.0-dev)
-
-**Install 0.6.0-dev before any later update.** Older official installations are
-always offered 0.6.0 first; it automatically switches to the current update feed.
-Future packages have no minimum-version field at all. This release is the
-transition, so an older updater can still read it.
-
-The new updater no longer shows a minimum version or requires a clean reinstall
-because of a version cutoff. Signatures, file hashes, hardware compatibility,
-package format, increasing signed sequences and downgrade prevention still apply.
-Use Settings → System → Software Update → Check for Updates as usual.
-
-## Sounds and recording (0.6.8-dev)
-
-Open Settings → **Sounds** for master On/Off, Volume (0–100%), Key presses,
-Apps / notifications and Preview sound. Preferences survive restarts and backups.
-Volume 0 or master Off is silent. Feedback is suppressed while the microphone or
-music/audio playback owns the codec. It resumes after those operations stop.
-
-Recorder prioritizes saving queued samples over drawing the meter. It writes
-larger batches, uses buffered SD writes and leaves more time for drainage between
-renders. If storage still stalls beyond the bounded buffer, it reports the error
-and retains the partial WAV. Recover existing `.wav.part` files in Recorder before
-deleting them; an overrun's uncaptured audio cannot be reconstructed.
-
-## 0.6.2 changes for an existing installation
-
-Use Settings → System → Software Update → Check for Updates. No SD formatting or
-USB flashing is needed from a working 0.6.0/0.6.1 installation. Keep your ordinary
-user files and interrupted recordings.
-
-Wi-Fi has Known Networks; save your connection once. The old-passphrase/import
-option is removed; re-save missing networks. Toggle Auto-connect there if wanted. Sounds retain existing preferences;
-the startup tune follows master/volume/app feedback settings. Recorder playback
-now waits properly for interface sounds to release the speaker.
-
-Text Editor: Esc → Delete document moves the saved original to Trash after
-confirmation. Files can restore it. Unsaved edits are discarded only on success.
-Firmware history and rollback instructions are in [FIRMWARE_HISTORY.md](FIRMWARE_HISTORY.md).
-
-## Maps (0.6.8-dev)
-
-After updating, open **Maps → Download a region**. Fit/detect the GPS cap first;
-a current fix is needed for "Around my GPS position", or enter decimal coordinates.
-Choose a small area, provider and Wi-Fi download. Open **Saved regions** offline.
-Arrows pan, +/- zoom, C follows GPS, Enter sets the crosshair as a destination.
-Enter opens road search, travel mode, cached offline routes and turn guidance.
-See [MAPS.md](MAPS.md) for complete instructions and limits.
-
-In 0.6.4, download the region again to add routing data. On its map press Enter,
-set **Travel mode**, then **Search road name** or **Route to map crosshair**.
-Routes calculate on the SD card and **Resume saved route** works without Wi-Fi.
-The yellow route, next-turn arrow, road name and remaining distance replace
-straight-line guidance. See [MAPS.md](MAPS.md) for snapping and access-rule limits.
-
-### World overview and numeric microphone gain (0.6.8-dev)
-
-Update through Settings → System → Software Update. No SD formatting or USB
-reflash is needed. Recorder → Microphone gain → Ctrl+U → type a whole number
-from 1 to 4096 → Enter. The saved value affects both WAV audio and the mono meter.
-Clipping still shows when samples reach the PCM limit; reduce gain then.
-
-Maps → World map → Enter opens the global coastline map. A current GPS fix
-automatically centers the map with a pink location pin. Arrows pan; +/− zoom;
-C resumes GPS follow; 0 zooms out to the whole planet. Enter returns to the
-Maps menu for regional downloads, roads and navigation. The overview works
-without Internet; a fresh satellite fix is needed for a truthful live pin.
+For the old manifest-heap error, see [UPDATER_HEAP.md](UPDATER_HEAP.md).
+For map controls/deletion, see [MAPS.md](MAPS.md); for apps, see [APPS.md](APPS.md).

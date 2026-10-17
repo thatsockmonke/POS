@@ -1,4 +1,4 @@
-# Offline maps and navigation — POS 0.6.8-dev
+# Offline maps and navigation — POS 0.6.9-dev
 
 POS can search downloaded road names, calculate routes entirely on Panputer,
 save/resume routes, and show GPS turn guidance without Internet. Region choice,
@@ -76,6 +76,25 @@ redownload is required. Pressing P updates labels without rereading the map.
 to add routing data: the earlier downloads did not request restriction relations
 or tagged access/barrier nodes. POS does not silently treat an incomplete old
 cache as a routing graph. Old maps and user data are preserved.
+
+## Delete a downloaded region
+
+Open **Saved regions → select the region → Enter → Delete region**. The
+confirmation names the region and counts its files; **Keep region** is selected
+by default. Confirm **Delete … files to Trash** to remove it from the catalog.
+
+Deletion includes this region's `.pmap`, matching original/normalized `.osm`,
+`.pnav` graph and `.route-XXXXXXXX` saved routes. It does not remove other maps,
+attribution, unknown temporary workspaces, similarly named notes or the bundled
+world map. Protected paths/symlinks are refused before anything moves.
+
+Files go to **Files → Trash**, with their original paths recorded. Restore the
+map and its companions there to use it again. Trash still occupies SD space;
+delete entries permanently through Files to reclaim that space. No permanent
+erasure happens from Maps. If an operation stops, moved files remain in Trash
+and remaining files stay in Maps. The catalog file moves last, so an interrupted
+region can still be opened or deleted again. Active route handles are closed
+before their files move.
 
 ## Routing rules and scope
 

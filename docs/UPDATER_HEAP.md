@@ -1,5 +1,9 @@
 # Installing the 0.6.6-dev low-memory bridge
 
+The menu numbers below describe the **0.6.6-dev installer**. Current 0.6.9-dev
+POS Setup uses **1 — Prepare the microSD**, **2 — Flash Cardputer**, and
+**3 — Restore backup**; see [the short current guide](EASY_INSTALL.md).
+
 This focused release is based on **0.6.4-dev**, without the new world map or
 numeric microphone gain. Those belong in the following full release.
 

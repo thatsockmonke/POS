@@ -1421,6 +1421,29 @@ static void map_controls(const char *root, bool world) {
   assert(map_frames[last].generation == map_frames[last - 1].generation);
 }
 static int apps_ui(const char *root, const char *mode) {
+  if (!strncmp(mode, "maps-ui-delete", 14)) {
+    bool cancel = strstr(mode, "cancel") != NULL;
+    bool blocked = strstr(mode, "protected") != NULL;
+    fake_expansion.gps_detected = fake_expansion.maps_available = true;
+    for (unsigned i = 0; i < 4; ++i)
+      push_key(POS_KEY_UP, 0);
+    choose(0); /* Saved regions */
+    choose(0); /* First region */
+    idle_event();
+    push_key(POS_KEY_ENTER, 0);
+    choose(9); /* Delete region */
+    if (!blocked)
+      choose(cancel ? 0 : 1);
+    idle_event();
+    if (!cancel)
+      push_key(POS_KEY_ENTER, 0); /* Completion/failure notice */
+    idle_event();
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_maps(root);
+    assert(ui_next == ui_count && pos_home_pending() && !ui_last.map_pixels &&
+           !ui_last.map_route_pixels);
+    return 0;
+  }
   if (!strcmp(mode, "maps-ui-world-controls") ||
       !strcmp(mode, "maps-ui-regional-controls")) {
     map_controls(root, !strcmp(mode, "maps-ui-world-controls"));
@@ -1489,8 +1512,10 @@ static int apps_ui(const char *root, const char *mode) {
     assert(ui_next == ui_count && pos_home_pending());
     return 0;
   }
-  if (!strcmp(mode, "maps-ui-route") || !strcmp(mode, "maps-ui-search")) {
+  if (!strcmp(mode, "maps-ui-route") || !strcmp(mode, "maps-ui-search") ||
+      !strcmp(mode, "maps-ui-route-delete")) {
     bool search = !strcmp(mode, "maps-ui-search");
+    bool deleting = !strcmp(mode, "maps-ui-route-delete");
     fake_expansion.gps_detected = fake_expansion.maps_available =
         fake_expansion.location.fix = true;
     fake_expansion.location.latitude = 34.05;
@@ -1534,6 +1559,14 @@ static int apps_ui(const char *root, const char *mode) {
       idle_event();
       push_key(POS_KEY_ENTER, 0);
       choose(2);
+      idle_event();
+    }
+    if (deleting) {
+      push_key(POS_KEY_ENTER, 0);
+      choose(9);
+      choose(1);
+      idle_event();
+      push_key(POS_KEY_ENTER, 0);
       idle_event();
     }
     push_key(POS_KEY_HOME, 0);
@@ -1819,6 +1852,13 @@ int main(int argc, char **argv) {
     return boot_splash_tests();
   if (!strcmp(argv[2], "text-qol"))
     return text_qol_tests();
+  if (!strcmp(argv[2], "file-restore") && argc == 4) {
+    pos_error_t error = {0};
+    int result = pos_files_restore(argv[1], argv[3], &error);
+    if (result)
+      fprintf(stderr, "%s\n", error.message);
+    return result ? 1 : 0;
+  }
   if (!strcmp(argv[2], "keyboard-ui"))
     return keyboard_ui_tests(true);
   if (!strcmp(argv[2], "keyboard-bare"))
