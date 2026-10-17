@@ -172,3 +172,100 @@ class UpdateTests(unittest.TestCase):
         old=self.private.read_bytes()
         with self.assertRaises(ValueError):pos_updates.keygen(self.private,self.public)
         self.assertEqual(self.private.read_bytes(),old);self.assertEqual(self.private.stat().st_mode&0o777,0o600)
+
+    def history_seed(self, version='0.6.1-dev', sequence=10, variant=''):
+        package=copy.deepcopy(self.old);package['version']=version
+        firmware=(version+' firmware').encode()*64
+        package['firmware']=self.record('firmware.bin',firmware)
+        for i,record in enumerate(package['files']):
+            content=(version+str(i)+variant).encode();package['files'][i]=self.record(record['path'],content)
+            self.write('POS/'+record['path'],content)
+        raw=json.dumps(package,separators=(',',':')).encode()
+        self.write('POS/System/installed.pos',raw);self.write('POS/.pos-transaction',hashlib.sha256(raw).hexdigest().encode())
+        body=json.dumps(dict(format=1,model=package['model'],release=version,sequence=sequence,kind='firmware',base_url='https://history.test/releases/'+version+'/',package=package),separators=(',',':'))
+        signature=subprocess.run(['openssl','dgst','-sha256','-sign',str(self.private)],input=body.encode(),check=True,capture_output=True).stdout
+        meta=self.base/(version+'.json');meta.write_text(json.dumps(dict(payload=body,signature=signature.hex())))
+        binary=self.base/(version+'.bin');binary.write_bytes(firmware)
+        return meta,binary,hashlib.sha256(raw).hexdigest()
+    def history_capture(self, meta, binary, expected=0, failure='', pin=''):
+        return self.run_c('history-capture',self.card,meta,self.public,binary,failure,'',pin,expected=expected)
+    def test_history_captures_verified_pair_and_rolls_back_through_existing_transaction(self):
+        meta,binary,identity=self.history_seed();self.history_capture(meta,binary)
+        archive=self.card/'POS/.History'/identity
+        self.assertEqual((archive/'firmware.bin').read_bytes(),binary.read_bytes())
+        self.assertTrue((archive/'complete').is_file())
+        self.history_seed('0.6.2-dev',11)
+        result=self.run_c('history-rollback',self.card,identity,self.public,'-',expected=0)
+        self.assertEqual(result.stdout.strip(),'1 1')
+        self.assertEqual(self.run_c('recover',self.card,'0.6.1-dev').stdout.strip(),'1')
+        self.run_c('confirm',self.card)
+        self.assertEqual(json.loads((self.card/'POS/System/installed.pos').read_bytes())['version'],'0.6.1-dev')
+        self.assertEqual((self.card/'POS/Users/Owner/Documents/precious.txt').read_bytes(),b'keep my words')
+    def test_history_cancellation_and_bad_flash_never_mark_complete_or_change_current_system(self):
+        meta,binary,identity=self.history_seed();before=(self.card/'POS/System/installed.pos').read_bytes()
+        self.history_capture(meta,binary,expected=1,failure='cancel')
+        self.assertFalse((self.card/'POS/.History'/identity/'complete').exists())
+        self.assertEqual((self.card/'POS/System/installed.pos').read_bytes(),before)
+        binary.write_bytes(b'bad image');self.history_capture(meta,binary,expected=1)
+        self.assertFalse((self.card/'POS/.History'/identity).exists())
+    def test_history_refuses_corrupt_signature_resources_or_firmware_before_flash(self):
+        meta,binary,identity=self.history_seed();self.history_capture(meta,binary)
+        archive=self.card/'POS/.History'/identity;self.history_seed('0.6.2-dev',11)
+        for path in [archive/'firmware.bin',archive/'payload/System/README.txt',archive/'manifest.json']:
+            original=path.read_bytes();path.write_bytes(original+b'corrupt')
+            result=self.run_c('history-rollback',self.card,identity,self.public,'-',expected=1)
+            self.assertEqual(result.stdout.strip(),'0 0');path.write_bytes(original)
+    def test_history_keeps_fifteen_complete_pairs_and_pins_selected_rollback_target(self):
+        first=None
+        for i in range(17):
+            meta,binary,identity=self.history_seed(f'0.6.{i+1}-dev',i+10)
+            if first is None:first=identity
+            self.history_capture(meta,binary,pin=first)
+        rows=self.run_c('history-list',self.card,self.public).stdout.splitlines()
+        self.assertEqual(len(rows),15)
+        self.assertIn(first,[r.split()[0] for r in rows])
+        self.assertTrue((self.card/'POS/.History'/identity/'complete').is_file())
+    def test_history_rejects_symlink_and_unknown_entries_and_preserves_them(self):
+        meta,binary,identity=self.history_seed();self.history_capture(meta,binary)
+        archive=self.card/'POS/.History'/identity;outside=self.base/'precious';outside.write_text('keep')
+        target=archive/'firmware.bin';target.unlink();target.symlink_to(outside)
+        self.history_seed('0.6.2-dev',11)
+        self.run_c('history-rollback',self.card,identity,self.public,'-',expected=1)
+        self.assertEqual(outside.read_text(),'keep')
+        unknown=self.card/'POS/.History/unknown';unknown.mkdir();(unknown/'keep').write_text('keep')
+        self.run_c('history-list',self.card,self.public)
+        self.assertEqual((unknown/'keep').read_text(),'keep')
+    def test_history_failed_boot_selection_and_power_loss_restore_matching_old_system(self):
+        meta,binary,identity=self.history_seed();self.history_capture(meta,binary)
+        for failure,interrupt,expected in [('select','',1),('', 'update-swapped',99)]:
+            self.history_seed('0.6.2-dev',11)
+            self.run_c('history-rollback',self.card,identity,self.public,'-',failure,interrupt,expected=expected)
+            self.run_c('recover',self.card,'0.6.2-dev')
+            self.assertEqual(json.loads((self.card/'POS/System/installed.pos').read_bytes())['version'],'0.6.2-dev')
+
+    def test_history_import_archives_retained_old_system_without_touching_current(self):
+        meta,binary,identity=self.history_seed()
+        import shutil
+        retained=self.card/'POS/Updates/import/old-System';retained.parent.mkdir(parents=True)
+        shutil.copytree(self.card/'POS/System',retained)
+        self.history_seed('0.6.2-dev',11)
+        before=(self.card/'POS/System/installed.pos').read_bytes()
+        self.run_c('history-import',self.card,meta,self.public,binary,'','','',retained)
+        self.assertTrue((self.card/'POS/.History'/identity/'complete').exists())
+        self.assertEqual((self.card/'POS/System/installed.pos').read_bytes(),before)
+    def test_same_resident_image_history_rolls_back_only_system_without_flash(self):
+        meta,binary,identity=self.history_seed();self.history_capture(meta,binary)
+        self.history_seed('0.6.1-dev',11,variant='updated assets')
+        result=self.run_c('history-rollback',self.card,identity,self.public,'-')
+        self.assertEqual(result.stdout.strip(),'0 0')
+        self.assertEqual(self.run_c('recover',self.card,'0.6.1-dev').stdout.strip(),'1')
+        self.run_c('confirm',self.card)
+    def test_different_same_version_firmware_is_refused_as_ambiguous(self):
+        meta,binary,identity=self.history_seed();self.history_capture(meta,binary)
+        self.history_seed('0.6.1-dev',11,variant='updated assets')
+        manifest=self.card/'POS/System/installed.pos';p=json.loads(manifest.read_bytes())
+        p['firmware']=self.record('firmware.bin',b'different resident image')
+        raw=json.dumps(p,separators=(',',':')).encode();manifest.write_bytes(raw)
+        self.write('POS/.pos-transaction',hashlib.sha256(raw).hexdigest().encode())
+        result=self.run_c('history-rollback',self.card,identity,self.public,'-',expected=1)
+        self.assertEqual(result.stdout.strip(),'0 0')

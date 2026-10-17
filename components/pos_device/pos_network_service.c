@@ -1,21 +1,22 @@
 #include "pos_network_service.h"
+#include "esp_app_desc.h"
 #include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_http_server.h"
+#include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_netif_sntp.h"
-#include "esp_random.h"
-#include "esp_app_desc.h"
-#include "esp_mac.h"
 #include "esp_ota_ops.h"
+#include "esp_random.h"
 #include "esp_timer.h"
-#include "pos_health.h"
-#include "pos_update_service.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "pos_device.h"
+#include "pos_health.h"
+#include "pos_update_service.h"
 #include <errno.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -52,8 +53,10 @@ int pos_network_scan(pos_network_ap_t *aps, unsigned capacity,
   if (esp_wifi_scan_start(&scan, true) != ESP_OK)
     return -1;
   wifi_ap_record_t *records = calloc(capacity, sizeof(*records));
-  if (!records)
+  if (!records) {
+    esp_wifi_clear_ap_list();
     return -1;
+  }
   uint16_t n = capacity;
   int result = esp_wifi_scan_get_ap_records(&n, records) != ESP_OK;
   if (!result)
@@ -64,6 +67,8 @@ int pos_network_scan(pos_network_ap_t *aps, unsigned capacity,
       aps[i].secured = records[i].authmode != WIFI_AUTH_OPEN;
     }
   free(records);
+  if (result)
+    esp_wifi_clear_ap_list();
   if (!result)
     *count = n;
   return result ? -1 : 0;
@@ -118,6 +123,107 @@ int pos_network_remember(const char *pass,
   }
   pos_secure_zero(blob, sizeof(blob));
   return result;
+}
+static atomic_bool auto_enabled, auto_paused, auto_stopping, auto_busy;
+static atomic_bool auto_running;
+bool pos_network_auto_enabled(void) {
+  nvs_handle_t h;
+  uint8_t enabled = 0;
+  if (!vault_handle(&h)) {
+    nvs_get_u8(h, "auto", &enabled);
+    nvs_close(h);
+  }
+  atomic_store(&auto_enabled, enabled == 1);
+  return enabled == 1;
+}
+int pos_network_auto_set(bool enabled) {
+  nvs_handle_t h;
+  if (vault_handle(&h))
+    return -1;
+  int bad = nvs_set_u8(h, "auto", enabled) != ESP_OK || nvs_commit(h) != ESP_OK;
+  nvs_close(h);
+  if (!bad)
+    atomic_store(&auto_enabled, enabled);
+  if (!bad && enabled && !atomic_load(&auto_running))
+    pos_network_auto_start();
+  return bad ? -1 : 0;
+}
+void pos_network_auto_pause(bool paused) {
+  atomic_store(&auto_paused, paused);
+  if (paused && atomic_load(&auto_busy)) {
+    esp_wifi_scan_stop();
+    while (atomic_load(&auto_busy))
+      vTaskDelay(1);
+  }
+}
+static void auto_task(void *unused) {
+  (void)unused;
+  unsigned retry = 0;
+  while (!atomic_load(&auto_stopping)) {
+    vTaskDelay(pdMS_TO_TICKS(100));
+    if (atomic_load(&auto_paused) || !atomic_load(&auto_enabled) ||
+        pos_network_status().connected)
+      continue;
+    if (retry) {
+      --retry;
+      continue;
+    }
+    retry = 300;
+    atomic_store(&auto_busy, true);
+    pos_wifi_profiles_t profiles = {0};
+    pos_network_ap_t aps[12];
+    unsigned count = 0;
+    if (!atomic_load(&auto_paused) && !pos_network_known(&profiles) &&
+        profiles.count && !pos_network_scan(aps, 12, &count)) {
+      for (unsigned i = 0; i < count && !atomic_load(&auto_paused) &&
+                           !atomic_load(&auto_stopping);
+           ++i)
+        for (unsigned j = 0; j < profiles.count; ++j)
+          if (!strcmp(aps[i].ssid, profiles.networks[j].ssid)) {
+            wifi_config_t cfg = {0};
+            memcpy(cfg.sta.ssid, profiles.networks[j].ssid,
+                   strlen(profiles.networks[j].ssid));
+            memcpy(cfg.sta.password, profiles.networks[j].password,
+                   strlen(profiles.networks[j].password));
+            cfg.sta.pmf_cfg.capable = true;
+            esp_wifi_disconnect();
+            int started = esp_wifi_set_config(WIFI_IF_STA, &cfg) == ESP_OK &&
+                          esp_wifi_connect() == ESP_OK;
+            pos_secure_zero(&cfg, sizeof(cfg));
+            for (unsigned wait = 0;
+                 started && wait < 100 && !atomic_load(&auto_paused) &&
+                 !atomic_load(&auto_stopping) &&
+                 !pos_network_status().connected;
+                 ++wait)
+              vTaskDelay(pdMS_TO_TICKS(100));
+            if (pos_network_status().connected)
+              goto finished;
+            esp_wifi_disconnect();
+            break;
+          }
+    }
+  finished:
+    pos_secure_zero(&profiles, sizeof(profiles));
+    atomic_store(&auto_busy, false);
+  }
+  auto_running = false;
+  vTaskDelete(NULL);
+}
+void pos_network_auto_start(void) {
+  if (!pos_network_auto_enabled())
+    return;
+  if (auto_running)
+    return;
+  atomic_store(&auto_stopping, false);
+  auto_running = true;
+  if (xTaskCreate(auto_task, "pos_wifi_auto", 6144, NULL, 1, NULL) != pdPASS)
+    auto_running = false;
+}
+void pos_network_auto_stop(void) {
+  atomic_store(&auto_stopping, true);
+  pos_network_auto_pause(true);
+  while (auto_running)
+    vTaskDelay(1);
 }
 int pos_network_sync_time(void) {
   if (!pos_network_status().connected)
@@ -216,22 +322,23 @@ static int https_once(const char *url, const char *method, const char *body,
              "HTTPS URL.");
     goto done;
   }
-  result =
-      pos_receive_file_limit(root, destination,
-                       length < 0 || esp_http_client_is_chunked_response(client)
-                           ? UINT64_MAX
-                           : (uint64_t)length,
-                       limit, sha, http_read, client, progress, ctx, e);
+  result = pos_receive_file_limit(
+      root, destination,
+      length < 0 || esp_http_client_is_chunked_response(client)
+          ? UINT64_MAX
+          : (uint64_t)length,
+      limit, sha, http_read, client, progress, ctx, e);
 done:
   esp_http_client_close(client);
   esp_http_client_cleanup(client);
   return result;
 }
 
-int pos_network_https_limit(const char *url, const char *method, const char *body,
-                      const char *type, const char *root, const char *dest,
-                      const char *sha, pos_io_progress_t progress, void *ctx,
-                      pos_error_t *e, uint32_t limit) {
+int pos_network_https_limit(const char *url, const char *method,
+                            const char *body, const char *type,
+                            const char *root, const char *dest, const char *sha,
+                            pos_io_progress_t progress, void *ctx,
+                            pos_error_t *e, uint32_t limit) {
   if (!pos_https_url_valid(url))
     return error(e, "Use an HTTPS URL without embedded credentials.");
   char current[512], location[512];
@@ -249,11 +356,18 @@ int pos_network_https_limit(const char *url, const char *method, const char *bod
   return error(e, "Too many HTTPS redirects. Use the final HTTPS URL.");
 }
 
-int pos_network_https(const char *url,const char *method,const char *body,const char *type,const char *root,const char *dest,const char *sha,pos_io_progress_t progress,void *ctx,pos_error_t *e) {return pos_network_https_limit(url,method,body,type,root,dest,sha,progress,ctx,e,UINT32_MAX);}
+int pos_network_https(const char *url, const char *method, const char *body,
+                      const char *type, const char *root, const char *dest,
+                      const char *sha, pos_io_progress_t progress, void *ctx,
+                      pos_error_t *e) {
+  return pos_network_https_limit(url, method, body, type, root, dest, sha,
+                                 progress, ctx, e, UINT32_MAX);
+}
 
 static httpd_handle_t server;
 static atomic_bool share_stop_requested;
-static atomic_int deployment_state; /* 0 idle, 1 queued, 2 executing, 3 done, 4 failed */
+static atomic_int
+    deployment_state; /* 0 idle, 1 queued, 2 executing, 3 done, 4 failed */
 static char deployment_url[512];
 static atomic_bool deployment_enabled;
 static int64_t deployment_deadline;
@@ -262,12 +376,15 @@ static struct {
 } share;
 static bool authorized(httpd_req_t *request) {
   char query[512], key[32], bearer[32];
-  if (deployment_enabled && esp_timer_get_time()>deployment_deadline) return false;
-  if (httpd_req_get_hdr_value_str(request,"Authorization",bearer,sizeof(bearer))==ESP_OK &&
-      strlen(bearer)==23 && !memcmp(bearer,"Bearer ",7)) {
-    unsigned different=0;
-    for(unsigned i=0;i<16;++i) different|=(unsigned char)bearer[i+7]^(unsigned char)share.key[i];
-    return different==0;
+  if (deployment_enabled && esp_timer_get_time() > deployment_deadline)
+    return false;
+  if (httpd_req_get_hdr_value_str(request, "Authorization", bearer,
+                                  sizeof(bearer)) == ESP_OK &&
+      strlen(bearer) == 23 && !memcmp(bearer, "Bearer ", 7)) {
+    unsigned different = 0;
+    for (unsigned i = 0; i < 16; ++i)
+      different |= (unsigned char)bearer[i + 7] ^ (unsigned char)share.key[i];
+    return different == 0;
   }
   if (httpd_req_get_url_query_str(request, query, sizeof(query)) != ESP_OK ||
       httpd_query_key_value(query, "key", key, sizeof(key)) != ESP_OK ||
@@ -316,8 +433,12 @@ static esp_err_t send_file(httpd_req_t *request) {
                                "File unavailable.");
   char sha[65];
   uint32_t export_size;
-  if(pos_fs_file_size(share.export_file,&export_size) || pos_hash_file(share.export_file,export_size,sha)) { fclose(f); return ESP_FAIL; }
-  httpd_resp_set_hdr(request,"X-POS-SHA256",sha);
+  if (pos_fs_file_size(share.export_file, &export_size) ||
+      pos_hash_file(share.export_file, export_size, sha)) {
+    fclose(f);
+    return ESP_FAIL;
+  }
+  httpd_resp_set_hdr(request, "X-POS-SHA256", sha);
   httpd_resp_set_type(request, "application/octet-stream");
   httpd_resp_set_hdr(request, "Content-Disposition",
                      "attachment; filename=\"panputer-file\"");
@@ -394,11 +515,15 @@ static esp_err_t receive_file(httpd_req_t *request) {
     return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
                                "Use a simple filename without directories.");
   snprintf(relative, sizeof(relative), "Downloads/%s", name);
-  char sha[65]; const char *expected=NULL;
-  if (httpd_req_get_hdr_value_len(request,"X-POS-SHA256")) {
-    if(httpd_req_get_hdr_value_str(request,"X-POS-SHA256",sha,sizeof(sha))!=ESP_OK || strlen(sha)!=64 || strspn(sha,"0123456789abcdef")!=64)
-      return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"Invalid SHA-256 header.");
-    expected=sha;
+  char sha[65];
+  const char *expected = NULL;
+  if (httpd_req_get_hdr_value_len(request, "X-POS-SHA256")) {
+    if (httpd_req_get_hdr_value_str(request, "X-POS-SHA256", sha,
+                                    sizeof(sha)) != ESP_OK ||
+        strlen(sha) != 64 || strspn(sha, "0123456789abcdef") != 64)
+      return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
+                                 "Invalid SHA-256 header.");
+    expected = sha;
   }
   upload_t upload = {request, request->content_len};
   pos_error_t e = {0};
@@ -410,55 +535,98 @@ static esp_err_t receive_file(httpd_req_t *request) {
   return httpd_resp_sendstr(request, "Uploaded and verified in Downloads.");
 }
 static esp_err_t device_status(httpd_req_t *request) {
-  if (!authorized(request)) return httpd_resp_send_err(request,HTTPD_403_FORBIDDEN,"Session key required.");
-  uint8_t mac[6]; char build[65],body[600],fingerprint[65]="";
-  uint32_t sequence=0;
-  pos_update_source_t *source=calloc(1,sizeof(*source));
-  if(source && !pos_update_source_load(source)) { sequence=source->sequence; if(*source->key) pos_update_key_fingerprint(source->key,fingerprint); }
+  if (!authorized(request))
+    return httpd_resp_send_err(request, HTTPD_403_FORBIDDEN,
+                               "Session key required.");
+  uint8_t mac[6];
+  char build[65], body[600], fingerprint[65] = "";
+  uint32_t sequence = 0;
+  pos_update_source_t *source = calloc(1, sizeof(*source));
+  if (source && !pos_update_source_load(source)) {
+    sequence = source->sequence;
+    if (*source->key)
+      pos_update_key_fingerprint(source->key, fingerprint);
+  }
   free(source);
-  if(esp_efuse_mac_get_default(mac)!=ESP_OK) return ESP_FAIL;
-  esp_app_get_elf_sha256(build,sizeof(build));
+  if (esp_efuse_mac_get_default(mac) != ESP_OK)
+    return ESP_FAIL;
+  esp_app_get_elf_sha256(build, sizeof(build));
   esp_ota_img_states_t state;
-  bool confirmed=esp_ota_get_state_partition(esp_ota_get_running_partition(),&state)==ESP_OK && state==ESP_OTA_IMG_VALID;
-  char journal[POS_FS_PATH]; struct stat st;
-  bool no_update=!pos_fs_join(journal,share.root,"pos-update.pos") && pos_fs_lstat(journal,&st) && errno==ENOENT;
-  snprintf(body,sizeof(body),"{\"format\":1,\"model\":\"m5stack-cardputer-adv\",\"device_id\":\"%02x:%02x:%02x:%02x:%02x:%02x\",\"build_id\":\"%s\",\"version\":\"%s\",\"healthy\":%s,\"ota_confirmed\":%s,\"update_pending\":%s,\"deployment\":%d,\"accepted_sequence\":%u,\"trusted_key\":\"%s\"}",
-    mac[0],mac[1],mac[2],mac[3],mac[4],mac[5],build,esp_app_get_description()->version,
-    pos_health_healthy()?"true":"false",confirmed?"true":"false",no_update?"false":"true",atomic_load(&deployment_state),(unsigned)sequence,fingerprint);
-  httpd_resp_set_type(request,"application/json"); httpd_resp_set_hdr(request,"Cache-Control","no-store");
-  return httpd_resp_sendstr(request,body);
+  bool confirmed = esp_ota_get_state_partition(esp_ota_get_running_partition(),
+                                               &state) == ESP_OK &&
+                   state == ESP_OTA_IMG_VALID;
+  char journal[POS_FS_PATH];
+  struct stat st;
+  bool no_update = !pos_fs_join(journal, share.root, "pos-update.pos") &&
+                   pos_fs_lstat(journal, &st) && errno == ENOENT;
+  snprintf(body, sizeof(body),
+           "{\"format\":1,\"model\":\"m5stack-cardputer-adv\",\"device_id\":\"%"
+           "02x:%02x:%02x:%02x:%02x:%02x\",\"build_id\":\"%s\",\"version\":\"%"
+           "s\",\"healthy\":%s,\"ota_confirmed\":%s,\"update_pending\":%s,"
+           "\"deployment\":%d,\"accepted_sequence\":%u,\"trusted_key\":\"%s\"}",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], build,
+           esp_app_get_description()->version,
+           pos_health_healthy() ? "true" : "false",
+           confirmed ? "true" : "false", no_update ? "false" : "true",
+           atomic_load(&deployment_state), (unsigned)sequence, fingerprint);
+  httpd_resp_set_type(request, "application/json");
+  httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+  return httpd_resp_sendstr(request, body);
 }
 static esp_err_t deploy_request(httpd_req_t *request) {
-  if (!deployment_enabled || !authorized(request)) return httpd_resp_send_err(request,HTTPD_403_FORBIDDEN,"Open a developer deployment session on device.");
-  if (atomic_load(&deployment_state)!=0) return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"One request per session; reopen for another deployment.");
-  if(request->content_len<9 || request->content_len>=sizeof(deployment_url))
-    return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"HTTPS manifest URL required.");
-  size_t at=0;
-  while(at<request->content_len) {
-    int n=httpd_req_recv(request,deployment_url+at,request->content_len-at);
-    if(n<=0) return ESP_FAIL;
-    at+=(size_t)n;
+  if (!deployment_enabled || !authorized(request))
+    return httpd_resp_send_err(
+        request, HTTPD_403_FORBIDDEN,
+        "Open a developer deployment session on device.");
+  if (atomic_load(&deployment_state) != 0)
+    return httpd_resp_send_err(
+        request, HTTPD_400_BAD_REQUEST,
+        "One request per session; reopen for another deployment.");
+  if (request->content_len < 9 ||
+      request->content_len >= sizeof(deployment_url))
+    return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
+                               "HTTPS manifest URL required.");
+  size_t at = 0;
+  while (at < request->content_len) {
+    int n =
+        httpd_req_recv(request, deployment_url + at, request->content_len - at);
+    if (n <= 0)
+      return ESP_FAIL;
+    at += (size_t)n;
   }
-  deployment_url[at]=0;
-  if(memchr(deployment_url,0,at) || !pos_https_url_valid(deployment_url))
-    return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"Use HTTPS without embedded credentials.");
-  atomic_store(&deployment_state,1);
-  httpd_resp_set_status(request,"202 Accepted");
-  return httpd_resp_sendstr(request,"Queued for on-device approval and signature verification.");
+  deployment_url[at] = 0;
+  if (memchr(deployment_url, 0, at) || !pos_https_url_valid(deployment_url))
+    return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
+                               "Use HTTPS without embedded credentials.");
+  atomic_store(&deployment_state, 1);
+  httpd_resp_set_status(request, "202 Accepted");
+  return httpd_resp_sendstr(
+      request, "Queued for on-device approval and signature verification.");
 }
-int pos_network_deploy_start(const char *root,char key[17]) {
-  if(pos_network_share_start(root,NULL,key)) return -1;
-  deployment_deadline=esp_timer_get_time()+300000000LL; deployment_enabled=true;
-  atomic_store(&deployment_state,0);
-  httpd_uri_t route={.uri="/deploy",.method=HTTP_POST,.handler=deploy_request};
-  if(httpd_register_uri_handler(server,&route)!=ESP_OK) { pos_network_share_stop(); return -1; }
+int pos_network_deploy_start(const char *root, char key[17]) {
+  if (pos_network_share_start(root, NULL, key))
+    return -1;
+  deployment_deadline = esp_timer_get_time() + 300000000LL;
+  deployment_enabled = true;
+  atomic_store(&deployment_state, 0);
+  httpd_uri_t route = {
+      .uri = "/deploy", .method = HTTP_POST, .handler = deploy_request};
+  if (httpd_register_uri_handler(server, &route) != ESP_OK) {
+    pos_network_share_stop();
+    return -1;
+  }
   return 0;
 }
 bool pos_network_deploy_take(char url[512]) {
-  if(atomic_load(&deployment_state)!=1) return false;
-  strcpy(url,deployment_url); atomic_store(&deployment_state,2); return true;
+  if (atomic_load(&deployment_state) != 1)
+    return false;
+  strcpy(url, deployment_url);
+  atomic_store(&deployment_state, 2);
+  return true;
 }
-void pos_network_deploy_result(bool success) { atomic_store(&deployment_state,success?3:4); }
+void pos_network_deploy_result(bool success) {
+  atomic_store(&deployment_state, success ? 3 : 4);
+}
 int pos_network_share_start(const char *root, const char *export_file,
                             char key[17]) {
   if (server || !pos_network_status().connected ||
@@ -509,8 +677,8 @@ void pos_network_share_stop(void) {
   if (server)
     httpd_stop(server);
   server = NULL;
-  deployment_enabled=false;
-  atomic_store(&deployment_state,0);
-  pos_secure_zero(deployment_url,sizeof(deployment_url));
+  deployment_enabled = false;
+  atomic_store(&deployment_state, 0);
+  pos_secure_zero(deployment_url, sizeof(deployment_url));
   pos_secure_zero(&share, sizeof(share));
 }

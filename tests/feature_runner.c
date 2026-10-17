@@ -16,6 +16,7 @@
 #include "pos_recovery.h"
 #include "pos_settings.h"
 #include "pos_timezone.h"
+#include "pos_update_service.h"
 #include "ui.h"
 #include <assert.h>
 #include <dirent.h>
@@ -344,6 +345,34 @@ int pos_network_remember(const char *pass,
     has_vault = true;
   return result;
 }
+static bool fake_auto;
+int pos_network_known(pos_wifi_profiles_t *p) {
+  return pos_network_profiles("device-generated-test-key", p);
+}
+int pos_network_known_save(const pos_wifi_profiles_t *p) {
+  return pos_network_remember("device-generated-test-key", p);
+}
+bool pos_network_auto_enabled(void) { return fake_auto; }
+int pos_network_auto_set(bool enabled) {
+  fake_auto = enabled;
+  return 0;
+}
+void pos_network_auto_pause(bool paused) { (void)paused; }
+int pos_update_source_load(pos_update_source_t *s) {
+  pos_update_source_official(s);
+  return 0;
+}
+int pos_device_history_import(const char *r, pos_error_t *e) {
+  (void)r;
+  (void)e;
+  return -1;
+}
+int pos_device_history_rollback(const char *r, const char *id, pos_error_t *e) {
+  (void)r;
+  (void)id;
+  (void)e;
+  return -1;
+}
 int pos_network_sync_time(void) { return fake_network.connected ? 0 : -1; }
 int pos_network_https(const char *url, const char *method, const char *body,
                       const char *type, const char *root, const char *dest,
@@ -405,6 +434,24 @@ static int editor_ui_tests(const char *root, const char *mode) {
     push_key('s', POS_MOD_CTRL);
     idle_event();
     push_key(POS_KEY_HOME, 0);
+  } else if (!strcmp(mode, "editor-ui-idle")) {
+    for (unsigned i = 0; i < 30; ++i)
+      idle_event();
+    push_key('s', POS_MOD_CTRL);
+    idle_event();
+    push_key(POS_KEY_HOME, 0);
+  } else if (!strcmp(mode, "editor-ui-trash")) {
+    push_key('s', POS_MOD_CTRL);
+    idle_event();
+    push_key('x', 0);
+    push_key(POS_KEY_ESCAPE, 0);
+    keys_down(18);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER, 0); /* explanation */
+    keys_down(1);
+    push_key(POS_KEY_ENTER, 0); /* confirm */
+    keys_down(3);
+    push_key(POS_KEY_ENTER, 0); /* editor app Back */
   } else if (!strcmp(mode, "editor-ui-save") ||
              !strcmp(mode, "editor-ui-punctuation")) {
     if (!strcmp(mode, "editor-ui-punctuation"))
@@ -427,6 +474,8 @@ static int editor_ui_tests(const char *root, const char *mode) {
   assert(ui_next == ui_count);
   if (!strcmp(mode, "editor-ui-advanced"))
     assert(selection_seen);
+  if (!strcmp(mode, "editor-ui-idle"))
+    assert(ui_frames < 15);
   puts("editor UI passed");
   return 0;
 }
@@ -442,22 +491,42 @@ static int wifi_ui_tests(const char *root, const char *mode) {
     push_key(POS_KEY_ENTER, 0); /* connected notice */
     push_key(POS_KEY_DOWN, 0);
     push_key(POS_KEY_ENTER, 0);
-    push_text("correct horse battery staple");
-    push_key(POS_KEY_ENTER, 0);
-    push_text("correct horse battery staple");
-    push_key(POS_KEY_ENTER, 0);
     push_key(POS_KEY_ENTER, 0); /* saved notice */
     keys_down(7);
     push_key(POS_KEY_ENTER, 0); /* Back */
     pos_ui_wifi(root);
     assert(has_vault && fake_network.connected);
     pos_wifi_profiles_t profiles = {0};
-    assert(!pos_wifi_vault_unlock(fake_vault, "correct horse battery staple",
+    assert(!pos_wifi_vault_unlock(fake_vault, "device-generated-test-key",
                                   &profiles));
     assert(profiles.count == 1 &&
            !strcmp(profiles.networks[0].ssid, "Test WiFi"));
     assert(!strcmp(profiles.networks[0].password, "network-password"));
     pos_secure_zero(&profiles, sizeof(profiles));
+  } else if (!strcmp(mode, "wifi-ui-known")) {
+    pos_wifi_profiles_t profiles = {.count = 1};
+    strcpy(profiles.networks[0].ssid, "Test WiFi");
+    strcpy(profiles.networks[0].password, "network-password");
+    assert(!pos_network_known_save(&profiles));
+    keys_down(3);
+    push_key(POS_KEY_ENTER, 0);
+    keys_down(1);
+    push_key(POS_KEY_ENTER, 0); /* enable auto */
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_ENTER, 0); /* connect + notice */
+    push_key(POS_KEY_ENTER, 0);
+    keys_down(1);
+    push_key(POS_KEY_ENTER, 0); /* Forget */
+    keys_down(1);
+    push_key(POS_KEY_ENTER, 0); /* confirm */
+    keys_down(2);
+    push_key(POS_KEY_ENTER, 0); /* empty known menu Back */
+    keys_down(6);
+    push_key(POS_KEY_ENTER, 0); /* Wi-Fi Back */
+    pos_ui_wifi(root);
+    assert(fake_auto && fake_network.connected);
+    assert(!pos_network_known(&profiles) && !profiles.count);
   } else {
     fake_network.connected = true;
     strcpy(fake_network.ip, "192.0.2.1");

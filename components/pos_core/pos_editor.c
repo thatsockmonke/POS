@@ -1,5 +1,6 @@
 #include "pos_editor.h"
 #include "cJSON.h"
+#include "pos_files.h"
 #include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -328,7 +329,9 @@ int pos_editor_open(pos_editor_t *e, const char *root, const char *relative,
     if (e->original_size &&
         fprintf(out, "O,0,%u\n", (unsigned)e->original_size) < 0)
       bad = 1;
-    if (flush(out) || fclose(out))
+    if (flush(out))
+      bad = 1;
+    if (fclose(out))
       bad = 1;
   }
   e->base_size = e->original_size;
@@ -445,7 +448,7 @@ int pos_editor_recover(pos_editor_t *e, const char *root, const char *folder,
                                 "were preserved.")
                   : 0;
 }
-int pos_editor_read(const pos_editor_t *e, uint32_t offset, void *buffer,
+static int read_raw(const pos_editor_t *e, uint32_t offset, void *buffer,
                     size_t capacity, size_t *read) {
   *read = 0;
   if (offset > e->length)
@@ -484,6 +487,54 @@ int pos_editor_read(const pos_editor_t *e, uint32_t offset, void *buffer,
   int bad = ferror(index);
   fclose(index);
   return bad || (offset < e->length && *read < capacity) ? -1 : 0;
+}
+int pos_editor_read(const pos_editor_t *e, uint32_t offset, void *buffer,
+                    size_t capacity, size_t *read) {
+  if (!read || (!buffer && capacity) || offset > e->length)
+    return -1;
+  *read = 0;
+  if (!capacity || offset == e->length)
+    return 0;
+  if (capacity > sizeof(e->read_cache))
+    return read_raw(e, offset, buffer, capacity, read);
+  pos_editor_t *cache = (pos_editor_t *)e;
+  size_t wanted = e->length - offset;
+  if (wanted > capacity)
+    wanted = capacity;
+  if (!e->cache_size || e->cache_generation != e->generation ||
+      offset < e->cache_start ||
+      (uint64_t)offset + wanted > (uint64_t)e->cache_start + e->cache_size) {
+    uint32_t start = offset > 512 && wanted <= sizeof(e->read_cache) - 512
+                         ? offset - 512
+                         : offset;
+    size_t n;
+    if (read_raw(e, start, cache->read_cache, sizeof(cache->read_cache), &n)) {
+      cache->cache_size = 0;
+      return -1;
+    }
+    cache->cache_start = start;
+    cache->cache_size = n;
+    cache->cache_generation = e->generation;
+  }
+  memcpy(buffer, e->read_cache + offset - e->cache_start, wanted);
+  *read = wanted;
+  return 0;
+}
+int pos_editor_delete(pos_editor_t *e, pos_error_t *error) {
+  char full[POS_FS_PATH], trash[241];
+  uint32_t size, crc;
+  if (!e->original_exists || !user_path(e->source) ||
+      !pos_files_mutable(e->root, e->source) ||
+      pos_fs_join(full, e->root, e->source) || pos_fs_file_size(full, &size) ||
+      size != e->original_size || pos_fs_crc_file(full, size, &crc) ||
+      crc != e->original_crc)
+    return fail(
+        error,
+        "Document changed or is protected. Original and draft preserved.");
+  if (pos_files_trash(e->root, e->source, trash, error))
+    return -1;
+  pos_editor_discard(e);
+  return 0;
 }
 typedef struct {
   FILE *f;
@@ -593,7 +644,9 @@ int pos_editor_undo(pos_editor_t *e, bool redo, pos_error_t *error) {
   if (!bad)
     bad = history_snapshot(e, !redo, *other_head);
   if (!bad)
-    bad = validate_text(e) || checkpoint(e, slot, length, cursor);
+    /* Immutable base was verified on open/recovery; full CRC validation remains
+     * at recovery and save, rather than rescanning a huge document on undo. */
+    bad = checkpoint(e, slot, length, cursor);
   if (bad)
     return fail(error, "Undo/redo failed; current checkpoint retained.");
   *head = target;

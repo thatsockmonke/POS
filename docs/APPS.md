@@ -346,3 +346,32 @@ has one owner: cues are skipped during microphone capture and music playback,
 then output is drained/muted before releasing ownership.
 
 Launcher motion keeps the selection box stationary. Left/Right slides the icon ribbon underneath it with momentum and spring settling; another arrow can change the motion before it finishes. Only seven tiny icon sprites are cached, including offscreen neighbors.
+
+## 0.6.2 app changes
+
+- Launcher: fixed selection box; continuous elapsed-time horizontal spring,
+  responsive arrow input, native 32×32 black icons with white outlines, and
+  partial/pipelined display transfers. Seven tiny sprites are cached (896 bytes).
+- Sounds: randomized pitches within a small palette; a 400-ms C–E–G–C startup
+  melody with a quiet sustained C harmony. Master mute, volume and app/notification
+  category also apply to startup. Recording/playback suppress interface sounds.
+- Editor: Esc → Delete document → explanation → confirmation moves the original
+  saved document into Files' Trash. Unsaved edits are discarded only after that
+  succeeds. Changed originals, protected paths and symlinks are refused. A 4-KiB
+  nearby-text cache, no idle re-render, layout-only page movement and batching of
+  already queued typing improve responsiveness. One burst is one undo operation.
+  Saves/recovery still validate complete data. No document-sized RAM buffer.
+- Wi-Fi → Known Networks: select an SSID for Connect / Forget, or toggle
+  Auto-connect. This starts disabled. Auto-connect retries visible known networks
+  about every 30 seconds when offline and does not consume keyboard events.
+  Manual Wi-Fi management pauses the background attempt; Disconnect disables
+  auto-connect. Hidden SSIDs can still be connected manually.
+- Old passphrase-encrypted profiles remain untouched. Known Networks → Import old
+  saved networks asks for the old vault passphrase once per explicit import;
+  subsequently no vault prompt is needed. Existing capacity is four saved SSIDs.
+- Settings → System → Firmware history: see [FIRMWARE_HISTORY.md](FIRMWARE_HISTORY.md).
+
+Credentials are authenticated encrypted NVS blobs with a random per-device key.
+The key is also on the device's NVS: this prevents casual plaintext disclosure,
+not extraction by an attacker who can read unencrypted physical flash. Credentials
+and device keys are never put on SD or in a filesystem backup. No eFuses are burned.

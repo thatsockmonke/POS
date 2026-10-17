@@ -183,11 +183,12 @@ static const char *string(const cJSON *j, const char *name) {
 void pos_update_free(pos_update_t *u) {
   if (u) {
     pos_package_free(u->package);
+    free(u->signed_manifest);
     free(u);
   }
 }
-int pos_update_load(const char *file, const char *key, const char *current,
-                    uint32_t floor, pos_update_t **out, pos_error_t *error) {
+static int load(const char *file, const char *key, const char *current,
+                uint32_t floor, pos_update_t **out, pos_error_t *error) {
   *out = NULL;
   FILE *f = fopen(file, "rb");
   if (!f)
@@ -243,7 +244,7 @@ int pos_update_load(const char *file, const char *key, const char *current,
       !cJSON_IsNumber(format) || format->valuedouble != 1 || !model ||
       strcmp(model, POS_MODEL) || !release ||
       pos_version_compare(release, release, &compare) ||
-      pos_version_compare(current, current, &compare) || !kind ||
+      (current && pos_version_compare(current, current, &compare)) || !kind ||
       (strcmp(kind, "firmware") && strcmp(kind, "assets")) || !base ||
       !pos_https_url_valid(base) || strchr(base, '?') || strlen(base) > 350 ||
       !cJSON_IsNumber(sequence) || sequence->valuedouble < 1 ||
@@ -270,6 +271,17 @@ int pos_update_load(const char *file, const char *key, const char *current,
   free(manifest);
   if (parsed)
     goto done;
+  u->signed_manifest = cJSON_PrintUnformatted(envelope);
+  if (!u->signed_manifest)
+    goto done;
+  if (u->firmware && strcmp(u->release, u->package->version))
+    goto invalid;
+  if (!current) {
+    *out = u;
+    u = NULL;
+    result = 0;
+    goto done;
+  }
   if (u->sequence <= floor) {
     fail(error,
          "This update is already installed or has an older signed sequence.");
@@ -304,4 +316,17 @@ done:
   cJSON_Delete(envelope);
   pos_update_free(u);
   return result;
+}
+
+int pos_update_load(const char *file, const char *key, const char *current,
+                    uint32_t floor, pos_update_t **out, pos_error_t *error) {
+  if (!current) {
+    *out = NULL;
+    return fail(error, "Current version is required.");
+  }
+  return load(file, key, current, floor, out, error);
+}
+int pos_update_authenticate(const char *file, const char *key,
+                            pos_update_t **out, pos_error_t *error) {
+  return load(file, key, NULL, 0, out, error);
 }

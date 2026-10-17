@@ -207,3 +207,12 @@ resolve a state, preserve the entire card and use the factory installer/read-onl
 browser. Filesystem rename/journal tests do not establish electrical power-cut
 safety on a real SD card. The factory installer partition and USB recovery remain
 unchanged.
+
+## Firmware/System history (0.6.2 onward)
+
+See [FIRMWARE_HISTORY.md](FIRMWARE_HISTORY.md). Local rollback is an explicit,
+confirmed action using authenticated archived metadata and verified firmware and
+System files. Ordinary online updates retain semantic-version and signed-sequence
+checks; rollback never lowers the persisted accepted-sequence watermark. Use
+History to return to an already archived newer release, or accept a later higher
+sequence from the online feed.

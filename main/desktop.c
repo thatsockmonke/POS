@@ -17,6 +17,7 @@
 #include "pos_health.h"
 #include "pos_launcher.h"
 #include "pos_network.h"
+#include "pos_network_service.h"
 #include "pos_peripherals.h"
 #include "pos_recovery.h"
 #include "pos_settings.h"
@@ -730,6 +731,7 @@ static const pos_app_t modal_apps[] = {{.name = "Settings",
 
 #ifndef POS_INSTALLER
 static void stop_services(void) {
+  pos_network_auto_stop();
   pos_audio_feedback_shutdown();
   pos_audio_stop();
   pos_microphone_stop();
@@ -804,7 +806,10 @@ void pos_desktop(const char *root, bool recovery_only) {
   pos_audio_feedback_configure(
       services->settings.sounds_enabled, services->settings.sounds_volume,
       services->settings.sounds_keys, services->settings.sounds_alerts);
-  pos_audio_feedback(POS_SOUND_NOTICE);
+  pos_audio_feedback(POS_SOUND_STARTUP);
+#ifndef POS_INSTALLER
+  pos_network_auto_start();
+#endif
   (void)pos_ui_take_home();
   pos_core_t core = {.services = services};
   int selected = 0;

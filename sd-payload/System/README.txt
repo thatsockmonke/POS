@@ -1,4 +1,4 @@
-POS 0.6.1-dev - Pan Operating System
+POS 0.6.2-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -58,3 +58,11 @@ Settings > Sounds: master, volume 0-100%, keys, app/notification tones, preview.
 Feedback stays silent during recording/playback. Recorder drains batches before
 redrawing; two-second PCM buffer preferred, one-second fallback, 4-KiB SD buffer.
 Real storage errors keep recoverable partial WAVs. Do not delete your only copy.
+
+0.6.2: fixed speaker/capture handoff on the 100-Hz scheduler; varied UI tones and startup jingle.
+Native 32x32 icons, optimized partial/pipelined ribbon rendering and responsive arrow navigation.
+Editor nearby-text cache, idle redraw suppression, queued typing batches and confirmed Trash deletion.
+Known Networks has Connect, Forget, Auto-connect and explicit old-vault import; no repeated vault password.
+Settings > System > Firmware history: up to 15 signed firmware/System pairs in POS/.History.
+Updates from this version archive the current pair; Import previous installation can recover a matching prior OTA/System.
+Factory recovery and both OTA runtime slots are retained. Flash images never execute from SD.

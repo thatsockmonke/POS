@@ -209,6 +209,28 @@ int main(int argc, char **argv) {
       free(e);
       return result ? 1 : 0;
     }
+    if (!result &&
+        (!strcmp(mode, "delete") || !strcmp(mode, "delete-protected"))) {
+      if (!strcmp(mode, "delete-protected"))
+        strcpy(e->source, "POS/System/README.txt");
+      result = pos_editor_delete(e, &error);
+    }
+    if (!result && !strcmp(mode, "cached-reads")) {
+      unsigned char first[16], again[16];
+      size_t n;
+      assert(!pos_editor_read(e, 0, first, sizeof(first), &n) &&
+             n == sizeof(first));
+      char index[POS_FS_PATH], moved[POS_FS_PATH];
+      char piece[32];
+      snprintf(piece, sizeof(piece), "pieces.%u.csv", e->slot);
+      assert(!pos_fs_join(index, e->directory, piece));
+      assert(!pos_fs_join(moved, e->directory, "index-test.tmp"));
+      assert(!rename(index, moved));
+      for (unsigned i = 0; i < 1000; ++i)
+        assert(!pos_editor_read(e, i % 8, again, 8, &n) && n == 8 &&
+               !memcmp(again, first + i % 8, 8));
+      assert(!rename(moved, index));
+    }
     if (!result && !strcmp(mode, "discard"))
       pos_editor_discard(e);
   }

@@ -99,9 +99,7 @@ current IDF flash settings; validate them against the actual module before flash
 Both images are checked against these partitions during builds. Main task stack is
 16 KiB, FAT locks 32, file streaming buffers 8 KiB; metadata and app allocations are
 bounded. Available runtime heap still requires an actual device measurement.
-Optional Wi-Fi does not start until requested, uses RAM credential storage and
-may consume significant heap. Saved profiles use a passphrase-encrypted NVS
-vault; HTTPS, time sync and file transfers are implemented. Wireless deployment is implemented through temporary developer sessions and the
+Optional Wi-Fi starts when requested or when saved Auto-connect is enabled. Session credentials stay in RAM; Known Networks uses authenticated encrypted NVS profiles with a device-generated key (not protection against physical unencrypted-flash extraction). The old vault is preserved for explicit import; HTTPS, time sync and file transfers are implemented. Wireless deployment is implemented through temporary developer sessions and the
 signed updater, gated on physical recovery/OTA evidence. Reopen a session after
 reboot for confirmation; no always-on service is enabled. New firmware still fits the
 existing slots, with limited runtime flash headroom; future growth must be
@@ -202,3 +200,11 @@ silence and a bounded drain precede codec mute. Atomic ownership prevents speake
 cues from touching capture/playback resources. Key events only queue a cue; they
 do not write I2S or wait. Actual loudness, latency, heap and long SD stalls still
 need physical measurements; these are not claimed from host tests.
+
+0.6.2 rendering uses alternating 3,840-byte DMA stripes, dirty text/ribbon bands,
+and a direct ribbon scanline path. Seven 32×32 monochrome icon masks occupy 896
+bytes per view; icons stream from a versioned SD file. The editor's nearby-read
+cache is a fixed 4 KiB; viewport/layout storage is heap-owned. These are bounded
+buffers, not document-sized allocations. Physical heap and FPS must be measured.
+The 100-Hz FreeRTOS scheduler is reproduced in the audio ownership host fixture;
+positive-tick, elapsed-time handoff waits replace a 5-ms delay that rounded to zero.

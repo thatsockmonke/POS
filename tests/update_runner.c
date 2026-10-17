@@ -2,6 +2,7 @@
 #include "pos_battery.h"
 #include "pos_core.h"
 #include "pos_diagnostics.h"
+#include "pos_history.h"
 #include "pos_network.h"
 #include "pos_timezone.h"
 #include "pos_update.h"
@@ -82,6 +83,10 @@ static char *read_text(const char *file) {
   assert(fread(s, 1, 4095, f) < 4095);
   fclose(f);
   return s;
+}
+static int flash_read(void *ctx, uint32_t offset, void *buffer, size_t n) {
+  FILE *f = ctx;
+  return fseek(f, offset, SEEK_SET) || fread(buffer, 1, n, f) != n ? -1 : 0;
 }
 int main(int argc, char **argv) {
   if (argc < 3)
@@ -212,6 +217,54 @@ int main(int argc, char **argv) {
     if (r)
       fprintf(stderr, "%s\n", e.message);
     return r ? 1 : 0;
+  }
+  if (!strcmp(mode, "history-list")) {
+    char *key = read_text(argv[3]);
+    pos_history_entry_t entries[64];
+    unsigned count = 0;
+    int result = pos_history_list(root, key, entries, 64, &count, &e);
+    free(key);
+    for (unsigned i = 0; i < count; ++i)
+      printf("%s %s %s %u\n", entries[i].id, entries[i].release,
+             entries[i].runtime, (unsigned)entries[i].sequence);
+    if (result)
+      fprintf(stderr, "%s\n", e.message);
+    return result ? 1 : 0;
+  }
+  if (!strcmp(mode, "history-capture") || !strcmp(mode, "history-import") ||
+      !strcmp(mode, "history-rollback")) {
+    char *key = read_text(argv[4]);
+    context_t c = {.root = root,
+                   .failure = argc > 6 ? argv[6] : "",
+                   .interrupt = argc > 7 ? argv[7] : "",
+                   .space = 1ULL << 40};
+    pos_update_platform_t hooks = {
+        .platform = {.ctx = &c,
+                     .free_bytes = free_bytes,
+                     .write_firmware = write_firmware,
+                     .select_firmware = select_firmware,
+                     .progress = cancel,
+                     .report = report}};
+    int result;
+    if (!strcmp(mode, "history-capture") || !strcmp(mode, "history-import")) {
+      FILE *f = fopen(argv[5], "rb");
+      assert(f);
+      if (!strcmp(mode, "history-import"))
+        result =
+            pos_history_capture_from(root, argv[9], argv[3], key, flash_read, f,
+                                     &hooks.platform, NULL, &e);
+      else
+        result =
+            pos_history_capture(root, argv[3], key, flash_read, f,
+                                &hooks.platform, argc > 8 ? argv[8] : NULL, &e);
+      fclose(f);
+    } else
+      result = pos_history_rollback(root, argv[3], key, &hooks, &e);
+    free(key);
+    if (result)
+      fprintf(stderr, "%s\n", e.message);
+    printf("%u %u\n", c.writes, c.selections);
+    return result ? 1 : 0;
   }
   assert(argc >= 7);
   char *key = read_text(argv[4]);

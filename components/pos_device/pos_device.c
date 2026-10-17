@@ -219,7 +219,8 @@ int pos_device_init(void) {
                           .quadwp_io_num = -1,
                           .quadhd_io_num = -1,
                           .max_transfer_sz = 240 * 8 * 2};
-  stripe = heap_caps_malloc(240 * 8 * 2, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+  stripe =
+      heap_caps_malloc(240 * 8 * 2 * 2, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
   if (stripe &&
       spi_bus_initialize(SPI2_HOST, &bus, SPI_DMA_CH_AUTO) == ESP_OK) {
     esp_lcd_panel_io_handle_t io;
@@ -350,7 +351,8 @@ static void show_view(const pos_view_t *input) {
     pos_battery_sample(&battery, pos_device_battery_mv(), now);
     battery_refresh = now ? now : 1;
   }
-  pos_view_t composed = *input;
+  static pos_view_t composed, comparable;
+  composed = *input;
   if (!pos_background_valid(&composed.background)) {
     if (!pos_background_valid(&display_theme))
       pos_background_defaults(&display_theme);
@@ -364,30 +366,83 @@ static void show_view(const pos_view_t *input) {
   const pos_view_t *v = &composed;
   if (previous_valid && !memcmp(&previous, v, sizeof(*v)))
     return;
-  previous = *v;
-  previous_valid = true;
+
   if (!info.display_ok) {
     printf("\n-- %s --\n", v->lines[0]);
     for (int i = 1; i < POS_ROWS; ++i)
       if (*v->lines[i])
         printf("%s\n", v->lines[i]);
+    previous = *v;
+    previous_valid = true;
     return;
   }
-  int64_t start = esp_timer_get_time();
-  for (int y = 0; y < 135; y += 8) {
-    int lines = 135 - y < 8 ? 135 - y : 8;
-    for (int row = 0; row < lines; ++row)
-      for (int x = 0; x < 240; ++x) {
-        uint16_t c = pos_view_pixel(v, x, y + row);
-        stripe[row * 240 + x] = (c << 8) | (c >> 8);
+  bool dirty[17];
+  memset(dirty, 1, sizeof(dirty));
+  if (previous_valid && !v->fade && !previous.fade) {
+    comparable = *v;
+    memcpy(comparable.lines, previous.lines, sizeof(comparable.lines));
+    comparable.selected_row = previous.selected_row;
+    comparable.editor_cursor_row = previous.editor_cursor_row;
+    comparable.editor_cursor_col = previous.editor_cursor_col;
+    memcpy(comparable.editor_selected, previous.editor_selected,
+           sizeof(comparable.editor_selected));
+    comparable.ribbon_offset = previous.ribbon_offset;
+    memcpy(comparable.icons, previous.icons, sizeof(comparable.icons));
+    if (!memcmp(&comparable, &previous, sizeof(previous))) {
+      memset(dirty, 0, sizeof(dirty));
+      for (unsigned row = 0; row < POS_ROWS; ++row) {
+        dirty[row] = memcmp(v->lines[row], previous.lines[row],
+                            sizeof(v->lines[row])) != 0 ||
+                     (((int)row == v->selected_row ||
+                      (int)row == previous.selected_row) &&
+                         v->selected_row != previous.selected_row);
+        if (v->text_editor && row >= 2 && row < 14)
+          dirty[row] |= v->editor_selected[row - 2] !=
+                            previous.editor_selected[row - 2] ||
+                        ((row == v->editor_cursor_row ||
+                          row == previous.editor_cursor_row) &&
+                         (v->editor_cursor_row != previous.editor_cursor_row ||
+                          v->editor_cursor_col != previous.editor_cursor_col));
       }
-    if (esp_lcd_panel_draw_bitmap(panel, 0, y, 240, y + lines, stripe) !=
-            ESP_OK ||
-        xSemaphoreTake(drawn, pdMS_TO_TICKS(1000)) != pdTRUE) {
+      if (v->tiles && (v->ribbon_offset != previous.ribbon_offset ||
+                       memcmp(v->icons, previous.icons, sizeof(v->icons))))
+        for (unsigned row = 4; row < 12; ++row)
+          dirty[row] = true;
+    }
+  }
+  int64_t start = esp_timer_get_time();
+  bool pending = false;
+  unsigned batch = 0;
+  for (int y = 0; y < 135; y += 8) {
+    if (!dirty[y / 8])
+      continue;
+    uint16_t *buffer = stripe + (batch++ % 2) * 240 * 8;
+    int lines = 135 - y < 8 ? 135 - y : 8;
+    for (int row = 0; row < lines; ++row) {
+      pos_view_scanline(v, y + row, buffer + row * 240);
+      for (int x = 0; x < 240; ++x) {
+        uint16_t c = buffer[row * 240 + x];
+        buffer[row * 240 + x] = (c << 8) | (c >> 8);
+      }
+    }
+    /* Render the next stripe while the previous DMA transfer is in flight. */
+    if ((pending && xSemaphoreTake(drawn, pdMS_TO_TICKS(1000)) != pdTRUE) ||
+        esp_lcd_panel_draw_bitmap(panel, 0, y, 240, y + lines, buffer) !=
+            ESP_OK) {
       info.display_ok = false;
       previous_valid = false;
+      pending = false;
       break;
     }
+    pending = true;
+  }
+  if (pending && xSemaphoreTake(drawn, pdMS_TO_TICKS(1000)) != pdTRUE) {
+    info.display_ok = false;
+    previous_valid = false;
+  }
+  if (info.display_ok) {
+    previous = *v;
+    previous_valid = true;
   }
   info.frame_us = (uint32_t)(esp_timer_get_time() - start);
   if (info.display_ok) {

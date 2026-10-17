@@ -1,5 +1,6 @@
 #include "driver/i2s_std.h"
 #include "esp_attr.h"
+#include "esp_random.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/stream_buffer.h"
@@ -14,7 +15,8 @@ static atomic_bool feedback_stopping;
 static SemaphoreHandle_t feedback_exited;
 static bool feedback_running;
 static bool claim(unsigned owner) {
-  for (unsigned tries = 0; tries < 120; ++tries) {
+  TickType_t started = xTaskGetTickCount();
+  do {
     unsigned expected = AUDIO_IDLE;
     if (atomic_compare_exchange_strong(&audio_owner, &expected, owner)) {
       atomic_store(&feedback_pending, 0);
@@ -24,8 +26,9 @@ static bool claim(unsigned owner) {
       return true;
     if (expected != AUDIO_CUE)
       return false;
-    vTaskDelay(pdMS_TO_TICKS(5));
-  }
+    /* A positive scheduler tick is essential: 5 ms rounds to zero at 100 Hz. */
+    vTaskDelay(1);
+  } while ((TickType_t)(xTaskGetTickCount() - started) < pdMS_TO_TICKS(600));
   return false;
 }
 static i2s_chan_handle_t output;
@@ -116,9 +119,10 @@ static int audio_write(const int16_t *stereo, size_t frames, unsigned hz,
 }
 
 void pos_audio_stop(void) {
-  for (unsigned tries = 0;
-       atomic_load(&audio_owner) == AUDIO_CUE && tries < 120; ++tries)
-    vTaskDelay(pdMS_TO_TICKS(5));
+  TickType_t started = xTaskGetTickCount();
+  while (atomic_load(&audio_owner) == AUDIO_CUE &&
+         (TickType_t)(xTaskGetTickCount() - started) < pdMS_TO_TICKS(600))
+    vTaskDelay(1);
   if (atomic_load(&audio_owner) != AUDIO_PLAYBACK)
     return;
   audio_stop();
@@ -137,23 +141,39 @@ int pos_audio_write(const int16_t *stereo, size_t frames, unsigned hz,
 }
 static void cue(pos_sound_t kind, unsigned volume) {
   static const unsigned notes[POS_SOUND_COUNT][2] = {
-      {1046, 1046}, {880, 880},  {1320, 1320}, {660, 660},
-      {880, 1320},  {1320, 880}, {1175, 1568}, {880, 1175}};
+      {1046, 1046}, {880, 880},   {1320, 1320}, {660, 660}, {880, 1320},
+      {1320, 880},  {1175, 1568}, {880, 1175},  {523, 784}};
   unsigned frames = kind <= POS_SOUND_NAV    ? 192
                     : kind <= POS_SOUND_BACK ? 384
                                              : 640;
-  uint32_t phase = 0;
+  bool startup = kind == POS_SOUND_STARTUP;
+  if (startup)
+    frames = 6400; /* 400 ms: C-E-G-C with a gentle chord tail. */
+  static const unsigned melody[] = {523, 659, 784, 1046};
+  static const unsigned variations[] = {0, 2, 4, 7, 9};
+  unsigned variation = startup ? 0 : variations[esp_random() % 5];
+  uint32_t phase = 0, harmony = 0;
   for (unsigned at = 0; at < frames;) {
     int16_t pcm[160 * 2];
     unsigned n = frames - at < 160 ? frames - at : 160;
     for (unsigned i = 0; i < n; ++i) {
       unsigned pos = at + i;
-      unsigned hz = notes[kind][pos < frames / 2 ? 0 : 1];
+      unsigned hz = startup ? melody[pos / 1600]
+                            : notes[kind][pos < frames / 2 ? 0 : 1] *
+                                  (100 + variation * 6) / 100;
       phase += (uint32_t)(((uint64_t)hz << 32) / 16000);
       int triangle = (int)(phase >> 16);
       triangle = triangle < 32768 ? triangle * 2 - 32768 : 98303 - triangle * 2;
-      unsigned ramp = pos < 32                ? pos
-                      : frames - 1 - pos < 32 ? frames - 1 - pos
+      if (startup) {
+        harmony += (uint32_t)(((uint64_t)523 << 32) / 16000);
+        int h = (int)(harmony >> 16);
+        h = h < 32768 ? h * 2 - 32768 : 98303 - h * 2;
+        triangle = (triangle * 2 + h) / 3;
+      }
+      unsigned envelope_pos = startup ? pos % 1600 : pos;
+      unsigned envelope_end = startup ? 1600 - envelope_pos : frames - pos;
+      unsigned ramp = envelope_pos < 32       ? envelope_pos
+                      : envelope_end - 1 < 32 ? envelope_end - 1
                                               : 32;
       int16_t sample =
           (int32_t)triangle * (int)volume * (int)ramp / (100 * 32 * 2);
@@ -179,7 +199,8 @@ static void feedback_task(void *unused) {
     if (pending && (config & 256)) {
       unsigned kind = pending - 1;
       bool allowed =
-          kind==POS_SOUND_PREVIEW || (kind <= POS_SOUND_BACK ? (config & 512) != 0 : (config & 1024) != 0);
+          kind == POS_SOUND_PREVIEW ||
+          (kind <= POS_SOUND_BACK ? (config & 512) != 0 : (config & 1024) != 0);
       unsigned expected = AUDIO_IDLE;
       if (allowed && (config & 127) &&
           atomic_compare_exchange_strong(&audio_owner, &expected, AUDIO_CUE)) {

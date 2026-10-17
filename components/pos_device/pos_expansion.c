@@ -3,6 +3,7 @@
 #include "driver/uart.h"
 #include "esp_mac.h"
 #include "esp_random.h"
+#include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -60,7 +61,7 @@ static bool busy_ready(void) {
   while (gpio_get_level(6)) {
     if (now_ms() >= until)
       return false;
-    vTaskDelay(pdMS_TO_TICKS(1));
+    vTaskDelay(1);
   }
   return true;
 }
@@ -97,7 +98,7 @@ sx126x_hal_status_t sx126x_hal_read(const void *ctx, const uint8_t *cmd,
 sx126x_hal_status_t sx126x_hal_reset(const void *ctx) {
   (void)ctx;
   gpio_set_level(3, 0);
-  vTaskDelay(pdMS_TO_TICKS(2));
+  esp_rom_delay_us(2000); /* A 2-ms delay is zero RTOS ticks at 100 Hz. */
   gpio_set_level(3, 1);
   vTaskDelay(pdMS_TO_TICKS(10));
   return busy_ready() ? SX126X_HAL_STATUS_OK : SX126X_HAL_STATUS_ERROR;
@@ -306,7 +307,7 @@ static int send_wire(const pos_radio_packet_t *packet, uint32_t *airtime) {
     }
     if (irq & SX126X_IRQ_TIMEOUT)
       break;
-    vTaskDelay(pdMS_TO_TICKS(5));
+    vTaskDelay(1);
   }
   sx126x_clear_irq_status(NULL, SX126X_IRQ_ALL);
   radio_receive_mode();

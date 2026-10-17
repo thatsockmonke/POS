@@ -16,11 +16,13 @@
 #include "pos_device.h"
 #include "pos_fs.h"
 #include "pos_health.h"
+#include "pos_history.h"
 #include "pos_install.h"
 #include "pos_recovery.h"
 #include "pos_update_service.h"
 #include "sdmmc_cmd.h"
 #include "ui.h"
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -262,7 +264,201 @@ static int select_firmware(void *opaque) {
   return esp_ota_set_boot_partition(context->target) == ESP_OK ? 0 : -1;
 }
 
+#ifdef POS_INSTALLER
+int pos_device_history_import(const char *root, pos_error_t *e) {
+  (void)root;
+  snprintf(e->message, sizeof(e->message), "Import runs from the POS runtime.");
+  return -1;
+}
+int pos_device_history_rollback(const char *root, const char *id,
+                                pos_error_t *e) {
+  (void)root;
+  (void)id;
+  snprintf(e->message, sizeof(e->message),
+           "Firmware history rollback runs from the resident POS runtime. Use "
+           "Recovery repair/reinstall here.");
+  return -1;
+}
+#endif
 #ifndef POS_INSTALLER
+static int read_running(void *ctx, uint32_t offset, void *buffer, size_t n) {
+  const esp_partition_t *partition = ctx;
+  return esp_partition_read(partition, offset, buffer, n) == ESP_OK ? 0 : -1;
+}
+static int archive_system(const char *root, const char *system,
+                          const esp_partition_t *running,
+                          const pos_platform_t *platform, const char *pin,
+                          pos_error_t *e) {
+  struct {
+    pos_update_source_t source;
+    char metadata[POS_FS_PATH], path[POS_FS_PATH], folder[POS_FS_PATH];
+  } *work = calloc(1, sizeof(*work));
+  if (!work)
+    return -1;
+  pos_package_t *p = NULL;
+  pos_update_t *u = NULL;
+  int bad = pos_update_source_load(&work->source) ||
+            pos_fs_join(work->path, system, "installed.pos") ||
+            pos_load_manifest(work->path, &p, e);
+  if (bad)
+    goto done;
+  if (verify_flash(running, p, false)) {
+    bad = -1;
+    goto done;
+  }
+  pos_fs_join(work->metadata, system, "signed-update.json");
+  if (pos_update_authenticate(work->metadata, work->source.key, &u, NULL) ||
+      strcmp(u->package->id, p->id)) {
+    pos_update_free(u);
+    u = NULL;
+    char archived[160];
+    snprintf(archived, sizeof(archived), POS_HISTORY_ROOT "/%s/manifest.json",
+             p->id);
+    pos_fs_join(work->path, root, archived);
+    if (!pos_update_authenticate(work->path, work->source.key, &u, NULL) &&
+        !strcmp(u->package->id, p->id))
+      strcpy(work->metadata, work->path);
+    else {
+      pos_update_free(u);
+      u = NULL;
+    }
+    /* Existing update checks retain their signed envelopes, including the
+     * installation immediately before firmware-history support. */
+    pos_fs_join(work->folder, root, "POS/Updates");
+    DIR *d = opendir(work->folder);
+    struct dirent *entry;
+    if (d) {
+      while (!u && (entry = readdir(d)))
+        if (!strncmp(entry->d_name, "check-", 6)) {
+          char relative[300];
+          snprintf(relative, sizeof(relative),
+                   "POS/Updates/%.240s/manifest.json", entry->d_name);
+          if (pos_fs_join(work->path, root, relative))
+            continue;
+          if (!pos_update_authenticate(work->path, work->source.key, &u,
+                                       NULL) &&
+              !strcmp(u->package->id, p->id)) {
+            strcpy(work->metadata, work->path);
+            break;
+          }
+          pos_update_free(u);
+          u = NULL;
+        }
+      closedir(d);
+    }
+    if (!u && !strcmp(work->source.key, pos_update_official_key)) {
+      char url[200], name[80];
+      snprintf(url, sizeof(url),
+               "https://raw.githubusercontent.com/thatsockmonke/POS/main/"
+               "updates/releases/%s/manifest.json",
+               p->version);
+      snprintf(name, sizeof(name), "history-%s.json", p->version);
+      pos_fs_join(work->folder, root, "POS/Updates");
+      pos_fs_join(work->metadata, work->folder, name);
+      struct stat st;
+      if (pos_fs_lstat(work->metadata, &st))
+        bad = pos_update_fetch(NULL, url, work->folder, name, POS_UPDATE_MAX,
+                               NULL, e);
+      if (!bad)
+        bad = pos_update_authenticate(work->metadata, work->source.key, &u, e);
+    }
+  }
+  if (!u || strcmp(u->package->id, p->id))
+    bad = -1;
+  if (!bad)
+    bad = pos_history_capture_from(root, system, work->metadata,
+                                   work->source.key, read_running,
+                                   (void *)running, platform, pin, e);
+done:
+  pos_update_free(u);
+  pos_package_free(p);
+  free(work);
+  if (bad && e && !*e->message)
+    snprintf(e->message, sizeof(e->message),
+             "Could not archive the current signed firmware/System pair. "
+             "Current installation retained. Connect Wi-Fi or preserve "
+             "signed-update.json for custom sources.");
+  return bad ? -1 : 0;
+}
+static int archive_current(const char *root, const pos_platform_t *platform,
+                           const char *pin, pos_error_t *e) {
+  char system[POS_FS_PATH];
+  if (pos_fs_join(system, root, "POS/System"))
+    return -1;
+  return archive_system(root, system, esp_ota_get_running_partition(), platform,
+                        pin, e);
+}
+int pos_device_history_import(const char *root, pos_error_t *e) {
+  char *paths = calloc(3, POS_FS_PATH);
+  if (!paths)
+    return -1;
+  char *folder = paths, *system = paths + POS_FS_PATH,
+       *file = paths + 2 * POS_FS_PATH;
+  pos_fs_join(file, root, POS_UPDATE_JOURNAL);
+  struct stat st;
+  if (!pos_fs_lstat(file, &st)) {
+    free(paths);
+    snprintf(e->message, sizeof(e->message),
+             "Let this boot finish its 60-second healthy confirmation before "
+             "importing history.");
+    return -1;
+  }
+  const esp_partition_t *inactive = esp_ota_get_next_update_partition(NULL);
+  pos_fs_join(folder, root, "POS/Updates");
+  DIR *d = opendir(folder);
+  struct dirent *entry;
+  int result = -1;
+  pos_platform_t platform = {.progress = pos_ui_progress};
+  if (d) {
+    while ((entry = readdir(d)))
+      if (strlen(entry->d_name) == 64 &&
+          strspn(entry->d_name, "0123456789abcdef") == 64) {
+        char relative[100];
+        snprintf(relative, sizeof(relative), "POS/Updates/%.64s/old-System",
+                 entry->d_name);
+        if (pos_fs_join(system, root, relative) ||
+            pos_fs_join(file, system, "installed.pos"))
+          continue;
+        pos_package_t *p = NULL;
+        if (!pos_load_manifest(file, &p, NULL) && inactive &&
+            !verify_flash(inactive, p, true)) {
+          result = archive_system(root, system, inactive, &platform, NULL, e);
+          pos_package_free(p);
+          break;
+        }
+        pos_package_free(p);
+      }
+    closedir(d);
+  }
+  free(paths);
+  if (result && !*e->message)
+    snprintf(e->message, sizeof(e->message),
+             "No matching prior OTA image, retained System and trusted signed "
+             "metadata were found. Existing recovery files are preserved.");
+  return result;
+}
+int pos_device_history_rollback(const char *root, const char *id,
+                                pos_error_t *error) {
+  installer_context_t context = {.allow_runtime = true};
+  pos_update_platform_t hooks = {
+      .platform = {.ctx = &context,
+                   .free_bytes = free_space,
+                   .write_firmware = write_firmware,
+                   .select_firmware = select_firmware,
+                   .progress = pos_ui_progress}};
+  pos_update_source_t *source = calloc(1, sizeof(*source));
+  if (!source)
+    return -1;
+  int bad = pos_update_source_load(source) ||
+            archive_current(root, &hooks.platform, id, error) ||
+            pos_history_rollback(root, id, source->key, &hooks, error);
+  free(source);
+  if (!bad) {
+    pos_health_clear();
+    esp_restart();
+  }
+  return bad ? -1 : 0;
+}
 int pos_device_install_update(const char *root, const pos_update_t *u,
                               pos_error_t *error) {
   installer_context_t context = {.allow_runtime = true};
@@ -273,7 +469,8 @@ int pos_device_install_update(const char *root, const pos_update_t *u,
                    .write_firmware = write_firmware,
                    .select_firmware = select_firmware,
                    .progress = pos_ui_progress}};
-  if (pos_update_apply(root, u, &hooks, error))
+  if (archive_current(root, &hooks.platform, NULL, error) ||
+      pos_update_apply(root, u, &hooks, error))
     return -1;
   if (u->firmware) {
     pos_ui_notice("Firmware update ready",

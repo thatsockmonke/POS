@@ -1,7 +1,9 @@
 #include "pos_device.h"
 #include "pos_health.h"
+#include "pos_history.h"
 #include "pos_network_service.h"
 #include "pos_peripherals.h"
+#include "pos_update_service.h"
 #include "ui.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -147,14 +149,81 @@ static void display_off(void) {
   if (pos_device_display_enabled(true))
     pos_ui_notice("Display unavailable", "The display could not be restored.");
 }
+extern int pos_device_history_import(const char *, pos_error_t *);
+extern int pos_device_history_rollback(const char *, const char *,
+                                       pos_error_t *);
+static void firmware_history(const char *root) {
+  struct {
+    pos_history_entry_t entries[16];
+    pos_update_source_t source;
+    char labels[17][72];
+    const char *items[18];
+  } *w = calloc(1, sizeof(*w));
+  if (!w)
+    return;
+  while (!pos_home_pending()) {
+    unsigned count = 0;
+    pos_error_t e = {0};
+    if (pos_update_source_load(&w->source) ||
+        pos_history_list(root, w->source.key, w->entries, 16, &count, &e)) {
+      pos_ui_notice(
+          "History unavailable",
+          *e.message ? e.message
+                     : "History or trusted key unavailable. Files preserved.");
+      break;
+    }
+    for (unsigned i = 0; i < count; ++i) {
+      snprintf(w->labels[i], sizeof(w->labels[i]), "%s (sequence %u)",
+               w->entries[i].release, (unsigned)w->entries[i].sequence);
+      w->items[i] = w->labels[i];
+    }
+    w->items[count] = "Import previous installation";
+    w->items[count + 1] = "Back";
+    int choice =
+        pos_ui_menu(count ? "Firmware history" : "History: no releases yet",
+                    w->items, count + 2);
+    if (choice < 0 || choice == (int)count + 1)
+      break;
+    if (choice == (int)count) {
+      pos_ui_message(
+          "Import previous installation",
+          "Looking for a matching previous OTA image and retained System. "
+          "Wi-Fi may be needed to recover its signed metadata.");
+      int result = pos_device_history_import(root, &e);
+      pos_ui_notice(
+          "Firmware history",
+          result
+              ? e.message
+              : "Previous firmware and matching System archived and verified.");
+      continue;
+    }
+    pos_ui_notice("Roll back firmware + System",
+                  "This verifies the archived signature and every file, "
+                  "archives the current installation, writes the inactive "
+                  "firmware slot, and switches its matching System. User files "
+                  "stay in place. Old app/settings formats may be unsupported; "
+                  "unknown data is preserved. Keep the SD inserted.");
+    const char *confirm[] = {"Cancel", "Verify and roll back"};
+    if (pos_ui_menu(w->entries[choice].release, confirm, 2) == 1) {
+      pos_ui_message("Firmware history",
+                     "Verifying archive and preserving current release...");
+      if (pos_device_history_rollback(root, w->entries[choice].id, &e))
+        pos_ui_notice("Rollback not completed",
+                      *e.message
+                          ? e.message
+                          : "Verification failed. Existing data preserved.");
+    }
+  }
+  free(w);
+}
 static void system_settings(const char *root) {
   int selected = 0;
   while (!pos_home_pending()) {
-    const char *items[] = {"Software Update", "Crash reports",
+    const char *items[] = {"Software Update",        "Crash reports",
                            "Safe mode on next boot", "Turn display off",
-                           "Back"};
-    int action = pos_ui_menu_from("System", items, 5, selected);
-    if (action < 0 || action == 4)
+                           "Firmware history",       "Back"};
+    int action = pos_ui_menu_from("System", items, 6, selected);
+    if (action < 0 || action == 5)
       return;
     selected = action;
     if (action == 0)
@@ -176,6 +245,8 @@ static void system_settings(const char *root) {
     }
     if (action == 3)
       display_off();
+    if (action == 4)
+      firmware_history(root);
   }
 }
 static void sounds(const char *root, pos_settings_t *settings) {

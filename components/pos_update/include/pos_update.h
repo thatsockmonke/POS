@@ -9,6 +9,7 @@ typedef struct {
   uint32_t sequence;
   bool firmware;
   pos_package_t *package;
+  char *signed_manifest;
 } pos_update_t;
 typedef struct {
   void *ctx;
@@ -35,3 +36,6 @@ int pos_update_recover(const char *root,const char *running_version,pos_error_t 
 int pos_update_confirm(const char *root,uint32_t *sequence,pos_error_t *);
 
 int pos_update_pending_sequence(const char *root,uint32_t *sequence,pos_error_t *);
+
+/* Signature/model/package validation for deliberate local history operations. */
+int pos_update_authenticate(const char *,const char *,pos_update_t **,pos_error_t *);

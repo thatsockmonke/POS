@@ -1,35 +1,36 @@
-POS 0.6.1-dev — adjustable sounds, text Files and Recorder throughput improvements.
+POS 0.6.2-dev — audio handoff, smoother rendering, editor, Known Networks and firmware history.
 
-Update through 0.6.0-dev first. This release removes obsolete minimum-field parsing,
-old official-source migration and obsolete package-generation branches. Active
-updates contain exactly seven fields. The archived 0.6.0 bridge stays untouched.
-Signatures, HTTPS, file hashes, signed sequences and rollback remain enforced.
+- Fix “Stop recording before playing audio” after recording: positive scheduler
+  ticks and elapsed-time waits let interface sounds release the codec. Actual
+  driver tests reproduce the configured 100-Hz scheduler and resource handoffs.
+- Fixed launcher focus with continuous spring momentum and responsive arrows;
+  direct ribbon rasterization, dirty bands and alternating DMA buffers reduce
+  LCD work. Native 32×32 coherent icons replace magnified 8×8 assets.
+- Varied musical key/interface pitches and a gentle 400-ms C–E–G–C startup melody.
+  Existing master/volume/key/app settings apply. Recording/playback stay exclusive.
+- Editor nearby-read cache, no idle redraw, layout-only page navigation and queued
+  typing batches. Esc → Delete document confirms a reversible Trash move; changed
+  originals/protected paths are refused. Original/save/draft validation remains.
+- Wi-Fi → Known Networks: saved SSIDs, Connect, Forget and Auto-connect (default
+  Off). No repeated vault passphrase. Explicit import preserves the old vault.
+  Authenticated credential blobs use a random device key in NVS; this does not
+  protect against an attacker reading unencrypted physical flash.
+- Settings → System → Firmware history: up to 15 signed, verified firmware/System
+  pairs on SD, safe retention, import of a matching previous OTA/System pair, and
+  confirmed rollback through inactive-slot writes and existing journals. History
+  starts with updates installed by this runtime; imports need exact retained bytes
+  and trusted metadata. Factory recovery and both OTA slots remain for safety.
+- Fix editor flush-error descriptor leak and Wi-Fi scan-result cleanup on low
+  memory/errors. Full causes, regression evidence and limitations:
+  docs/BUG_REPORT_0.6.2.md and docs/FIRMWARE_HISTORY.md.
 
-- Settings → Sounds: master On/Off, volume 0–100%, key presses, app/notification
-  feedback and a preview. Defaults are enabled at 20%. Preferences survive restart
-  and backup/restore; prior settings load without losing identity, wallpaper or gain.
-- Short ramped beeps/boops for keys, navigation, selection/back, app open/close and
-  notices. One pending cue coalesces bursts. A separate worker owns the codec only
-  while idle; feedback is silent during microphone recording or audio playback.
-- Files returns to the original text browser and Enter action menus. Editor,
-  Files-only Audio Player, copy/move, Trash, protected paths and confirmations stay.
-  The folder carousel, content-decoration scans and unused renderer are removed.
-- Recorder now drains queued audio in batches before drawing, defers the meter
-  while catching up, paces redraws after frame completion and buffers SD writes
-  in 4 KiB. Prefer two seconds of mono buffering, fall back to one when needed.
-  Drain already-captured PCM before reporting an overrun; partial WAVs remain
-  recoverable. This addresses the identified one-small-block-per-redraw bottleneck.
-- Launcher focus stays fixed in the center while icons slide beneath it on an
-  elapsed-time spring. Repeated arrows preserve momentum, reversals settle
-  naturally, and a small offscreen icon cache prevents blank ribbon edges. Input
-  remains responsive during navigation. Opening/closing zoom and fades remain.
-- Existing gain controls and boot flag/logo animation remain.
+Update through 0.6.0-dev first if older. From a working 0.6.0/0.6.1 installation:
+Settings → System → Software Update → Check for Updates. No SD format/USB reflash.
+Keep the microSD inserted through reboot and healthy-boot confirmation.
 
-Both firmware roles build; native tests exercise waveform volume/mute/categories,
-codec ownership, sustained simulated UI/storage stalls, ordered PCM and drain/error
-paths, settings migration/backup and text Files operations. Real speaker loudness,
-recording performance and electrical interruption behavior still need a device check.
-
-Install via Settings → System → Software Update → Check for Updates. No SD format
-or USB reflash is needed from a working 0.6.0-dev installation. Keep old partial
-recordings: Recorder → Recover interrupted WAV can recover persisted PCM.
+Both firmware roles and the host suite are checked before publication. Host
+simulations cover audio ownership, cache/UI behavior, credential storage and
+history/update interruptions. No hardware tests are claimed: real animation FPS,
+SD throughput, radio behavior, audio loudness and power-cut recovery need checking
+on a physical ADV. User files stay in place; rollback does not downgrade their
+settings/save formats or lower the accepted signed-sequence watermark.

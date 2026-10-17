@@ -91,7 +91,7 @@ static bool picker_pixel(const pos_view_t *v, int x, int y, uint16_t *color) {
 }
 static bool icon_ink(const pos_view_t *v, int tile, int x, int y) {
   return x >= 0 && x < 32 && y >= 0 && y < 32 &&
-         ((v->icons[tile + 2][y / 4] >> (x / 4)) & 1);
+         ((v->icons[tile + 2][y] >> x) & 1);
 }
 
 static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
@@ -244,4 +244,53 @@ uint16_t pos_view_pixel(const pos_view_t *view, int x, int y) {
   return ((((color >> 11) & 31) * remain / 255) << 11) |
          ((((color >> 5) & 63) * remain / 255) << 5) |
          ((color & 31) * remain / 255);
+}
+
+/* Fast raster path for the moving ribbon. No per-pixel string scans, theme
+ * validation, coordinate division, or generic visual dispatch in this band. */
+void pos_view_scanline(const pos_view_t *v, int y, uint16_t pixels[240]) {
+  if (!v->tiles || v->fade || v->tile_lift ||
+      (v->tile_scale && v->tile_scale != 100) || y < 32 || y >= 96) {
+    for (int x = 0; x < 240; ++x)
+      pixels[x] = pos_view_pixel(v, x, y);
+    return;
+  }
+  unsigned count = v->background.count;
+  uint16_t bg = count && count <= POS_BACKGROUND_MAX_STRIPES
+                    ? pos_color_rgb565(v->background.colors[y * count / 135])
+                    : pos_boot_colors[y / 45];
+  for (int x = 0; x < 240; ++x)
+    pixels[x] = bg;
+  int iy = y - 48;
+  if (iy >= -1 && iy <= 32)
+    for (int tile = -2; tile < 5; ++tile) {
+      int start = tile * 80 + 24 + v->ribbon_offset;
+      if (start > 239 || start + 32 < 0)
+        continue;
+      uint32_t row = iy >= 0 && iy < 32 ? v->icons[tile + 2][iy] : 0;
+      uint32_t above = iy > 0 && iy <= 32 ? v->icons[tile + 2][iy - 1] : 0;
+      uint32_t below = iy >= -1 && iy < 31 ? v->icons[tile + 2][iy + 1] : 0;
+      for (int ix = -1; ix <= 32; ++ix) {
+        int x = start + ix;
+        if (x < 0 || x >= 240)
+          continue;
+        if (ix >= 0 && ix < 32 && ((row >> ix) & 1))
+          pixels[x] = 0;
+        else if ((ix > 0 && ((row >> (ix - 1)) & 1)) ||
+                 (ix < 31 && ((row >> (ix + 1)) & 1)) ||
+                 (ix >= 0 && ix < 32 && (((above | below) >> ix) & 1)))
+          pixels[x] = 0xffff;
+      }
+    }
+  int left = v->selected_tile * 80;
+  if (y >= 38 && y <= 89)
+    for (int x = left + 14; x <= left + 65 && x < 240; ++x) {
+      if (x < 0)
+        continue;
+      int local = x - left;
+      if (local < 16 || local > 63 || y < 40 || y > 87)
+        pixels[x] = 0;
+      else if (local == 16 || local == 63 || y == 40 || y == 87)
+        pixels[x] = 0xffff;
+    }
 }

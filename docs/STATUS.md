@@ -1,4 +1,4 @@
-# POS feature status — 0.6.1-dev
+# POS feature status — 0.6.2-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -10,7 +10,7 @@ layouts and display-off still require physical validation; other peripherals ret
 | --- | --- | --- |
 | Boot appearance | Black start; pink, yellow and blue slide in with each starting halfway through the previous stripe; large POS fades in after the flag completes, holds 1 second, then normal boot | Observe orientation/color on actual ADV |
 | Display/input | ST7789 output, TCA8418 decode, arrow-key/context routing, global Home, held recovery shortcut, nonblocking USB fallback | Verify all 56 positions, wiring, timing and stalled-app recovery physically |
-| Core/UI/apps | Central event loop, streamed icons, fifteen-app ribbon, one foreground app, lifecycle/cleanup, stationary focus with an elapsed-time spring icon ribbon, zoom/fade entry/return, shared wallpaper accents and paginated menus; launcher workspace is heap-owned | Additional scoped apps; physical stack/heap measurements |
+| Core/UI/apps | Central event loop, native 32×32 icons, fifteen-app ribbon, one foreground app, lifecycle/cleanup, stationary focus with an elapsed-time spring ribbon, optimized scanlines and partial/pipelined LCD transfers, zoom/fade entry/return, shared wallpaper accents and paginated menus; launcher workspace is heap-owned | Additional scoped apps; physical stack/heap measurements |
 | Background app | 1-12 horizontal stripes, visual arrow-key picker, Q/E hue, Shift fine steps, live striped canvas, white selection pulse, S to save and protected persistence | Optional richer styling later |
 | Setup/settings | Direct profile/brightness/date-time/background controls, regional/custom POSIX timezones, manual validated UTC, SNTP, preference reset confirmation and remembered menu selection and manual LCD/backlight-off with consumed wake input; checksummed redundant settings | Physical UX/time-sync validation; preset rule changes when legislation changes |
 | SD/files | Safe file manager, previews/editor/music, restored text list/actions, create/rename, copy/cut/paste, streamed verified folder copies, Trash/restore and confirmed permanent deletion | Optional sorting/search refinements; real-card performance |
@@ -19,12 +19,12 @@ layouts and display-off still require physical validation; other peripherals ret
 | Backup/restore | Standard small ZIPs, scalable readable folder backups, owned folder resume, full verification, conflict preservation and reports | Measure large real-card performance; archives/settings from unknown formats remain preserved, not guessed compatible |
 | Settings migration | Strict current schema, latest valid generation, format-1/2 settings compatibility, format-3 gain preferences and format-4 sound preferences and legacy format-0 migration, current destination takes priority | Versioned app-save envelopes, stepwise migrations and concrete Counter migrations implemented; future app-specific converters are added when formats exist |
 | Diagnostics | Heap/stack, firmware/flash/SD, boot/frame metrics, battery ADC, raw keyboard coverage, SD test, app cycles, evidence tooling | Actual measured hardware baseline and battery calibration |
-| Wi-Fi | Shared scan/connect/status, passphrase-encrypted NVS profiles, SNTP, verified HTTPS GET/POST/downloads, temporary authenticated LAN file transfer | Physical radio/TLS interoperability validation, broader Share integration |
-| Firmware updates | Settings Software Update, built-in official feed/public key, trusted P-256 signatures, HTTPS, semantic versions, signed sequences, no minimum-version cutoff/display, strict seven-field metadata after the mandatory 0.6.0 transition, archived bridge feed, bounded downloads, asset-only updates, previous-System journal recovery and inactive-slot write/readback; online OTA waits for a healthy 60-second UI interval | Official feed and pinned key included; physical TLS/OTA/rollback/power-cut validation |
+| Wi-Fi | Shared scan/connect/status, device-key encrypted Known Networks, optional background auto-connect, explicit old-vault import, SNTP, verified HTTPS GET/POST/downloads, temporary authenticated LAN file transfer | Physical radio/TLS interoperability validation, broader Share integration |
+| Firmware updates | Settings Software Update, built-in official feed/public key, trusted P-256 signatures, HTTPS, semantic versions, signed sequences, no minimum-version cutoff/display, strict seven-field metadata after the mandatory 0.6.0 transition, archived bridge feed, up to 15 signed firmware/System history pairs on SD and deliberate journaled rollback, bounded downloads, asset-only updates, previous-System journal recovery and inactive-slot write/readback; online OTA waits for a healthy 60-second UI interval | Official feed and pinned key included; physical TLS/OTA/rollback/power-cut validation |
 | Guided installer | Executable `pos-setup`: latest/private GitHub download, streamed checksum verification, card detection/FAT32 with exact erase confirmation, shared-folder route, factory backup/restore guidance, checked USB flash/readback and recovery menu | Crostini backup/restore and 0.5.6-dev installation/display/keyboard reported working. Exhaustive keys, power-loss/SD/OTA reliability remain to validate; shared folders cannot format a physical card |
 | USB developer tools | Build/package, checksum/backup-checked flash/readback, probe, detected-capacity double-read factory backup with bounded ROM fallback, matching-device restore/readback, logs and evidence reports | Factory restore/readback and observed boot reported; repeat with corrected verify-before-boot ordering |
 | Battery / recovery | Always-visible percentage/icon on black, smoothing/hysteresis and near-full voltage indication; RTC panic snapshot, persistent JSON crash logs, NVS failure counter and explicit Safe Mode exit; existing manual deep sleep retained | Battery percentage/full indication is an estimate; calibrate on hardware. Automatic power management is removed from scope |
-| Text editor / huge documents | SD-backed editor and streamed saves/search/line navigation; 32-level session undo/redo, highlighted selection, SD clipboard, word/page/line/document navigation and recoverable drafts | Physical large-file responsiveness; session history restarts after reopening/recovery |
+| Text editor / huge documents | SD-backed editor, bounded nearby-read cache, queued-typing batches, change-only rendering, confirmed Trash deletion and streamed saves/search/line navigation; 32-level session undo/redo, highlighted selection, SD clipboard, word/page/line/document navigation and recoverable drafts | Physical large-file responsiveness; session history restarts after reopening/recovery |
 | Music/audio | Streamed MP3 and PCM 16-bit WAV, folders/library, Files-only Audio Player, playback controls, shuffle, M3U playlists and ES8311/I2S output | Physical audio/timing validation; other codecs optional |
 | BLE/shared transfer | POS peer discovery, encrypted numeric-comparison pairing, accept/reject, chunk ACK/retry, resume, SHA-256 and lost-final-ACK recovery; common local/Wi-Fi/BLE Share entry point | Physical peer interoperability/throughput validation; third-party clients |
 | GPS/LoRa cap | Verified published pins, Semtech driver, shared SPI, UART NMEA location service, Settings detection/enablement panel and GPS-based Maps gate | Actual cap/revision/peripheral coexistence validation |
@@ -54,8 +54,7 @@ scope; existing legacy user folders are never erased.
 - Offline maps and navigation, with region selection and automatic Wi-Fi downloads directly on the device.
 - Meshtastic compatibility: messaging, encrypted channels, mesh routing and voluntarily shared locations.
 
-0.6.1-dev adds asynchronous ramped UI sounds with master/volume/key/notification
-settings. Audio ownership suppresses cues during playback/capture. Recorder drains
-queued blocks in batches before UI work, defers busy redraws, paces from render
-completion and uses a 4-KiB file buffer. Native tests cover sustained simulated
-stalls and PCM ordering; actual SD/display/cue performance still needs observation.
+0.6.2-dev fixes zero-tick audio handoff, adds randomized cues/startup melody,
+optimizes the ribbon and text editor, adds Known Networks and signed SD firmware
+history. See [the full bug report](BUG_REPORT_0.6.2.md) for causes, verification and
+hardware limitations. This release does not reduce the safe internal OTA layout.

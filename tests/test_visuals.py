@@ -24,3 +24,12 @@ class VisualTests(unittest.TestCase):
     def test_stationary_focus_continuous_spring_momentum_and_cached_neighbors(self):self.check('ribbon')
 
     def test_music_progress_is_visible_and_does_not_cover_volume(self):self.check('music')
+
+    def test_native_icon_asset_is_reproducible_unique_and_bounded(self):
+        import importlib.util
+        spec=importlib.util.spec_from_file_location('pos_icons',ROOT/'tools/build_icons.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        asset=module.artwork()
+        self.assertEqual(asset,(ROOT/'sd-payload/System/Assets/apps.icons').read_bytes())
+        self.assertEqual(len(asset),1924);self.assertEqual(asset[:4],b'POI1')
+        self.assertEqual(len(set(asset[4+i*128:4+(i+1)*128] for i in range(15))),15)

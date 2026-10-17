@@ -155,6 +155,22 @@ int main(int argc, char **argv) {
     v.ribbon_offset = 12;
     assert(pos_view_pixel(&v, 24, 50) != 0);
     assert(pos_view_pixel(&v, 36, 50) == 0);
+    uint16_t row[240];
+    for (unsigned tile = 0; tile < 7; ++tile)
+      for (unsigned y = 0; y < 32; ++y)
+        v.icons[tile][y] = 0x10204081u * (y + 1 + tile * 31);
+    for (unsigned count = 1; count <= 12; ++count) {
+      assert(pos_background_resize(&v.background, count));
+      for (unsigned i = 0; i < 7; ++i) {
+        v.ribbon_offset = offsets[i];
+        for (int y = 32; y < 96; ++y) {
+          pos_view_scanline(&v, y, row);
+          for (int x = 0; x < 240; ++x)
+            assert(row[x] == pos_view_pixel(&v, x, y));
+        }
+      }
+    }
+    memset(v.icons, 0xff, sizeof(v.icons));
     /* Cached neighbors keep the ribbon populated at both extremes. */
     v.ribbon_offset = 160;
     assert(pos_view_pixel(&v, 24, 50) == 0);

@@ -99,3 +99,14 @@ ZIP/folder backup/restore, more than 2048 files, over-64-GiB sparse scans, resum
 owned backups, mid-write failures, journal-before-retirement changes, delayed settings
 migration, paginated notices, and hardware evidence validation. USB/serial command
 orchestration is mocked; no physical serial device is opened.
+
+## Native launcher icons (0.6.2)
+
+`System/Assets/apps.icons` starts with ASCII `POI1`, followed by 15 icons in
+launcher order. Each icon is 32 rows of little-endian 32-bit mask bits; bit 0 is
+the leftmost pixel. Black ink uses set bits; the renderer adds a one-pixel white
+outline, including negative-space details. Total size is 1,924 bytes. Historical
+8-row/8-bit icons are expanded by the loader when reading old paired resources.
+Generate the current asset with `python tools/build_icons.py`.
+Firmware history uses ordinary signed envelopes, raw `.bin` images and matching
+payload files; see FIRMWARE_HISTORY.md for directory/completion semantics.

@@ -353,6 +353,8 @@ int pos_update_apply(const char *root, const pos_update_t *u,
         goto done;
     }
   }
+  if (u->signed_manifest && (pos_fs_join(p->path,p->next,"signed-update.json") ||
+      write_new(p->path,u->signed_manifest,strlen(u->signed_manifest)))) goto done;
   if (pos_fs_join(p->path, p->next, "installed.pos") ||
       write_new(p->path, u->package->manifest, u->package->manifest_size) ||
       tree(p->next, u->package->id, NULL, e))

@@ -165,3 +165,20 @@ class EditorNetworkTests(unittest.TestCase):
             self.assertTrue(list((self.root/"Downloads").glob(name+".part-*")))
         self.receive("case-0.bin",data,len(data))
         self.assertEqual((self.root/"Downloads/case-0.bin").read_bytes(),data)
+
+    def test_editor_delete_moves_original_to_trash_and_discards_working_draft_only_after_success(self):
+        folder=self.open(b'original document', [dict(at=0,remove=0,text='unsaved ')])
+        self.run_tool('delete',folder)
+        self.assertFalse((self.root/'Documents/notes.txt').exists())
+        self.assertFalse((self.root/folder).exists())
+        self.assertTrue(any(p.is_file() and p.read_bytes()==b'original document' for p in (self.root/'POS/Users/Owner/Trash').rglob('*')))
+    def test_editor_delete_refuses_changed_original_and_protected_paths(self):
+        folder=self.open(b'original')
+        path=self.root/'Documents/notes.txt';path.write_bytes(b'changed outside editor')
+        self.run_tool('delete',folder,expected=1)
+        self.assertEqual(path.read_bytes(),b'changed outside editor')
+        self.assertTrue((self.root/folder).is_dir())
+        self.run_tool('delete-protected',folder,expected=1)
+    def test_editor_nearby_cursor_reads_use_bounded_cache_without_reopening_sd_index(self):
+        folder=self.open(b'abcdefgh'*4096)
+        self.run_tool('cached-reads',folder)

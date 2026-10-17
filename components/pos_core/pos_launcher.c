@@ -42,12 +42,31 @@ void pos_launcher_view(const char *root, const char *device,
   FILE *icons = root && !pos_fs_join(path, root, "System/Assets/apps.icons")
                     ? fopen(path, "rb")
                     : NULL;
+  unsigned char magic[4];
+  bool native =
+      icons && fread(magic, 1, 4, icons) == 4 && !memcmp(magic, "POI1", 4);
   for (unsigned tile = 0; tile < 7; ++tile) {
     int app = (selected + POS_LAUNCHER_APP_COUNT + (int)tile - 3) %
               POS_LAUNCHER_APP_COUNT;
-    if (!icons || fseek(icons, app * 8, SEEK_SET) ||
-        fread(view->icons[tile], 1, 8, icons) != 8)
-      memcpy(view->icons[tile], fallback, sizeof(fallback));
+    uint8_t old[8];
+    if (native) {
+      unsigned char rows[128];
+      if (!fseek(icons, 4 + app * 128, SEEK_SET) &&
+          fread(rows, 1, 128, icons) == 128) {
+        for (unsigned y = 0; y < 32; ++y)
+          view->icons[tile][y] =
+              (uint32_t)rows[y * 4] | (uint32_t)rows[y * 4 + 1] << 8 |
+              (uint32_t)rows[y * 4 + 2] << 16 | (uint32_t)rows[y * 4 + 3] << 24;
+        continue;
+      }
+    }
+    if (native || !icons || fseek(icons, app * 8, SEEK_SET) ||
+        fread(old, 1, 8, icons) != 8)
+      memcpy(old, fallback, sizeof(old));
+    for (unsigned y = 0; y < 32; ++y)
+      for (unsigned x = 0; x < 32; ++x)
+        if ((old[y / 4] >> (x / 4)) & 1)
+          view->icons[tile][y] |= 1u << x;
   }
   if (icons)
     fclose(icons);

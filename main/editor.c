@@ -13,6 +13,8 @@ typedef struct {
   unsigned row, col;
   bool visible, selecting;
   uint32_t anchor;
+  unsigned char bytes[2048];
+  pos_view_t view;
 } screen_t;
 static int progress(void *ctx, const char *phase, uint64_t done,
                     uint64_t total) {
@@ -85,21 +87,22 @@ static uint32_t previous_row(const pos_editor_t *e, uint32_t top) {
   }
   return at;
 }
-static int render(pos_editor_t *e, screen_t *screen) {
+static int render(pos_editor_t *e, screen_t *screen, bool show) {
   if (screen->top > e->cursor)
     screen->top = previous_row(e, e->cursor);
   for (unsigned retry = 0; retry < 2; ++retry) {
-    unsigned char bytes[2048];
+    unsigned char *bytes = screen->bytes;
     size_t n;
-    if (pos_editor_read(e, screen->top, bytes, sizeof(bytes), &n))
+    if (pos_editor_read(e, screen->top, bytes, sizeof(screen->bytes), &n))
       return -1;
     memset(screen->positions, 0xff, sizeof(screen->positions));
     screen->visible = false;
-    pos_view_t view;
+    pos_view_t *view = &screen->view;
     const char *name = strrchr(e->source, '/');
     name = name ? name + 1 : e->source;
-    pos_view_clear(&view, name);
-    pos_view_line(&view, 1, "%s  %u KB  %u%%", e->dirty ? "* edited" : "Saved",
+    pos_view_clear(view, name);
+    pos_ui_style(view);
+    pos_view_line(view, 1, "%s  %u KB  %u%%", e->dirty ? "* edited" : "Saved",
                   (unsigned)((e->length + 1023ULL) / 1024),
                   e->length ? (unsigned)((uint64_t)e->cursor * 100 / e->length)
                             : 0);
@@ -118,7 +121,7 @@ static int render(pos_editor_t *e, screen_t *screen) {
       uint32_t low = screen->anchor < e->cursor ? screen->anchor : e->cursor;
       uint32_t high = screen->anchor > e->cursor ? screen->anchor : e->cursor;
       if (screen->selecting && offset >= low && offset < high)
-        view.editor_selected[row] |= 1u << col;
+        view->editor_selected[row] |= 1u << col;
       char c;
       unsigned used = glyph(bytes + i, n - i, &c);
       i += used;
@@ -127,9 +130,9 @@ static int render(pos_editor_t *e, screen_t *screen) {
         col = 0;
         continue;
       }
-      view.lines[row + 2][col] = c;
+      view->lines[row + 2][col] = c;
       if (++col == 30) {
-        view.lines[row + 2][30] = 0;
+        view->lines[row + 2][30] = 0;
         ++row;
         col = 0;
       }
@@ -138,14 +141,15 @@ static int render(pos_editor_t *e, screen_t *screen) {
       screen->top = e->cursor;
       continue;
     }
-    view.text_editor = true;
-    view.editor_cursor_row = screen->row + 2;
-    view.editor_cursor_col = screen->col;
-    pos_view_line(&view, 14,
+    view->text_editor = true;
+    view->editor_cursor_row = screen->row + 2;
+    view->editor_cursor_col = screen->col;
+    pos_view_line(view, 14,
                   screen->selecting ? "Selecting  Ctrl+C/X:copy/cut"
                                     : "Ctrl+S:save Ctrl+Z:undo");
-    pos_view_line(&view, 15, "Shift+arrows:select Esc:menu");
-    pos_device_show(&view);
+    pos_view_line(view, 15, "Shift+arrows:select Esc:menu");
+    if (show)
+      pos_device_show(view);
     return 0;
   }
   return -1;
@@ -159,7 +163,7 @@ static void vertical(pos_editor_t *e, screen_t *screen, int direction) {
     screen->top = top;
     uint32_t cursor = e->cursor;
     e->cursor = top;
-    if (render(e, screen)) {
+    if (render(e, screen, false)) {
       e->cursor = cursor;
       return;
     }
@@ -169,7 +173,7 @@ static void vertical(pos_editor_t *e, screen_t *screen, int direction) {
     if (top == UINT32_MAX || top == screen->top)
       return;
     screen->top = top;
-    if (render(e, screen))
+    if (render(e, screen, false))
       return;
     row = 11;
   } else
@@ -338,7 +342,7 @@ static void move_cursor(pos_editor_t *e, screen_t *s, int key, bool ctrl) {
 static void page_move(pos_editor_t *e, screen_t *s, int direction) {
   for (unsigned i = 0; i < 11; ++i) {
     vertical(e, s, direction);
-    if (render(e, s))
+    if (render(e, s, false))
       break;
   }
 }
@@ -348,14 +352,21 @@ static bool edit(pos_editor_t *e) {
     return false;
   screen->top = e->cursor;
   bool leave = false, home = false;
+  bool redraw = true, queued = false;
+  pos_event_t pending = {0};
   while (!leave) {
-    if (render(e, screen)) {
+    if (redraw && render(e, screen, true)) {
       pos_ui_notice("Read failed", "Original and working files remain on SD.");
       break;
     }
+    redraw = false;
     pos_event_t event;
-    if (!pos_device_event(&event, 100) || !event.pressed)
+    if (queued) {
+      event = pending;
+      queued = false;
+    } else if (!pos_device_event(&event, 100) || !event.pressed)
       continue;
+    redraw = true;
     if (event.key == POS_KEY_HOME) {
       leave = close_document(e);
       home = leave;
@@ -379,8 +390,25 @@ static bool edit(pos_editor_t *e) {
                              "Paste",
                              "Page up",
                              "Page down",
-                             "Controls help"};
-      int choice = pos_ui_menu("Text editor", items, 18);
+                             "Controls help",
+                             "Delete document"};
+      int choice = pos_ui_menu("Text editor", items, 19);
+      if (choice == 18) {
+        const char *confirm[] = {"Cancel", "Move document to Trash"};
+        pos_ui_notice(
+            "Delete document",
+            "The saved document moves to Trash. Unsaved edits will be "
+            "discarded only after the move succeeds. Restore it using Files.");
+        if (pos_ui_menu("Delete this document?", confirm, 2) == 1) {
+          pos_error_t error = {0};
+          if (pos_editor_delete(e, &error))
+            pos_ui_notice("Document kept", error.message);
+          else {
+            leave = true;
+            continue;
+          }
+        }
+      }
       if (choice == 1)
         save_as(e, false);
       if (choice == 2)
@@ -516,8 +544,27 @@ static bool edit(pos_editor_t *e) {
       const char *text = event.key == POS_KEY_ENTER ? "\n"
                          : event.key == '\t'        ? "    "
                                                     : &c;
-      result =
-          pos_editor_replace(e, count, text, event.key == '\t' ? 4 : 1, &error);
+      char burst[64];
+      size_t used = event.key == '\t' ? 4 : 1;
+      memcpy(burst, text, used);
+      /* Commit already-queued typing in one durable transaction. Retain the
+       * first command/navigation event instead of dropping it or reordering. */
+      while (used < sizeof(burst)) {
+        pos_event_t next_event;
+        if (!pos_device_event(&next_event, 0))
+          break;
+        if (!next_event.pressed)
+          continue;
+        if (next_event.key >= 32 && next_event.key <= 126 &&
+            !(next_event.modifiers & (POS_MOD_CTRL | POS_MOD_ALT)))
+          burst[used++] = (char)next_event.key;
+        else {
+          pending = next_event;
+          queued = true;
+          break;
+        }
+      }
+      result = pos_editor_replace(e, count, burst, used, &error);
     }
     if (editing) {
       if (result)

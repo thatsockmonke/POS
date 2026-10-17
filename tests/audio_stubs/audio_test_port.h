@@ -8,7 +8,10 @@ typedef int esp_err_t;
 #define pdTRUE 1
 #define pdPASS 1
 #define portMAX_DELAY UINT32_MAX
-#define pdMS_TO_TICKS(x) (x)
+#define pdMS_TO_TICKS(x) ((x)/10)
+typedef uint32_t TickType_t;
+TickType_t xTaskGetTickCount(void);
+uint32_t esp_random(void);
 typedef struct test_stream *StreamBufferHandle_t;
 typedef struct test_sem *SemaphoreHandle_t;
 typedef void *i2s_chan_handle_t;

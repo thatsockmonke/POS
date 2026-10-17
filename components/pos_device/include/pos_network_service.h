@@ -36,3 +36,12 @@ int pos_network_https_limit(const char *,const char *,const char *,const char *,
 int pos_network_deploy_start(const char *root,char key[17]);
 bool pos_network_deploy_take(char url[512]);
 void pos_network_deploy_result(bool success);
+
+/* Device-bound authenticated profiles; no repeated human vault password. */
+int pos_network_known(pos_wifi_profiles_t *);
+int pos_network_known_save(const pos_wifi_profiles_t *);
+bool pos_network_auto_enabled(void);
+int pos_network_auto_set(bool);
+void pos_network_auto_pause(bool);
+void pos_network_auto_start(void);
+void pos_network_auto_stop(void);

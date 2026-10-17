@@ -4,29 +4,39 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.6.1-dev restores text Files, adds adjustable UI sounds and fixes Recorder drainage.**
-Update to **0.6.0-dev first** if you are on an older installation. The obsolete
-update field and official-source migration code are removed from the resident
-updater; active metadata contains exactly seven fields. The archived 0.6.0 bridge
-stays available for older devices.
+**0.6.2-dev fixes Recorder playback and improves launcher, editor and Wi-Fi use.**
+The launcher keeps its selection box fixed while crisp 32×32 icons slide on an
+elapsed-time spring. Partial redraws, a direct ribbon rasterizer and alternating
+DMA buffers reduce display work; arrow input continues throughout movement.
 
-Settings → **Sounds** controls master mute, UI volume (0–100%), key presses and
-app/notification feedback, with a preview. Short synthesized beeps/boops run in
-a separate bounded worker; feedback stays silent during recording and playback.
-Files is the original text list again: arrows move and Enter opens actions,
-including Audio Player, Editor, copy/move and Trash.
+Settings → **Sounds** controls volume, master mute and key/app categories.
+Short cues vary within a small musical palette; a gentle C–E–G–C startup jingle
+uses the same settings. Cues, recording and playback share exclusive audio
+ownership. Positive scheduler-tick waits fix playback being rejected by a cue.
 
-Recorder now drains accumulated PCM in batches before drawing, uses a 4-KiB
-file buffer, paces the meter from the end of each render and defers redraws while
-catching up. It prefers a two-second audio buffer and falls back to one second
-under heap pressure. Real I/O/overrun failures preserve partial WAVs and queued
-audio; use Recorder → Recover interrupted WAV. A long physical recording still
-needs checking on your device.
+The Text Editor caches nearby text, redraws only after changes, batches queued
+typing into durable edits, and has **Esc → Delete document** with confirmation
+and reversible Trash. Documents remain SD-backed; save/recovery validation stays.
+Files retains its plain text browser and Files-only Audio Player.
 
-Black-start flag/logo boot, spring launcher transitions, themed mono meter,
-1x–64x microphone gain, direct stripe editing and Counter motion remain.
+Wi-Fi → **Known Networks** lists saved SSIDs, Connect, Forget and Auto-connect.
+No repeated vault passphrase is required. Existing vaults have an explicit
+one-time import action. Device-generated keys protect stored credential blobs;
+physical unencrypted flash remains a security limitation.
 
-[Animated UI preview](downloads/0.6.1-dev/ui-animation.png) · [Recorder](downloads/0.6.1-dev/recorder.png) · [Files](downloads/0.6.1-dev/files.png) · [Background](downloads/0.6.1-dev/background.png) · [Counter](downloads/0.6.1-dev/counter.png)
+Settings → System → **Firmware history** browses up to 15 verified firmware and
+matching System pairs in `POS/.History`. Updates made by 0.6.2 onward archive the
+current pair first; **Import previous installation** can preserve a matching
+inactive OTA image and retained System. Rollback uses the inactive flash slot,
+verification, existing transaction journal and healthy-boot confirmation.
+The factory recovery image and both runtime slots remain for safety. See the
+[complete bug report](docs/BUG_REPORT_0.6.2.md) and [history guide](docs/FIRMWARE_HISTORY.md).
+
+Upgrade through **0.6.0-dev** first if using an older installation. Active update
+metadata stays at exactly seven fields; the old bridge feed remains frozen.
+Black-start flag/logo boot, microphone gain and themed app visuals remain.
+
+[Animated UI preview](downloads/0.6.2-dev/ui-animation.png) · [Recorder](downloads/0.6.2-dev/recorder.png) · [Files](downloads/0.6.2-dev/files.png) · [Background](downloads/0.6.2-dev/background.png) · [Counter](downloads/0.6.2-dev/counter.png)
 
 Previews use the actual portable renderer with example state; they are not
 hardware recordings or device frame-rate measurements.
@@ -82,7 +92,7 @@ Implemented:
   Settings, Diagnostics, Files, Music, Share, Location, Radio, Range Test,
   Recovery and About also use the app manager.
 - First-time name/device/timezone/brightness setup, plus optional Wi-Fi.
-  Connect for a session or save up to four networks in a passphrase-encrypted NVS vault.
+  Connect for a session or use Known Networks for up to four device-key encrypted profiles and optional auto-connect.
   Passwords remain masked and are never written to SD.
 - Text Editor: New/Open/Recover, SD-backed editing beyond available RAM, protected
   streamed saves, 32-level undo/redo, selection, SD clipboard, word/page/line
@@ -141,14 +151,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.6.1-dev/launcher.png)
-![Color picker](downloads/0.6.1-dev/color-picker.png)
+![Launcher](downloads/0.6.2-dev/launcher.png)
+![Color picker](downloads/0.6.2-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.6.1-dev/boot-animation.png)
+![POS boot animation](downloads/0.6.2-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.6.1-dev/boot-splash.png)
+[Final splash frame](downloads/0.6.2-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -165,7 +175,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.1-dev --zip-output dist/pos-0.6.1-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.2-dev --zip-output dist/pos-0.6.2-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -285,5 +295,3 @@ Settings → **IR & motion** provides live BMI270 readings and explicit NEC send
 See [Developer tooling](docs/DEVELOPMENT.md) for `posctl flash`, `files` and gated
 `deploy`. HTTPS uses ESP-IDF's common-root certificate bundle to preserve the
 existing OTA layout; validation remains enabled and unsupported roots are rejected.
-
-In 0.6.1-dev the launcher selection box stays fixed while its icons slide with momentum and spring settling. Repeated arrow presses remain responsive during the animation.

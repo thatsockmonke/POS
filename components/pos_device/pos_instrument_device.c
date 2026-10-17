@@ -57,7 +57,7 @@ int pos_infrared_send(uint8_t address, uint8_t command, pos_error_t *e) {
   if (rmt_new_tx_channel(&config, &channel) != ESP_OK)
     goto done;
   rmt_carrier_config_t carrier = {.frequency_hz = 38000, .duty_cycle = 0.33f};
-  rmt_copy_encoder_config_t copy = {0};
+  rmt_copy_encoder_config_t copy = {};
   if (rmt_apply_carrier(channel, &carrier) != ESP_OK ||
       rmt_new_copy_encoder(&copy, &encoder) != ESP_OK ||
       rmt_enable(channel) != ESP_OK)

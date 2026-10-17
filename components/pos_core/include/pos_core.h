@@ -75,7 +75,7 @@ typedef struct {
   bool visual_flash;
   bool black_background;
   int selected_tile;
-  uint8_t icons[7][8]; /* Visible three plus two neighbors on each side. */
+  uint32_t icons[7][32]; /* Visible three plus two neighbors on each side. */
   bool solid_color;
   uint16_t color_rgb565;
   bool boot_splash;
@@ -95,6 +95,7 @@ typedef struct {
 } pos_view_t;
 void pos_view_clear(pos_view_t *view, const char *title);
 void pos_view_line(pos_view_t *view, int row, const char *format, ...);
+void pos_view_scanline(const pos_view_t *, int y, uint16_t pixels[240]);
 uint16_t pos_view_pixel(const pos_view_t *view, int x, int y);
 /* Damped spring samples in percent. Final frame is always zero. */
 int pos_motion_spring(unsigned frame);

@@ -36,10 +36,10 @@ class FeatureTests(unittest.TestCase):
         sdk=Path(os.environ.get("IDF_PATH","/workspace/pos-cloud/esp-idf-v5.5.5"));cjson=sdk/"components/json/cJSON"
         sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/settings.c",ROOT/"main/browser.c",ROOT/"main/background.c",ROOT/"main/editor.c",ROOT/"main/wifi.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
         sources += [ROOT/"main/files.c",ROOT/"main/music.c",ROOT/"main/recorder.c",ROOT/"main/instruments.c",ROOT/"main/sharing.c",ROOT/"main/expansion.c"]
-        for component in ("pos_core","pos_recovery"):
+        for component in ("pos_core","pos_recovery","pos_update"):
             sources.extend((ROOT/"components"/component).glob("*.c"))
         command=["gcc","-std=c11","-D_POSIX_C_SOURCE=200809L","-Wall","-Wextra","-Werror","-g","-fsanitize=undefined","-fno-sanitize-recover=all"]
-        for component in ("pos_install","pos_core","pos_recovery"):
+        for component in ("pos_install","pos_core","pos_recovery","pos_update"):
             command.extend(["-I",str(ROOT/"components"/component/"include")])
         command.extend(["-I",str(ROOT/"tests/stubs"),"-I",str(ROOT/"main"),"-I",str(ROOT/"components/pos_device/include")])
         subprocess.run(command+["-I",str(cjson),*map(str,sources),"-lcrypto","-lm","-o",str(cls.runner)],check=True)
@@ -812,5 +812,16 @@ class FeatureTests(unittest.TestCase):
         self.run_feature('backup')
         dest=self.destination();self.run_feature('restore','--archive',self.card/BACKUP,card=dest)
         self.assertEqual(json.loads(self.run_feature('settings-read',card=dest).stdout)['microphone_gain'],64)
+
+
+    def test_editor_idle_polling_does_not_redraw_and_typing_keeps_commands_ordered(self):
+        self.run_feature('editor-ui-idle')
+        self.assertEqual((self.card/'POS/Users/Owner/Documents/Untitled.txt').read_bytes(),b'wasd')
+    def test_editor_delete_menu_confirms_trash_and_discards_unsaved_edits_after_success(self):
+        self.run_feature('editor-ui-trash')
+        self.assertFalse((self.card/'POS/Users/Owner/Documents/Untitled.txt').exists())
+        self.assertTrue(any(p.is_file() and p.read_bytes()==b'wasd' for p in (self.card/'POS/Users/Owner/Trash').rglob('*')))
+    def test_known_networks_ui_connect_forget_and_auto_toggle_without_vault_prompt(self):
+        self.run_feature('wifi-ui-known')
 
 if __name__=="__main__":unittest.main()

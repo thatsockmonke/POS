@@ -91,6 +91,7 @@ bool pos_fs_user_path(const char *p) {
                             "POS/Temp",
                             "POS/Cache",
                             "POS/Updates",
+                            "POS/.History",
                             "POS/.pos-transaction",
                             "POS.installing",
                             "POS.previous",

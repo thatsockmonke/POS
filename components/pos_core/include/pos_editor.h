@@ -10,6 +10,8 @@ typedef struct {
   uint32_t base_size, base_crc, added_size, added_crc;
   bool original_exists, dirty;
   unsigned slot;
+  uint32_t cache_start, cache_size, cache_generation;
+  unsigned char read_cache[4096];
   unsigned undo_head, undo_count, redo_head, redo_count;
 } pos_editor_t;
 /* All document paths are relative, user-owned paths. Working text and CSV
@@ -35,3 +37,6 @@ void pos_editor_discard(pos_editor_t *editor);
 int pos_editor_undo(pos_editor_t *, bool redo, pos_error_t *);
 int pos_editor_copy_selection(pos_editor_t *, uint32_t start, uint32_t end, pos_io_progress_t, void *, pos_error_t *);
 int pos_editor_paste(pos_editor_t *, uint32_t remove, pos_io_progress_t, void *, pos_error_t *);
+
+/* Move a saved document to Trash only if its original fingerprint still matches. */
+int pos_editor_delete(pos_editor_t *, pos_error_t *);

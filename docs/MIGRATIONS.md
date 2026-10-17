@@ -73,3 +73,13 @@ categories on. Identity, wallpaper, timezone, brightness and microphone gain are
 preserved. Backup/restore uses the same validated decoder. Unknown future formats
 remain protected. Firmware older than 0.6.1 treats format 4 as future preferences
 rather than rewriting it; user documents/audio remain ordinary recoverable files.
+
+## 0.6.2 Known Networks and firmware history
+
+The settings schema remains format 4, preserving sound/gain/wallpaper preferences.
+Wi-Fi's new `known` blob and random `known_key` are internal NVS data; the old
+`vault` stays intact until an explicit user import, and is still preserved after
+successful import. No credentials are migrated onto SD or into ZIP backups.
+`POS/.History` is protected system storage, excluded from user filesystem backup.
+History rollback restores a firmware/System pair and leaves user data/preferences
+in place; format downgrades are not guessed. See FIRMWARE_HISTORY.md.

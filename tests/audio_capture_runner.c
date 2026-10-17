@@ -41,6 +41,7 @@ static int16_t expected_sample(unsigned index) {
     return -32768;
   return (int16_t)amplified;
 }
+static atomic_uint waveform = 2166136261u;
 static atomic_uint blocks;
 static atomic_bool fail_read;
 static atomic_uint allocated, channels, output_writes, output_peak,
@@ -148,6 +149,10 @@ int i2s_channel_write(i2s_chan_handle_t h, const void *p, size_t n,
     while (peak < v && !atomic_compare_exchange_weak(&output_peak, &peak, v))
       ;
   }
+  uint32_t wave_hash = atomic_load(&waveform);
+  for (size_t i = 0; i < n / 2; ++i)
+    wave_hash = (wave_hash ^ (uint16_t)pcm[i]) * 16777619u;
+  atomic_store(&waveform, wave_hash);
   atomic_fetch_add(&output_writes, 1);
   *written = n;
   return 0;
@@ -262,7 +267,15 @@ void vTaskDelete(void *h) {
   atomic_fetch_sub(&active_tasks, 1);
   pthread_exit(NULL);
 }
-void vTaskDelay(unsigned ms) {
+TickType_t xTaskGetTickCount(void) {
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  return (uint32_t)((uint64_t)t.tv_sec * 100 + t.tv_nsec / 10000000);
+}
+static unsigned random_note;
+uint32_t esp_random(void) { return random_note; }
+void vTaskDelay(unsigned ticks) {
+  unsigned ms = ticks * 10;
   struct timespec t = {ms / 1000, (ms % 1000) * 1000000};
   nanosleep(&t, NULL);
 }
@@ -493,6 +506,34 @@ int main(void) {
   vTaskDelay(20);
   assert(atomic_load(&output_writes) == writes && pos_microphone_active());
   pos_microphone_stop();
+  /* A 100 Hz scheduler must wait for an active cue before playing a WAV.
+   * The old 5-ms delay rounded to zero and exhausted retries immediately. */
+  unsigned before_cue = atomic_load(&output_writes);
+  pos_audio_feedback(POS_SOUND_NOTICE);
+  for (unsigned i = 0; i < 1000 && atomic_load(&output_writes) == before_cue;
+       ++i)
+    delay();
+  assert(atomic_load(&output_writes) > before_cue);
+  assert(!pos_audio_write(silence, 256, 16000, &e));
+  pos_audio_stop();
+  assert(!pos_microphone_start(&e));
+  pos_microphone_stop();
+  assert(!pos_audio_write(silence, 256, 16000, &e));
+  pos_audio_stop();
+  before_cue = atomic_load(&output_writes);
+  pos_audio_feedback(POS_SOUND_STARTUP);
+  wait_cue();
+  assert(atomic_load(&output_writes) >= before_cue + 44);
+  atomic_store(&waveform, 2166136261u);
+  random_note = 1;
+  pos_audio_feedback(POS_SOUND_NAV);
+  wait_cue();
+  unsigned first_note = atomic_load(&waveform);
+  atomic_store(&waveform, 2166136261u);
+  random_note = 4;
+  pos_audio_feedback(POS_SOUND_NAV);
+  wait_cue();
+  assert(first_note != atomic_load(&waveform));
   pos_audio_feedback_shutdown();
   for (unsigned i = 0; i < 100 && atomic_load(&active_tasks); ++i)
     delay();
