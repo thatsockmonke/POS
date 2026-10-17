@@ -1,10 +1,30 @@
-# Offline maps and navigation — POS 0.6.7-dev
+# Offline maps and navigation — POS 0.6.8-dev
 
 POS can search downloaded road names, calculate routes entirely on Panputer,
 save/resume routes, and show GPS turn guidance without Internet. Region choice,
 map download and graph compilation all run on the device. GPS receiver detection
 is required to open Maps; a satellite fix is needed for live guidance, not for
 browsing or planning from the saved region center.
+
+## Pan and zoom controls (both map views)
+
+- **Arrow keys** pan. On the ADV, use the printed arrow keys without Fn in Maps.
+- **P** cycles **Normal → Large → Fine → Normal**. The value beside P is the
+  movement per key press, automatically reduced as you zoom in. This preference
+  is shared between world and regional views for this boot; reboot resets Normal.
+- **+** or **=** zooms in; **−** zooms out. These controls already existed.
+- **C** centers on a current GPS fix and resumes GPS follow. Arrow movement
+  pauses follow so the view stays where you pan. Without a fix, pan/zoom still
+  work offline; C waits for a fix in the world view and explains it regionally.
+- **Enter** returns to the world menu or opens regional map options; **Esc**
+  goes back. **0** fits the whole planet in the world overview only.
+
+Regional Fine/Normal/Large steps are **1/16, 1/4 and 1/2** of the current map
+width in meters. At a 1 km view, those are 62.5 m, 250 m and 500 m. The world
+overview uses **7.5°, 30° and 60° divided by its zoom multiplier**. World steps
+are angular distances, not a promise of equal ground distance at every latitude.
+Normal preserves the previous movement amount. No new settings format or map
+redownload is required. Pressing P updates labels without rereading the map.
 
 ## Download and use
 

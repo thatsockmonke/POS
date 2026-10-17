@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.6.7-dev is an **experimental foundation**, not the complete master roadmap.
+POS 0.6.8-dev is an **experimental foundation**, not the complete master roadmap.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
 flashing, peripherals, factory boot recovery and electrical power-loss behavior
 have not been tested here. Read [STATUS.md](STATUS.md) before choosing to install.
@@ -19,9 +19,9 @@ including Chromebook shared-folder/USB limits. The detailed manual route follows
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.6.7-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.6.8-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.6.7-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.6.8-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -42,10 +42,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.6.7-dev.zip.sha256
-mkdir pos-0.6.7-dev
-unzip pos-0.6.7-dev.zip -d pos-0.6.7-dev
-cd pos-0.6.7-dev
+sha256sum -c pos-0.6.8-dev.zip.sha256
+mkdir pos-0.6.8-dev
+unzip pos-0.6.8-dev.zip -d pos-0.6.8-dev
+cd pos-0.6.8-dev
 sha256sum -c SHA256SUMS
 ```
 

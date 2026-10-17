@@ -1,4 +1,4 @@
-POS 0.6.7-dev (unreleased) - Pan Operating System
+POS 0.6.8-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -84,3 +84,8 @@ Known Networks no longer has the old-passphrase/import option.
 
 Development combines the updater heap fix with the full numeric-gain/world-map changes.
 Do not publish until the user confirms installing the 0.6.6-dev bridge.
+
+Maps: arrows pan; P cycles Normal -> Large -> Fine -> Normal, shared this boot.
++ or = zooms in, - zooms out, C recenters/follows GPS. World: 0 fits the planet.
+Regional steps are 1/16, 1/4 or 1/2 of visible map width; world steps are
+7.5, 30 or 60 degrees divided by zoom. The current step is shown beside P.

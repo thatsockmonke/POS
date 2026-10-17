@@ -38,10 +38,10 @@ static int preview(const char *root, const char *output, unsigned screen,
     v.map_fix = true;
     v.map_gps_x = 120;
     v.map_gps_y = 44;
-    pos_view_line(&v, 1, "GPS  follow  1x");
+    pos_view_line(&v, 1, "Follow 1x P:30deg");
     pos_view_line(&v, 13, "34.0500 -118.2480");
-    pos_view_line(&v, 14, "Arrows: pan +/-: zoom C: GPS");
-    pos_view_line(&v, 15, "0: whole planet Enter: menu");
+    pos_view_line(&v, 14, "Arrows:pan +/-:zoom P:step");
+    pos_view_line(&v, 15, "C:GPS 0:world Enter:menu");
   } else if (screen == 8) {
     /* Deterministic example roads, rendered with the actual device compositor.
      */
@@ -67,7 +67,7 @@ static int preview(const char *root, const char *output, unsigned screen,
     v.map_target_y = 44;
     pos_view_line(&v, 1, "Turn right in 40m");
     pos_view_line(&v, 13, "Example Road");
-    pos_view_line(&v, 14, "286m left   Enter: menu");
+    pos_view_line(&v, 14, "286m P:250m +/- Enter:menu");
     pos_view_line(&v, 15, "(c) OpenStreetMap contributors");
   } else if (screen == 1) {
     uint32_t hold;

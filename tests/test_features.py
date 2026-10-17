@@ -62,6 +62,19 @@ class FeatureTests(unittest.TestCase):
         self.write('POS/System/Assets/world.map',(ROOT/'sd-payload/System/Assets/world.map').read_bytes())
         self.run_feature('maps-ui-world')
 
+    def test_world_map_pan_steps_zoom_follow_and_metadata_only_redraw(self):
+        self.write('POS/System/Assets/world.map',(ROOT/'sd-payload/System/Assets/world.map').read_bytes())
+        self.run_feature('maps-ui-world-controls')
+
+    def test_regional_map_pan_steps_zoom_follow_and_metadata_only_redraw(self):
+        header=bytearray(64);header[:4]=b'PMP1'
+        struct.pack_into('<iiII',header,4,34050500,-118247500,1000,1)
+        header[24:29]=b'Local'
+        body=struct.pack('<iiii',34050000,-118248000,34051000,-118247000)
+        struct.pack_into('<I',header,20,zlib.crc32(header+body))
+        self.write('POS/Maps/local.pmap',header+body)
+        self.run_feature('maps-ui-regional-controls')
+
     def test_custom_gain_entry_rejects_out_of_range_and_preserves_integer(self):
         self.run_feature('recorder-ui-custom')
         self.assertEqual(json.loads(self.run_feature('settings-read').stdout)['microphone_gain'],1537)

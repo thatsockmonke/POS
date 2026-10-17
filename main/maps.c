@@ -15,6 +15,13 @@
 #include <unistd.h>
 
 #ifndef POS_INSTALLER
+/* Shared for this boot, without writing preferences/SD for every key press.
+ * Fine = quarter of the old step; Normal preserves it; Large doubles it. */
+static unsigned pan_size = 1;
+static double pan_distance(double normal) {
+  static const double factors[] = {0.25, 1, 2};
+  return normal * factors[pan_size];
+}
 static int progress(void *ctx, const char *phase, uint64_t done,
                     uint64_t total) {
   return pos_ui_progress(ctx, phase, "Map region", done, total);
@@ -377,8 +384,9 @@ static __attribute__((noinline)) void open_map(const char *path) {
                       dirs[((bearing + 22) / 45) % 8], bearing,
                       distance < 15 ? " near" : "");
       } else
-        pos_view_line(v, 1, "%s %um %s", gps.fix ? "GPS" : "No fix", width,
-                      follow ? "follow" : "pan");
+        pos_view_line(v, 1, "%s %um %s P:%.1fm", gps.fix ? "GPS" : "No fix",
+                      width, follow ? "follow" : "pan",
+                      pan_distance(width / 4.0));
       pos_view_line(v, 13, "%.5f %.5f", lat, lon);
       if (s->route) {
         if (gps.fix) {
@@ -401,13 +409,15 @@ static __attribute__((noinline)) void open_map(const char *path) {
             else
               pos_view_line(v, 1, "%s in %um", turns[g.turn], g.next_m);
             pos_view_line(v, 13, "%s", *g.road ? g.road : "Unnamed road");
-            pos_view_line(v, 14, "%um left   Enter: menu", g.remaining_m);
+            pos_view_line(v, 14, "%um P:%.0fm +/- Enter:menu", g.remaining_m,
+                          pan_distance(width / 4.0));
           }
         } else
           pos_view_line(v, 1, "No GPS fix - route saved");
       }
-      if (!s->route)
-        pos_view_line(v, 14, "+/- zoom C:GPS Enter:menu");
+      if (!s->route || !gps.fix)
+        pos_view_line(v, 14, "P:%.1fm +/- C:GPS Enter:menu",
+                      pan_distance(width / 4.0));
       pos_view_line(v, 15, "(c) OpenStreetMap contributors");
       pos_device_show(v);
       refreshed = now;
@@ -422,7 +432,7 @@ static __attribute__((noinline)) void open_map(const char *path) {
       continue;
     if (key == POS_KEY_UP || key == POS_KEY_DOWN || key == POS_KEY_LEFT ||
         key == POS_KEY_RIGHT) {
-      double step = width / 4.0 / 111195.08;
+      double step = pan_distance(width / 4.0) / 111195.08;
       if (key == POS_KEY_UP)
         lat += step;
       if (key == POS_KEY_DOWN)
@@ -435,6 +445,10 @@ static __attribute__((noinline)) void open_map(const char *path) {
       lon = fmax(-179.9, fmin(179.9, lon));
       follow = false;
       redraw = true;
+    }
+    if (key == 'p' || key == 'P') {
+      pan_size = (pan_size + 1) % 3;
+      refreshed = 0; /* Metadata only: changing step needs no SD raster read. */
     }
     if (key == '+' || key == '=' || key == '-') {
       width = key == '-' ? width * 2 : width / 2;
@@ -666,11 +680,14 @@ static void world(const char *root) {
       pos_world_project(gps.latitude, gps.longitude, lat, lon, zoom, &x, &y);
       v->map_gps_x = x;
       v->map_gps_y = y;
-      pos_view_line(v, 1, "%s  %s  %ux", gps.fix ? "GPS" : "Waiting for fix",
-                    follow ? "follow" : "pan", 1u << zoom);
+      pos_view_line(v, 1, "%s %ux P:%.3gdeg",
+                    !gps.fix ? "No fix"
+                    : follow ? "Follow"
+                             : "Pan",
+                    1u << zoom, pan_distance(30. / (1u << zoom)));
       pos_view_line(v, 13, "%.4f %.4f", lat, lon);
-      pos_view_line(v, 14, "Arrows: pan +/-: zoom C: GPS");
-      pos_view_line(v, 15, "0: whole planet Enter: menu");
+      pos_view_line(v, 14, "Arrows:pan +/-:zoom P:step");
+      pos_view_line(v, 15, "C:GPS 0:world Enter:menu");
       pos_device_show(v);
       refreshed = now;
     }
@@ -680,12 +697,16 @@ static void world(const char *root) {
     int key = pos_navigation(&event);
     if (key == POS_KEY_HOME || key == POS_KEY_ESCAPE || key == POS_KEY_ENTER)
       break;
-    double step = 30. / (1u << zoom);
+    double step = pan_distance(30. / (1u << zoom));
     if (key == POS_KEY_LEFT || key == POS_KEY_RIGHT) {
       lon += key == POS_KEY_LEFT ? -step : step;
       lon = fmod(lon + 540., 360.) - 180.;
       follow = false;
       redraw = true;
+    }
+    if (key == 'p' || key == 'P') {
+      pan_size = (pan_size + 1) % 3;
+      refreshed = 0;
     }
     if (key == POS_KEY_UP || key == POS_KEY_DOWN) {
       lat = fmax(-90, fmin(90, lat + (key == POS_KEY_UP ? step : -step)));
@@ -705,6 +726,10 @@ static void world(const char *root) {
       redraw = true;
     }
     if (key == 'c' || key == 'C') {
+      if (gps.fix) {
+        lat = gps.latitude;
+        lon = gps.longitude;
+      }
       follow = true;
       redraw = true;
     }
@@ -746,7 +771,8 @@ void pos_ui_maps(const char *root) {
                     "World overview: Natural Earth, public domain. Regional "
                     "roads: (c) OpenStreetMap contributors. "
                     "https://www.openstreetmap.org/copyright. ODbL 1.0. "
-                    "Downloads use a public Overpass service; availability is "
+                    "Downloads use OpenStreetMap or the selected Overpass "
+                    "service; availability is "
                     "not guaranteed. Raw .osm files remain in POS/Maps. Small "
                     "areas only. Offline routing uses the selected travel mode "
                     "and downloaded restrictions.");

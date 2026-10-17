@@ -1,4 +1,4 @@
-# POS development status — 0.6.7-dev
+# POS development status — 0.6.8-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -29,7 +29,7 @@ layouts and display-off still require physical validation; other peripherals ret
 | BLE/shared transfer | POS peer discovery, encrypted numeric-comparison pairing, accept/reject, chunk ACK/retry, resume, SHA-256 and lost-final-ACK recovery; common local/Wi-Fi/BLE Share entry point | Physical peer interoperability/throughput validation; third-party clients |
 | GPS/LoRa cap | Verified published pins, Semtech driver, shared SPI, UART NMEA location service, Settings detection/enablement panel and GPS-based Maps gate | Actual cap/revision/peripheral coexistence validation |
 | Range test / messaging | Radio messaging, IDs, bounded retries/duplicate suppression, verified SD outbox, opt-in location and range-test CSVs with packet IDs/GPS/RSSI/SNR | Physical range measurements; future coverage visualizations |
-| Maps/navigation | GPS-gated on-device region downloads, direct OSM (500 m) plus selected Overpass services, bounded SD node-reference conversion and explicit HTTP/TLS diagnostics; SD-backed road geometry/names/graph; offline mode-aware road search and shortest-distance A*; walking/cycling/driving access, barriers, one-way and node-via turn rules; conservative conditional/via-way blocking; saved/resumed routes, route overlay, next-turn arrow/road name, GPS progress/off-route/arrival, explicit recalculation | Physical GPS/SD/heap/TLS validation; cross-region routing, Unicode fonts/search, lane/exit guidance and richer OSM/vehicle constraints are further refinements. Old 0.6.3 maps need fresh downloads for routing. See [MAPS.md](MAPS.md) |
+| Maps/navigation | Arrow pan, +/- zoom, shared Fine/Normal/Large pan steps (P), GPS recenter/follow (C), GPS-gated on-device region downloads, direct OSM (500 m) plus selected Overpass services, bounded SD node-reference conversion and explicit HTTP/TLS diagnostics; SD-backed road geometry/names/graph; offline mode-aware road search and shortest-distance A*; walking/cycling/driving access, barriers, one-way and node-via turn rules; conservative conditional/via-way blocking; saved/resumed routes, route overlay, next-turn arrow/road name, GPS progress/off-route/arrival, explicit recalculation | Physical GPS/SD/heap/TLS validation; cross-region routing, Unicode fonts/search, lane/exit guidance and richer OSM/vehicle constraints are further refinements. Old 0.6.3 maps need fresh downloads for routing. See [MAPS.md](MAPS.md) |
 | Recorder / IR / IMU | Dedicated streamed PCM WAV Recorder, interrupted WAV recovery, Files-only Audio Player; shared ES8311 microphone with a dedicated capture task and 64,000-byte/two-second mono buffer (32,000-byte fallback), pre-capture WAV creation, right-slot extraction, saturated 8x PCM gain, codec readback and saved live integer 1x–4096x gain and a clean themed mono meter, BMI270 configuration/scaled readings and 38 kHz NEC IR transmit; Settings screens | User confirms the 0.5.8-dev microphone works; new gain/UI changes need retesting. Microphone channel/gain/timing, IMU orientation/calibration and IR waveform validation; no built-in IR receiver |
 | Developer tools / wireless deploy | `posctl flash` with matching verified factory backup/readback; streamed `files`; temporary LAN `deploy` requests through the signed HTTPS updater, target/build-bound evidence checks and boot confirmation polling | Recovery/OTA physical tests must pass before firmware deployment; manually reopen a temporary session after reboot for verification. No always-on deployment server |
 
@@ -86,3 +86,13 @@ numeric microphone gain, the streamed GPS-centered world overview and removal of
 the old Wi-Fi passphrase/import UI. These software checks do not replace physical
 Cardputer/TLS/GPS/SD or interruption validation. See [MAPS.md](MAPS.md),
 [release notes](RELEASE.md) and [bug report](BUG_REPORT_0.6.7.md).
+
+## 0.6.8-dev map controls
+
+Both map views retain arrow-key pan and +/- zoom. P cycles Normal → Large → Fine
+→ Normal and displays the distance per key press (meters for regional maps,
+degrees for the world overview). Steps scale with zoom, stay shared across both
+views during this boot, and reset to Normal after reboot. P refreshes labels
+without rebuilding the map raster. Arrow movement pauses GPS follow; C recenters
+on a current fix and resumes follow. World C now recenters even when the previous
+offset was smaller than one display pixel. See [MAPS.md](MAPS.md).

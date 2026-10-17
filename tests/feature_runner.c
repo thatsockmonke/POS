@@ -22,12 +22,19 @@
 #include <assert.h>
 #include <dirent.h>
 #include <limits.h>
+#include <math.h>
 #include <signal.h>
 #include <sys/resource.h>
 #include <time.h>
 
 uint32_t esp_random(void) { return 0x13572468u; }
 static bool maps_download_test, maps_guidance_seen, maps_turn_seen;
+static bool map_controls_record;
+static struct {
+  double lat, lon, step;
+  unsigned generation;
+} map_frames[64];
+static unsigned map_frame_count;
 static pos_event_t ui_events[512];
 static unsigned ui_next, ui_count, ui_frames;
 static bool secret_leaked, notice_tail_seen, selection_seen;
@@ -241,9 +248,25 @@ void pos_device_show(const pos_view_t *view) {
     assert(!strstr(view->lines[row], "Old vault passphrase"));
     assert(!strstr(view->lines[row], "Import old saved networks"));
   }
-  if (view->map_world && view->map_fix) {
+  if (view->map_world && view->map_fix &&
+      !strncmp(view->lines[1], "Follow", 6)) {
     assert(view->map_gps_x == 120 && view->map_gps_y == 44);
     assert(pos_view_pixel(view, 123, 54) == 0xf911); /* Pink GPS pin head. */
+  }
+  if (map_controls_record && view->map_pixels) {
+    double lat, lon, step;
+    const char *p = strstr(view->lines[1], "P:");
+    assert(p && sscanf(p + 2, "%lf", &step) == 1);
+    assert(sscanf(view->lines[13], "%lf %lf", &lat, &lon) == 2);
+    if (!map_frame_count ||
+        map_frames[map_frame_count - 1].generation != view->map_generation ||
+        map_frames[map_frame_count - 1].step != step) {
+      assert(map_frame_count < 64);
+      map_frames[map_frame_count].lat = lat;
+      map_frames[map_frame_count].lon = lon;
+      map_frames[map_frame_count].step = step;
+      map_frames[map_frame_count++].generation = view->map_generation;
+    }
   }
   if (!strcmp(view->lines[0], "Recorder")) {
     if (view->visual == POS_VISUAL_MIC)
@@ -1342,7 +1365,67 @@ static int core_tests(void) {
   return 0;
 }
 
+static void map_controls(const char *root, bool world) {
+  fake_expansion.gps_detected = fake_expansion.maps_available =
+      fake_expansion.location.fix = true;
+  double lat = 34.0505, lon = -118.2475;
+  fake_expansion.location.latitude = lat;
+  fake_expansion.location.longitude = lon;
+  map_controls_record = true;
+  if (!world) {
+    for (unsigned i = 0; i < 4; ++i)
+      push_key(POS_KEY_UP, 0);
+    choose(0); /* Saved regions */
+  }
+  choose(0); /* World or first saved region */
+  idle_event();
+  const int keys[] = {
+      POS_KEY_RIGHT, 'p', POS_KEY_RIGHT, 'P', POS_KEY_LEFT, POS_KEY_UP,
+      POS_KEY_DOWN,  '+', POS_KEY_RIGHT, '=', '-'};
+  for (unsigned i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
+    push_key(keys[i], 0);
+    idle_event();
+  }
+  if (world) {
+    push_key('0', 0);
+    idle_event();
+  }
+  push_key('c', 0);
+  idle_event();
+  push_key('p', 0); /* Wrap Fine back to Normal. */
+  idle_event();
+  push_key(POS_KEY_HOME, 0);
+  pos_ui_maps(root);
+  assert(ui_next == ui_count && pos_home_pending() && !ui_last.map_pixels);
+  assert(map_frame_count == (world ? 15u : 14u));
+  double normal = world ? 30 : 250;
+  double factor =
+      world ? 1 : 1 / (111195.08 * cos(lat * 3.14159265358979323846 / 180));
+  double lat_step = world ? 7.5 : 62.5 / 111195.08;
+  const double dx[] = {0, 1, 1, 3, 3, 2.75, 2.75, 2.75, 2.75, 2.875};
+  for (unsigned i = 0; i < 10; ++i) {
+    assert(fabs(map_frames[i].lon - (lon + normal * factor * dx[i])) < .00006);
+    assert(fabs(map_frames[i].lat - (lat + (i == 6 ? lat_step : 0))) < .00006);
+  }
+  double expected[] = {normal,     normal,     normal * 2,  normal * 2,
+                       normal / 4, normal / 4, normal / 4,  normal / 4,
+                       normal / 8, normal / 8, normal / 16, normal / 8};
+  for (unsigned i = 0; i < 12; ++i)
+    assert(fabs(map_frames[i].step - expected[i]) < .051);
+  assert(map_frames[1].generation == map_frames[2].generation);
+  assert(map_frames[3].generation == map_frames[4].generation);
+  unsigned last = map_frame_count - 1;
+  assert(fabs(map_frames[last].lat - lat) < .00006);
+  assert(fabs(map_frames[last].lon - lon) < .00006);
+  assert(fabs(map_frames[last].step - (world ? normal : normal / 2)) < .051);
+  assert(map_frames[last].generation == map_frames[last - 1].generation);
+}
 static int apps_ui(const char *root, const char *mode) {
+  if (!strcmp(mode, "maps-ui-world-controls") ||
+      !strcmp(mode, "maps-ui-regional-controls")) {
+    map_controls(root, !strcmp(mode, "maps-ui-world-controls"));
+    return 0;
+  }
   if (!strcmp(mode, "maps-ui-missing")) {
     push_key(POS_KEY_ENTER, 0);
     pos_ui_maps(root);
