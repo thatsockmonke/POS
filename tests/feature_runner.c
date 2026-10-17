@@ -161,8 +161,10 @@ int pos_ble_send(const char *relative, pos_io_progress_t progress, void *ctx,
   assert(relative && *relative);
   return 0;
 }
+static unsigned fake_gain = 8;
 static bool microphone_ended, microphone_tail_enabled, microphone_silent;
 static bool mic_quiet_meter_seen, mic_silence_seen;
+static unsigned folder_hint_seen;
 static unsigned microphone_tail_frames;
 static const char *microphone_test_root;
 static unsigned brightness_applied;
@@ -231,11 +233,19 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout) {
 void pos_device_show(const pos_view_t *view) {
   assert(!display_hidden);
   if (!strcmp(view->lines[0], "Recorder")) {
-    if (strstr(view->lines[8], "0.7%") &&
-        strstr(view->lines[9], "Raw L:0 R:32"))
+    if (view->visual == POS_VISUAL_MIC && strstr(view->lines[12], "0.7%"))
       mic_quiet_meter_seen = true;
-    if (!strcmp(view->lines[2], "No input detected"))
+    if (!strcmp(view->lines[1], "No input detected"))
       mic_silence_seen = true;
+  }
+  if (view->visual == POS_VISUAL_FILES) {
+    const char *names[] = {"Documents", "Music", "Pictures", "Mixed", "Links"};
+    const unsigned kinds[] = {POS_ICON_DOCUMENT, POS_ICON_AUDIO, POS_ICON_IMAGE,
+                              POS_ICON_MIXED, POS_ICON_FOLDER};
+    for (unsigned i = 0; i < 5; ++i)
+      if (!strcmp(view->lines[2], names[i]) &&
+          view->visual_icons[1] == (128 | kinds[i]))
+        folder_hint_seen |= 1u << i;
   }
   if (display_off_count && !strcmp(view->lines[0], "System")) {
     assert(view->selected_row == 6); /* Turn display off remains selected. */
@@ -270,7 +280,7 @@ void pos_device_show(const pos_view_t *view) {
     ++picker_frames;
     picker_last = *view;
   }
-  if (view->tiles && strstr(view->lines[14], "PREVIEW"))
+  if (view->visual == POS_VISUAL_STRIPES)
     background_preview_seen = true;
   if (!strcmp(view->lines[0], "Display name not valid"))
     display_error = true;
@@ -814,33 +824,27 @@ static int background_tests(const char *root, const char *mode) {
   (void)pos_settings_load(root, &settings);
   pos_settings_t before = settings;
   ui_next = ui_count = 0;
-  push_key(POS_KEY_ENTER, 0);
-  replace_field(!strcmp(mode, "background-invalid-count") ? "0" : "4");
   if (!strcmp(mode, "background-invalid-count")) {
-    push_key(POS_KEY_ENTER, 0); /* dismiss invalid count */
+    for (unsigned i = 0; i < 15; ++i)
+      push_key(POS_KEY_LEFT, 0);
     push_key(POS_KEY_ESCAPE, 0);
   } else {
-    push_key(POS_KEY_DOWN, 0);
-    push_key(POS_KEY_ENTER, 0); /* first stripe */
+    push_key(POS_KEY_RIGHT, 0); /* Add a fourth stripe in the live canvas. */
+    push_key(POS_KEY_ENTER, 0);
     push_key(POS_KEY_RIGHT, 0);
     push_key(POS_KEY_DOWN, 0);
     push_key('e', 0);
     push_key(POS_KEY_UP, POS_MOD_SHIFT);
-    if (!strcmp(mode, "background-home")) {
+    if (!strcmp(mode, "background-home"))
       push_key(POS_KEY_HOME, 0);
-    } else {
-      push_key(POS_KEY_ENTER, 0); /* accept color */
-      if (!strcmp(mode, "background-cancel")) {
+    else {
+      push_key(POS_KEY_ENTER, 0);
+      if (!strcmp(mode, "background-cancel"))
         push_key(POS_KEY_ESCAPE, 0);
-      } else {
-        for (unsigned i = 0; i < 4; ++i)
-          push_key(POS_KEY_DOWN, 0);
-        push_key(POS_KEY_ENTER, 0); /* preview at index 5 */
-        push_key(POS_KEY_ENTER, 0); /* return to editor */
-        push_key(POS_KEY_DOWN, 0);
-        push_key(POS_KEY_ENTER, 0); /* Save & Apply */
+      else {
+        push_key('s', 0);
         if (!strcmp(mode, "background-save-failure")) {
-          push_key(POS_KEY_ENTER, 0); /* save error */
+          push_key(POS_KEY_ENTER, 0);
           push_key(POS_KEY_ESCAPE, 0);
         }
       }
@@ -1174,6 +1178,27 @@ static int apps_ui(const char *root, const char *mode) {
     assert(!strcmp(ui_last.lines[0], "Audio Player"));
     return 0;
   }
+  if (!strcmp(mode, "recorder-ui-gain")) {
+    pos_settings_t settings;
+    pos_settings_defaults(&settings);
+    pos_ui_set_theme(&settings.background);
+    choose(1); /* Gain menu starts at saved default 8x. */
+    push_key(POS_KEY_RIGHT, 0);
+    push_key(POS_KEY_RIGHT, 0);
+    push_key(POS_KEY_ENTER, 0); /* 32x */
+    push_key(POS_KEY_ENTER, 0); /* Start */
+    idle_event();
+    push_key(POS_KEY_RIGHT, 0);
+    idle_event(); /* Live 64x */
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_recorder(root, &settings);
+    assert(settings.microphone_gain == 64 && fake_gain == 64);
+    pos_settings_t loaded;
+    assert(!pos_settings_load(root, &loaded));
+    assert(loaded.microphone_gain == 64 && loaded.brightness == 70);
+    assert(pos_home_pending() && microphone_stops);
+    return 0;
+  }
   if (!strcmp(mode, "recorder-ui-home") || !strcmp(mode, "recorder-ui-tail") ||
       !strcmp(mode, "recorder-ui-silent")) {
     microphone_test_root = root;
@@ -1184,7 +1209,9 @@ static int apps_ui(const char *root, const char *mode) {
     for (unsigned i = 0; i < reads; ++i)
       idle_event();
     push_key(POS_KEY_HOME, 0);
-    pos_ui_recorder(root);
+    pos_settings_t recorder_settings;
+    pos_settings_defaults(&recorder_settings);
+    pos_ui_recorder(root, &recorder_settings);
     assert(microphone_starts == 1 && microphone_reads == reads &&
            microphone_stops && pos_home_pending());
     char file[POS_FS_PATH];
@@ -1210,6 +1237,14 @@ static int apps_ui(const char *root, const char *mode) {
       assert(audio_writes >= 2 && audio_stops >= 2);
     return 0;
   }
+  if (!strcmp(mode, "files-ui-icons")) {
+    for (unsigned i = 0; i < 15; ++i)
+      push_key(POS_KEY_RIGHT, 0);
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_files(root);
+    assert(folder_hint_seen == 31 && pos_home_pending());
+    return 0;
+  }
   if (!strncmp(mode, "files-ui-", 9)) {
     char folder[POS_FS_PATH];
     pos_fs_join(folder, root, "POS/Users/Owner");
@@ -1226,8 +1261,8 @@ static int apps_ui(const char *root, const char *mode) {
         ++at;
       }
     closedir(directory);
-    keys_down(file_index);
-    push_key(POS_KEY_ENTER, 0);
+    keys_down(file_index - 4);
+    push_key(' ', 0);
     if (!strcmp(mode, "files-ui-delete-cancel")) {
       keys_down(6);
       push_key(POS_KEY_ENTER, 0);
@@ -1240,10 +1275,10 @@ static int apps_ui(const char *root, const char *mode) {
     keys_down(strstr(mode, "cut") ? 2 : 1);
     push_key(POS_KEY_ENTER, 0);
     push_key(POS_KEY_ENTER, 0);
-    keys_down(directory_index);
+    keys_down(directory_index - 4);
     push_key(POS_KEY_ENTER, 0);
-    push_key(POS_KEY_ENTER, 0);
-    keys_down(3);
+    push_key(POS_KEY_UP, 0); /* Empty folder starts on Folder actions. */
+    push_key(POS_KEY_DOWN, 0);
     push_key(POS_KEY_ENTER, 0);
     keys_down(1);
     push_key(POS_KEY_ENTER, 0);
@@ -1434,6 +1469,8 @@ int main(int argc, char **argv) {
       cJSON_AddStringToObject(json, "name", settings.display_name);
       cJSON_AddNumberToObject(json, "generation", settings.generation);
       cJSON_AddNumberToObject(json, "brightness", settings.brightness);
+      cJSON_AddNumberToObject(json, "microphone_gain",
+                              settings.microphone_gain);
       cJSON *colors = cJSON_AddArrayToObject(json, "background");
       for (unsigned i = 0; i < settings.background.count; ++i)
         cJSON_AddItemToArray(colors,
@@ -1481,6 +1518,10 @@ int main(int argc, char **argv) {
 }
 
 void pos_ui_deploy(const char *root) { (void)root; }
+int pos_microphone_set_gain(unsigned gain) {
+  fake_gain = gain;
+  return 0;
+}
 int pos_microphone_start(pos_error_t *e) {
   (void)e;
   if (microphone_test_root) {

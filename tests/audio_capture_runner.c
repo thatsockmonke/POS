@@ -25,7 +25,7 @@ static bool worker_created, fail_alloc, fail_task, enabled, receiving;
 static bool fail_config, fail_readback;
 static uint8_t codec[256];
 enum { RIGHT_SIGNAL, LEFT_SIGNAL, SILENT, EXTREMES };
-static unsigned signal_mode;
+static unsigned signal_mode, reference_gain = 8;
 static int16_t raw_sample(unsigned index) {
   static const int16_t extremes[] = {0,     1,     -1,    4095,  4096,
                                      -4096, -4097, 32767, -32768};
@@ -34,11 +34,12 @@ static int16_t raw_sample(unsigned index) {
 }
 static int16_t expected_sample(unsigned index) {
   int raw = raw_sample(index);
-  if (raw > 4095)
+  int amplified = raw * (int)reference_gain;
+  if (amplified > 32767)
     return 32767;
-  if (raw < -4096)
+  if (amplified < -32768)
     return -32768;
-  return (int16_t)(raw * 8);
+  return (int16_t)amplified;
 }
 static atomic_uint blocks;
 static atomic_bool fail_read;
@@ -309,6 +310,49 @@ int main(void) {
   assert(strstr(e.message, "readback"));
   fail_readback = false;
   assert(!allocated && !channels && !enabled);
+  /* Gain changes alter captured PCM, including at quiet levels and limits. */
+  for (unsigned gain = 1; gain <= 64; gain *= 2) {
+    reference_gain = gain;
+    assert(!pos_microphone_set_gain(gain));
+    signal_mode = EXTREMES;
+    sample = 0;
+    atomic_store(&blocks, 0);
+    assert(!pos_microphone_start(&e));
+    wait_blocks(1);
+    assert(!pos_microphone_read(mono, 256, &frames, &e));
+    for (size_t j = 0; j < frames; ++j)
+      assert(mono[j] == expected_sample(63 * 256 + j));
+    pos_microphone_stop();
+    assert(!allocated && !channels && !enabled);
+  }
+  /* A control change while I2S is running reaches the PCM producer. */
+  signal_mode = RIGHT_SIGNAL;
+  sample = 0;
+  atomic_store(&blocks, 0);
+  assert(!pos_microphone_set_gain(1));
+  assert(!pos_microphone_start(&e));
+  wait_blocks(1);
+  assert(!pos_microphone_read(mono, 256, &frames, &e));
+  for (size_t i = 0; i < frames; ++i)
+    assert(mono[i] >= -128 && mono[i] <= 128);
+  unsigned before = atomic_load(&blocks);
+  assert(!pos_microphone_set_gain(64));
+  wait_blocks(before + 3);
+  pos_microphone_end();
+  bool amplified = false;
+  do {
+    assert(!pos_microphone_read(mono, 256, &frames, &e));
+    for (size_t i = 0; i < frames; ++i)
+      amplified |= mono[i] > 1024 || mono[i] < -1024;
+  } while (frames);
+  assert(amplified);
+  pos_microphone_stop();
+  assert(!allocated && !channels && !enabled);
+  assert(pos_microphone_set_gain(0) && pos_microphone_set_gain(3) &&
+         pos_microphone_set_gain(65));
+  assert(!pos_microphone_set_gain(8));
+  reference_gain = 8;
+  signal_mode = RIGHT_SIGNAL;
   /* A prolonged storage stall is reported, never silently dropped. */
   atomic_store(&blocks, 0);
   assert(!pos_microphone_start(&e));

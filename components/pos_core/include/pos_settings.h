@@ -8,6 +8,8 @@ typedef struct {
   char device_name[25];
   char timezone[64];
   uint8_t brightness;
+  uint8_t
+      microphone_gain; /* 1x-64x, powers of two; format 1/2 default to 8x. */
   bool setup_complete;
   uint32_t generation;
   pos_background_t background;

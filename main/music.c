@@ -173,27 +173,20 @@ static void player(const char *root, const char *initial, const char *playlist,
         const char *name = strrchr(track, '/');
         name = name ? name + 1 : track;
         pos_view_line(&view, 2, "%.30s", name);
-        pos_view_line(&view, 4, "%s  %llu:%02llu",
-                      paused ? "Paused" : "Playing",
-                      (unsigned long long)(seconds / 60),
-                      (unsigned long long)(seconds % 60));
-        pos_view_line(&view, 6, "Progress: %u%%",
-                      status.total_bytes ? (unsigned)((uint64_t)status.bytes *
-                                                      100 / status.total_bytes)
-                                         : 0);
-        if (single)
-          pos_view_line(&view, 7, "Volume: %u%%", volume);
-        else
-          pos_view_line(&view, 7, "Volume: %u%%  Shuffle:%s", volume,
-                        shuffle ? "on" : "off");
-        pos_view_line(&view, 9, "%u Hz / %u channels", status.rate,
-                      status.channels);
-        pos_view_line(&view, 11, "Space:pause  L/R:prev/next");
-        pos_view_line(&view, 12,
-                      single ? "Up/Down:volume  End:stop"
-                             : "Up/Down:volume  R:shuffle");
-        pos_view_line(&view, 13, "P:playlist  H:help");
-        pos_view_line(&view, 15, "Esc:stop Fn+Space:close");
+        pos_ui_style(&view);
+        view.visual = POS_VISUAL_MUSIC;
+        view.visual_motion = (int)(seconds & 7);
+        view.visual_level = status.total_bytes ? (uint64_t)status.bytes * 1000 /
+                                                     status.total_bytes
+                                               : 0;
+        pos_view_line(
+            &view, 3, "%s  %llu:%02llu", paused ? "Paused" : "Playing",
+            (unsigned long long)seconds / 60, (unsigned long long)seconds % 60);
+        pos_view_line(&view, 11, "%11sVol %u%% %s", "", volume,
+                      !single && shuffle ? "Shuffle" : "");
+        pos_view_line(&view, 13, "Space:pause   U/D:volume");
+        pos_view_line(&view, 14, "L/R:track   P:playlist H:help");
+        pos_view_line(&view, 15, "Esc:back  Fn+':close G0:home");
         pos_device_show(&view);
         last_frame = seconds;
       }

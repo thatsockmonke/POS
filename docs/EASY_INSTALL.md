@@ -8,7 +8,7 @@ manual flash addresses or an understanding of partitions.
 
 ## Start here
 
-1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.8-dev).
+1. Open the [current POS release](https://github.com/thatsockmonke/POS/releases/tag/v0.5.9-dev).
 2. Download **`pos-setup`**. This is the executable wizard, not the Source code ZIP.
    Its optional `pos-setup.sha256` checksum is beside it. The complete POS ZIP
    also includes a copy of the wizard.
@@ -203,7 +203,7 @@ installs the already-prepared 0.5.5-dev software; formatting/re-copying is unnec
 ### Upgrading the prepared installer after the upside-down-screen fix
 
 The display/keyboard fix was introduced in **both 0.5.5-dev firmware roles**
-and is included in 0.5.8-dev. Refresh the
+and is included in 0.5.9-dev. Refresh the
 SD package as well as the USB installer; using `--release v0.5.3-dev` would keep
 installing the old firmware.
 
@@ -214,7 +214,7 @@ If the card has only the old installer files and you have **not installed POS**:
    **pos-install-old** (or another unused name). Keep the old files; formatting
    is unnecessary. Preserve any `pos-install.copying` folder under another name too.
 3. Download this release's **pos-setup**, replace the old executable and run it
-   with `--release v0.5.8-dev`. Choose **2. Prepare the microSD only** and select
+   with `--release v0.5.9-dev`. Choose **2. Prepare the microSD only** and select
    the card's shared top-level folder. It copies and verifies the matching package.
 4. Eject the card, put it into the powered-off ADV, connect the ADV and share its
    USB connection with Linux. Run the same command and choose **3. Flash Cardputer
@@ -230,7 +230,7 @@ With the paths used in the reported Crostini session, run:
 
 ```sh
 chmod +x "/mnt/shared/MyFiles/Downloads/pos-setup"
-"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.5.8-dev --sd-folder "/mnt/shared/removable/POS Drive"
+"/mnt/shared/MyFiles/Downloads/pos-setup" --release v0.5.9-dev --sd-folder "/mnt/shared/removable/POS Drive"
 ```
 
 If the card already contains an installed **/POS** tree, keep it and your files.
@@ -242,8 +242,8 @@ Optional commands for troubleshooting:
 
 ```sh
 ~/pos-setup --download-only                 # Download/verify without device changes
-~/pos-setup --release v0.5.8-dev             # Use a specific published version
-~/pos-setup --bundle /path/pos-0.5.8-dev.zip # Use a ZIP and matching .sha256 offline
+~/pos-setup --release v0.5.9-dev             # Use a specific published version
+~/pos-setup --bundle /path/pos-0.5.9-dev.zip # Use a ZIP and matching .sha256 offline
 ~/pos-setup --sd-folder '/mnt/chromeos/removable/YOUR CARD'
 ```
 
@@ -295,18 +295,46 @@ relying on it for an important recording.
 
 ## Silent microphone / 0% peak
 
-The 0.5.8-dev fix selects the **right** I2S channel used by M5Stack's ADV
-microphone profile; older POS saved only the left. It also applies the stock
-path's effective 8x PCM gain with saturation, checks stable codec register
-readback, and displays peak percentage to one decimal place. Update through
-**Settings → System / software update → Software Update → Check for Updates**.
-No SD formatting or USB factory restore is required for this runtime update.
+0.5.8-dev corrected the I2S channel selection, and the user confirms microphone
+input works. Current Recorder screens use one mono meter. If speech is too quiet,
+use Microphone gain below, then stop and play the new WAV from Files. **No input
+detected** means repeated zero samples, not merely a quiet percentage. Report the
+installed version and level if it remains silent. A file containing only zeros
+cannot have missing speech reconstructed. The temporary raw L/R readout in
+0.5.8-dev is no longer part of the normal Recorder screen.
 
-Open Recorder and make a short recording while speaking near the microphone.
-**Raw L / R** are raw input peaks before gain; **R** feeds the recording. A quiet
-signal may be below 1%, so a whole-number 0% was not sufficient evidence of no
-input. After repeated genuinely zero readouts, **No input detected** appears;
-it is a nonfatal warning and never inserts fake audio. If both raw values stay
-zero while you speak, report those values and the installed POS version. Stop,
-then open the new WAV in Files → Play in Audio Player to check actual audio.
-Saved files that contain only zeros cannot have missing speech reconstructed.
+## Microphone gain and visual controls (0.5.9-dev)
+
+The user confirmed microphone input works in 0.5.8-dev. If normal speech is too
+quiet, open **Recorder → Microphone gain**. Choose 1x, 2x, 4x, 8x (the existing
+default), 16x, 32x or 64x. Try **32x** first. During recording, **Left/Right**
+changes gain live. Higher gain amplifies both speech and background noise. Lower
+it if **Clipping - lower gain** appears. This is digital PCM gain; it does not
+change the analog codec profile. Your preference is saved after capture stops.
+
+The Recorder now shows one mono microphone, one level bar, a percentage and gain.
+The icon/bar use your wallpaper stripe colors. Raw L/R are not shown in normal
+Recorder screens. **Space** pauses/resumes; **Enter/Escape** stops and saves.
+**Fn + apostrophe**, **Fn+Space** or a short **G0** press saves/closes the app.
+Keep G0 brief; holding it still requests recovery. New layouts and timing need a
+physical usability test on your device.
+
+**Background:** Up/Down selects a stripe, which briefly flashes white. Enter opens
+its color picker. Left/Right changes stripe count (1–12), **P** restores the pan
+preset to the draft, **S** saves, and Escape cancels. The draft is visible directly;
+there is no separate Preview button. Color picker controls remain arrows, Q/E for
+hue, Shift for fine steps, Enter to accept, Escape to cancel that color change.
+
+**Files:** arrows move across icon cards; Enter opens folders, audio and text documents directly; Space opens the action
+menu. Folder icons hint at documents, audio, images or mixed contents, inspecting
+at most 24 immediate entries without loading file data or following symlinks.
+Parent, Previous, Next and Folder actions cards retain the existing operations.
+
+**Counter:** Enter, Space or Up adds one; Down subtracts one. The red button
+squishes and the number jumps, with the value saved on close. Music/Audio Player
+have a themed disc/progress display; existing playback controls remain.
+
+The launcher springs between icons, zooms/fades to black on opening and fades
+back to the selected icon on return. Motion is bounded, skips missed frames on
+slow renders, and retains one foreground app. The display streams scanlines;
+these changes do not allocate a whole-screen framebuffer.

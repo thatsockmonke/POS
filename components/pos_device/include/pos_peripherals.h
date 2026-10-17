@@ -29,6 +29,8 @@ void pos_expansion_stop(void);
 #include "pos_instruments.h"
 /* Audio is exclusive: microphone and speaker cannot run together. */
 int pos_microphone_start(pos_error_t *);
+/* Live digital PCM gain, 1/2/4/8/16/32/64; does not write flash. */
+int pos_microphone_set_gain(unsigned gain);
 int pos_microphone_read(int16_t *mono,size_t capacity,size_t *frames,pos_error_t *);
 /* Stop acquisition, retaining queued PCM. Read until frames == 0, then stop
  * to free the channel/buffer. This preserves the tail on pause and save. */

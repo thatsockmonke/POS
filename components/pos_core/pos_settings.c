@@ -16,6 +16,7 @@ void pos_settings_defaults(pos_settings_t *s) {
   strcpy(s->device_name, "PANPUTER");
   strcpy(s->timezone, "UTC0");
   s->brightness = 70;
+  s->microphone_gain = 8;
   pos_background_defaults(&s->background);
 }
 
@@ -40,7 +41,9 @@ bool pos_settings_valid(const pos_settings_t *s) {
   if (!pos_settings_display_name_valid(s->display_name) ||
       !pos_settings_device_name_valid(s->device_name) ||
       !memchr(s->timezone, 0, sizeof(s->timezone)) || !*s->timezone ||
-      s->brightness < 10 || s->brightness > 100 ||
+      s->brightness < 10 || s->brightness > 100 || !s->microphone_gain ||
+      s->microphone_gain > 64 ||
+      (s->microphone_gain & (s->microphone_gain - 1)) ||
       !pos_background_valid(&s->background))
     return false;
   for (const char *p = s->timezone; *p; ++p)
@@ -89,7 +92,8 @@ int pos_settings_decode(const char *buffer, size_t n, pos_settings_t *s) {
   cJSON *format = cJSON_GetObjectItemCaseSensitive(j, "format"),
         *generation = cJSON_GetObjectItemCaseSensitive(j, "generation");
   if (!cJSON_IsNumber(format) ||
-      (format->valuedouble != 1 && format->valuedouble != 2)) {
+      (format->valuedouble != 1 && format->valuedouble != 2 &&
+       format->valuedouble != 3)) {
     result = -2;
     cJSON_Delete(j);
     goto done;
@@ -99,8 +103,11 @@ int pos_settings_decode(const char *buffer, size_t n, pos_settings_t *s) {
   cJSON *bright = cJSON_GetObjectItemCaseSensitive(j, "brightness"),
         *complete = cJSON_GetObjectItemCaseSensitive(j, "setup_complete");
   bool legacy = format->valuedouble == 1;
-  if (cJSON_GetArraySize(j) != (legacy ? 7 : 8) || !name ||
-      strlen(name) >= sizeof(s->display_name) || !device ||
+  bool gain_format = format->valuedouble == 3;
+  if (cJSON_GetArraySize(j) != (legacy        ? 7
+                                : gain_format ? 9
+                                              : 8) ||
+      !name || strlen(name) >= sizeof(s->display_name) || !device ||
       strlen(device) >= sizeof(s->device_name) || !tz ||
       strlen(tz) >= sizeof(s->timezone) || !cJSON_IsNumber(generation) ||
       generation->valuedouble < 1 || generation->valuedouble > UINT32_MAX ||
@@ -117,6 +124,16 @@ int pos_settings_decode(const char *buffer, size_t n, pos_settings_t *s) {
   strcpy(s->device_name, device);
   strcpy(s->timezone, tz);
   s->brightness = bright->valueint;
+  s->microphone_gain = 8;
+  if (gain_format) {
+    cJSON *gain = cJSON_GetObjectItemCaseSensitive(j, "microphone_gain");
+    if (!cJSON_IsNumber(gain) || gain->valuedouble < 1 ||
+        gain->valuedouble > 64 || gain->valuedouble != gain->valueint) {
+      cJSON_Delete(j);
+      goto done;
+    }
+    s->microphone_gain = gain->valueint;
+  }
   s->generation = (uint32_t)generation->valuedouble;
   s->setup_complete = cJSON_IsTrue(complete);
   pos_background_defaults(&s->background);
@@ -169,12 +186,13 @@ int pos_settings_save(const char *root, pos_settings_t *s) {
   cJSON *j = cJSON_CreateObject();
   if (!j)
     return -1;
-  cJSON_AddNumberToObject(j, "format", 2);
+  cJSON_AddNumberToObject(j, "format", 3);
   cJSON_AddNumberToObject(j, "generation", generation);
   cJSON_AddStringToObject(j, "display_name", s->display_name);
   cJSON_AddStringToObject(j, "device_name", s->device_name);
   cJSON_AddStringToObject(j, "timezone", s->timezone);
   cJSON_AddNumberToObject(j, "brightness", s->brightness);
+  cJSON_AddNumberToObject(j, "microphone_gain", s->microphone_gain);
   cJSON_AddBoolToObject(j, "setup_complete", s->setup_complete);
   cJSON *colors = cJSON_AddArrayToObject(j, "background");
   if (!colors) {

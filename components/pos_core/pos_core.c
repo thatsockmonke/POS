@@ -44,7 +44,8 @@ bool pos_keyboard_decode(pos_keyboard_t *k, uint8_t raw, pos_event_t *event) {
       (k->held[29] ? POS_MOD_SHIFT : 0) | (k->held[42] ? POS_MOD_CTRL : 0) |
       (k->held[28] ? POS_MOD_FN : 0) | (k->held[44] ? POS_MOD_ALT : 0) |
       (k->held[43] ? POS_MOD_META : 0);
-  bool home = k->held[28] && k->held[55]; /* Fn+Space, reserved globally */
+  bool home = k->held[28] &&
+              (k->held[55] || k->held[40]); /* Fn+Space, reserved globally */
   if (home && !k->home_held) {
     k->home_held = true;
     *event = (pos_event_t){POS_KEY_HOME, mods, true};
@@ -60,7 +61,7 @@ bool pos_keyboard_decode(pos_keyboard_t *k, uint8_t raw, pos_event_t *event) {
     return true;
   }
   int key = normal[y][x];
-  if (!key || (home && index == 55))
+  if (!key || (home && (index == 55 || index == 40)))
     return false;
   if (mods & POS_MOD_FN) {
     if (index == 0)
@@ -123,7 +124,9 @@ int pos_core_close(pos_core_t *core) {
 }
 
 int pos_core_open(pos_core_t *core, const pos_app_t *app) {
-  if (!app || !app->render || (app->available&&!app->available(core->services)) || pos_core_close(core))
+  if (!app || !app->render ||
+      (app->available && !app->available(core->services)) ||
+      pos_core_close(core))
     return -1;
   void *state = calloc(1, app->state_size ? app->state_size : 1);
   if (!state)

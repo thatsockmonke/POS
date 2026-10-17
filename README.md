@@ -4,14 +4,20 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**0.5.8-dev corrects the microphone's I2S channel and recording gain.** The
-stock ADV microphone selects the right channel; POS previously discarded it and
-saved only the left. Capture now uses the right channel with bounded 8x PCM gain,
-checks the codec's clock/ADC registers, and shows decimal peak levels plus raw
-left/right peaks. An all-zero input is labelled instead of being confused with a
-quiet signal rounded to 0%. The buffered capture and manual **Turn display off**
-option remain. The user reports that buffering stopped the overrun in 0.5.7-dev;
-the new input correction still requires a physical recording/playback check.
+**0.5.9-dev adds saved microphone gain and a visual, animated UI pass.**
+Recorder has a single microphone/level meter colored from your wallpaper and
+1x–64x gain, adjustable with Left/Right while recording. The launcher springs
+between apps, zooms/fades on opening and reverses the motion on return. Fn +
+apostrophe and short G0 close to the launcher; Fn+Space remains available.
+Background edits stripes directly, Files shows content-hint folder cards, Counter
+has a squishy red button and jumping count, and Music has a disc/progress view.
+The user confirms the 0.5.8-dev microphone records sound; gain, motion and the new
+layouts still need a physical usability/performance check.
+
+[Animated UI preview](downloads/0.5.9-dev/ui-animation.png) · [Recorder](downloads/0.5.9-dev/recorder.png) · [Files](downloads/0.5.9-dev/files.png) · [Background](downloads/0.5.9-dev/background.png) · [Counter](downloads/0.5.9-dev/counter.png)
+
+Previews use the actual portable renderer with example state; they are not
+hardware recordings or device frame-rate measurements.
 
 ## Download and install
 
@@ -56,7 +62,7 @@ Implemented:
 - A fifteen-app horizontal launcher with black icons outlined in white, streamed from SD.
   Left/Right moves the ribbon; Up or Enter opens the centered app. Only one foreground app runs.
 - Background app: 1-12 horizontal stripes, visual arrow-key color picker, Q/E hue,
-  Shift fine adjustments, launcher preview and explicit Save & Apply.
+  Shift fine adjustments, a live striped canvas and S to save.
   Backgrounds survive restarts, settings changes and verified backup/restore.
 - Central input routing, protected Home shortcut, and a separate input supervisor.
 - One foreground application with initialize/foreground/event/update/render/save/
@@ -123,14 +129,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.5.8-dev/launcher.png)
-![Color picker](downloads/0.5.8-dev/color-picker.png)
+![Launcher](downloads/0.5.9-dev/launcher.png)
+![Color picker](downloads/0.5.9-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.5.8-dev/boot-animation.png)
+![POS boot animation](downloads/0.5.9-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.5.8-dev/boot-splash.png)
+[Final splash frame](downloads/0.5.9-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -147,7 +153,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.8-dev --zip-output dist/pos-0.5.8-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.5.9-dev --zip-output dist/pos-0.5.9-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png

@@ -52,3 +52,14 @@ without overwriting the new operating system. Existing Settings migrations remai
 separate, as documented in RECOVERY.md. Future app/save schemas require explicit
 converters when those schemas are defined; unsupported data stays accessible.
 No framework can safely guess the meaning of arbitrary future save formats.
+
+## Settings format 3: microphone gain
+
+0.5.9-dev writes checksummed settings format 3 with `microphone_gain` (a power of
+two from 1 to 64). Formats 1 and 2 load without rewriting user files, defaulting
+gain to 8x and retaining supported identity, timezone, brightness and background.
+The first intentional save writes format 3 to the alternate slot. Backup/restore
+uses the same decoder/migration path and preserves the gain. Unknown future
+formats remain protected. Older firmware treats format 3 as future preferences
+and preserves it rather than silently downgrading it; user documents and audio
+remain ordinary files regardless of preferences compatibility.

@@ -97,7 +97,7 @@ static bool icon_ink(const pos_view_t *v, int tile, int x, int y) {
          ((v->icons[tile][y / 4] >> (x / 4)) & 1);
 }
 
-uint16_t pos_view_pixel(const pos_view_t *v, int x, int y) {
+static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
   if (!v || x < 0 || x >= 240 || y < 0 || y >= 135)
     return 0;
   if (v->battery_overlay && x >= 184 && y < 9) {
@@ -153,6 +153,12 @@ uint16_t pos_view_pixel(const pos_view_t *v, int x, int y) {
   uint16_t picker;
   if (v->color_picker && picker_pixel(v, x, y, &picker))
     return picker;
+  uint16_t visual;
+  if (pos_visual_pixel(v, x, y, &visual))
+    return visual;
+  if (!v->tiles && y >= 132 && pos_background_valid(&v->background))
+    return pos_color_rgb565(
+        v->background.colors[x * v->background.count / 240]);
   int row = y / 8, column = x / 8;
   uint16_t bg = v->color_picker || v->black_background ? 0 : 0x0842,
            fg = 0xffff;
@@ -171,20 +177,28 @@ uint16_t pos_view_pixel(const pos_view_t *v, int x, int y) {
     fg = 0;
   }
   if (v->tiles) {
-    int tile = x / 80, local = x % 80;
-    if (tile == v->selected_tile && local >= 14 && local <= 65 && y >= 38 &&
-        y <= 89) {
-      if (local < 16 || local > 63 || y < 40 || y > 87)
+    int rx = x - v->ribbon_offset;
+    int tile = rx >= 0 ? rx / 80 : -1, local = rx >= 0 ? rx % 80 : 0;
+    if (tile >= 0 && tile < 3) {
+      int lift = tile == v->selected_tile ? v->tile_lift : 0;
+      unsigned scale =
+          tile == v->selected_tile && v->tile_scale ? v->tile_scale : 100;
+      int lx = (local - 40) * 100 / (int)scale + 40;
+      int ly = (y + lift - 64) * 100 / (int)scale + 64;
+      if (tile == v->selected_tile && lx >= 14 && lx <= 65 && ly >= 38 &&
+          ly <= 89) {
+        if (lx < 16 || lx > 63 || ly < 40 || ly > 87)
+          return 0;
+        if (lx == 16 || lx == 63 || ly == 40 || ly == 87)
+          return 0xffff;
+      }
+      int ix = lx - 24, iy = ly - 48;
+      if (icon_ink(v, tile, ix, iy))
         return 0;
-      if (local == 16 || local == 63 || y == 40 || y == 87)
+      if (icon_ink(v, tile, ix - 1, iy) || icon_ink(v, tile, ix + 1, iy) ||
+          icon_ink(v, tile, ix, iy - 1) || icon_ink(v, tile, ix, iy + 1))
         return 0xffff;
     }
-    int ix = local - 24, iy = y - 48;
-    if (icon_ink(v, tile, ix, iy))
-      return 0;
-    if (icon_ink(v, tile, ix - 1, iy) || icon_ink(v, tile, ix + 1, iy) ||
-        icon_ink(v, tile, ix, iy - 1) || icon_ink(v, tile, ix, iy + 1))
-      return 0xffff;
     if (row >= 14)
       bg = 0;
   }
@@ -217,4 +231,16 @@ uint16_t pos_view_pixel(const pos_view_t *v, int x, int y) {
       return fg;
   }
   return bg;
+}
+
+uint16_t pos_view_pixel(const pos_view_t *view, int x, int y) {
+  if (!view || view->fade == 255)
+    return 0;
+  uint16_t color = content_pixel(view, x, y);
+  if (!view || !view->fade)
+    return color;
+  unsigned remain = 255 - view->fade;
+  return ((((color >> 11) & 31) * remain / 255) << 11) |
+         ((((color >> 5) & 63) * remain / 255) << 5) |
+         ((color & 31) * remain / 255);
 }

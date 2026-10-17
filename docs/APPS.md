@@ -1,14 +1,16 @@
 # Files, Audio Player, Recorder, Music and hardware
 
 Use Left/Right arrows to move the launcher ribbon and Up/Enter to open an app. Menus use Up/Down
-and Enter. Fn+backtick is Escape; Fn+Space requests closing the current app.
+and Enter. Fn+backtick is Escape; Fn + apostrophe, Fn+Space or short G0 closes
+the current app.
 Only one foreground app runs. Wi-Fi and the enabled location/radio services can
 continue in the background. Music and explicit file-transfer sessions stop on exit.
 
 ## Files
 
 Files starts in `POS/Users/Owner`. Each directory has paginated entries, Parent,
-Previous/Next and Folder actions. Enter on an entry opens its action menu.
+Previous/Next and Folder actions. Enter opens folders, audio or text directly;
+Space opens the selected entry's action menu.
 
 - **Open:** enter a folder or choose Text Editor/Preview for a file. For MP3/WAV,
   the first action is **Play in Audio Player**. It opens the selected file and
@@ -294,29 +296,25 @@ All working text and indexes remain ordinary readable files if POS stops working
 
 ## Recorder
 
-Open **Recorder** from the launcher, then **Start recording**. Recorder shows a
-RECORDING label, elapsed recorded time, file size and peak
-level (one decimal place). Raw L/R show the largest input samples in each
-readout window, before gain. The right channel feeds the WAV with saturated 8x
-PCM gain, matching M5Unified's effective default mono gain. Several all-zero
-readouts show **No input detected**, without stopping or inventing audio.
-Space pauses/resumes; Enter or Escape stops and saves; Fn+Space saves and
-closes. Pauses are omitted from recorded duration. Resuming discards analog warm-up.
-Only this foreground app records; there is no background microphone capture.
+Recorder → **Microphone gain** offers saved 1x, 2x, 4x, 8x (default), 16x, 32x
+and 64x digital gain. During a recording, Left/Right changes it live; the setting
+is committed after stopping capture. Try 32x for quiet speech; reduce it when
+Clipping appears. The normal view has a wallpaper-colored microphone and one
+mono level bar, elapsed time, percentage and gain. It does not show raw channel
+values. Repeated all-zero input is labelled without inventing audio.
 
-Files are standard signed 16-bit mono PCM WAV at 16000 Hz, under `/Recordings`,
-with unique `Recording-00001.wav` names. Audio streams through small buffers and
-syncs approximately every two recorded seconds. The 2-GiB file limit is checked.
-Stop performs a full streamed PCM CRC readback before publishing the completed
-name. Close playback before starting Recorder, and vice versa.
+Space pauses/resumes; Enter or Escape stops/saves; Fn + apostrophe, Fn+Space or a
+short G0 saves/closes. Queued PCM is drained on pause/stop. Resuming discards
+analog warm-up. Capture runs in a dedicated bounded task only while this app
+records, independently of SD/UI work. Playback and recording are exclusive.
 
-Interrupted writes remain `Recording-NNNNN.wav.part`, never a completed WAV.
-**Recover interrupted WAV** lets you select one, confirms the layout/whole frames,
-repairs size fields, reads the complete file and publishes only after verification.
-Existing completed files, malformed headers and odd trailing bytes are refused
-and preserved. Files/ordinary desktop tools can copy partials for manual recovery.
-A DMA overrun, full card or SD failure stops recording with a precise error.
-Actual electrical power-cut behavior and microphone quality still need hardware tests.
+Files are standard signed 16-bit mono PCM WAV at 16000 Hz under `/Recordings`,
+with unique `Recording-00001.wav` names. Writes sync approximately every two
+recorded seconds; stop verifies the complete PCM CRC before publication. Partial
+`.wav.part` files remain recoverable through **Recover interrupted WAV**. Existing
+files are never overwritten. A DMA overrun, full card or storage stall beyond the
+one-second buffer remains an explicit error. The user confirms input works in
+0.5.8-dev; gain/UI changes still need acoustic/usability confirmation.
 
 ## Files Audio Player
 
@@ -335,3 +333,29 @@ in hex, point the emitter, and confirm one transmit. No automatic scanning or
 unrequested transmission runs. The shared BMI270 and NEC APIs are available to
 future apps; the IMU is stopped when its screen closes. Sensor axes are shown
 without pretending to provide a calibrated compass. The ADV has no IR receiver.
+
+## Visual controls and motion (0.5.9-dev)
+
+Launcher: Left/Right springs between outlined black icons; Up/Enter zooms the
+selected icon and fades quickly to black before the app. Return fades to the same
+selection and reverses its zoom with a small overshoot. **Fn + apostrophe** and
+short G0 are global close controls; Fn+Space remains supported. Escape backs out
+of nested screens, and closes non-modal apps. Held recovery shortcuts remain.
+
+Background edits its live striped canvas: Up/Down selects, Enter picks color,
+Left/Right changes count, S saves, P resets the draft to the pan flag, Escape
+cancels. Selected stripes pulse white briefly, at a slow interval. No Preview
+button or separate preview state remains.
+
+Files uses icon cards; folder hints show paper, a note, a picture or mixed items
+from a bounded scan of up to 24 immediate entries. No recursive content scan is
+needed. Arrows select; Enter opens folders/audio/text, and Space opens actions. Protected operations, confirmation,
+Trash, copy/move and pagination retain their existing safeguards.
+
+Counter uses a red pressable button with a jumping number: Enter/Space/Up adds,
+Down subtracts. Music and the Files-only Audio Player use a disc/progress display.
+Shared menus and app screens carry wallpaper accents. Dense technical screens
+retain readable text; this is not a replacement of every diagnostic with icons.
+
+Animations use short integer spring curves and streamed rendering. Slow draws
+skip intermediate frames; frame-rate/response measurements require hardware.

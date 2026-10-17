@@ -18,6 +18,7 @@ static StreamBufferHandle_t mic_buffer;
 static SemaphoreHandle_t mic_exited;
 static bool mic_task_running, input_enabled;
 static atomic_uint mic_left_peak, mic_right_peak;
+static atomic_uint mic_gain = 8;
 static atomic_bool mic_overflow, mic_stopping;
 enum { MIC_OK, MIC_READ_FAILED, MIC_DMA_OVERRUN, MIC_BUFFER_OVERRUN };
 static atomic_int mic_error;
@@ -98,7 +99,12 @@ int pos_audio_write(const int16_t *stereo, size_t frames, unsigned hz,
  * with f_gain = magnification / (over_sampling * 2): 8x at one sample/frame.
  * Keep the stock analog profile; saturate PCM instead of wrapping loud input.
  */
-#define MIC_PCM_GAIN 8
+int pos_microphone_set_gain(unsigned gain) {
+  if (!gain || gain > 64 || (gain & (gain - 1)))
+    return -1;
+  atomic_store_explicit(&mic_gain, gain, memory_order_relaxed);
+  return 0;
+}
 static void peak_update(atomic_uint *peak, unsigned value) {
   unsigned previous = atomic_load_explicit(peak, memory_order_relaxed);
   while (previous < value && !atomic_compare_exchange_weak_explicit(
@@ -123,6 +129,7 @@ static int capture_read(int16_t mono[256], size_t capacity, size_t *frames) {
     return MIC_DMA_OVERRUN;
   *frames = bytes / 4;
   unsigned left_peak = 0, right_peak = 0;
+  int gain = (int)atomic_load_explicit(&mic_gain, memory_order_relaxed);
   for (size_t i = 0; i < *frames; ++i) {
     int left = stereo[i * 2], right = stereo[i * 2 + 1];
     unsigned l = left < 0 ? -left : left;
@@ -131,7 +138,7 @@ static int capture_read(int16_t mono[256], size_t capacity, size_t *frames) {
       left_peak = l;
     if (r > right_peak)
       right_peak = r;
-    int amplified = right * MIC_PCM_GAIN;
+    int amplified = right * gain;
     mono[i] = amplified > INT16_MAX   ? INT16_MAX
               : amplified < INT16_MIN ? INT16_MIN
                                       : amplified;

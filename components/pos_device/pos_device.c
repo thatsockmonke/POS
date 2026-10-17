@@ -50,6 +50,8 @@ static pos_view_t previous;
 static bool previous_valid, backlight, wifi_initialized, wifi_started;
 static bool serial_input, display_hidden;
 static unsigned display_brightness;
+static bool fade_next;
+static pos_background_t display_theme;
 static void (*sleep_hook)(void);
 static RTC_NOINIT_ATTR uint32_t boot_magic, boot_attempts, force_recovery;
 #define BOOT_MAGIC 0x504f5332u
@@ -329,7 +331,7 @@ void pos_device_boot_flash(void) {
   }
 }
 
-void pos_device_show(const pos_view_t *input) {
+static void show_view(const pos_view_t *input) {
   if (display_hidden)
     return;
   uint64_t now = esp_timer_get_time() / 1000;
@@ -338,6 +340,11 @@ void pos_device_show(const pos_view_t *input) {
     battery_refresh = now ? now : 1;
   }
   pos_view_t composed = *input;
+  if (!pos_background_valid(&composed.background)) {
+    if (!pos_background_valid(&display_theme))
+      pos_background_defaults(&display_theme);
+    composed.background = display_theme;
+  }
   composed.battery_overlay = true;
   composed.battery_available = battery.available;
   composed.battery_percent = battery.percent;
@@ -379,6 +386,34 @@ void pos_device_show(const pos_view_t *input) {
       info.frame_max_us = info.frame_us;
     ++info.frames;
     info.frame_total_us += info.frame_us;
+  }
+}
+
+void pos_device_set_theme(const pos_background_t *background) {
+  if (pos_background_valid(background))
+    display_theme = *background;
+}
+void pos_device_fade_next(void) { fade_next = true; }
+void pos_device_show(const pos_view_t *view) {
+  if (fade_next && !display_hidden) {
+    fade_next = false;
+    pos_view_t frame = *view;
+    const uint8_t fades[] = {150, 50, 0};
+    for (unsigned i = 0; i < sizeof(fades); ++i) {
+      frame.fade = fades[i];
+      show_view(&frame);
+    }
+  } else
+    show_view(view);
+}
+void pos_device_fade_out(void) {
+  if (!previous_valid || display_hidden)
+    return;
+  pos_view_t frame = previous;
+  const uint8_t fades[] = {100, 200, 255};
+  for (unsigned i = 0; i < sizeof(fades); ++i) {
+    frame.fade = fades[i];
+    show_view(&frame);
   }
 }
 

@@ -2,8 +2,46 @@
 #include "esp_timer.h"
 #include "pos_device.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
+static pos_background_t theme;
+void pos_ui_set_theme(const pos_background_t *background) {
+  if (pos_background_valid(background))
+    theme = *background;
+}
+void pos_ui_style(pos_view_t *view) {
+  view->black_background = true;
+  if (!pos_background_valid(&theme))
+    pos_background_defaults(&theme);
+  view->background = theme;
+}
+void pos_ui_spring(pos_view_t *view, bool opening, bool returning) {
+  int offset = view->ribbon_offset;
+  int64_t start = esp_timer_get_time();
+  for (unsigned frame = 0; frame < 6;) {
+    int spring = pos_motion_spring(frame);
+    view->ribbon_offset = offset * spring / 100;
+    view->tile_lift = frame < 5 ? (100 - abs(spring)) * 8 / 100 : 0;
+    view->tile_scale = opening     ? 100 + (100 - spring) * 48 / 100
+                       : returning ? 100 + spring * 48 / 100
+                                   : 100;
+    view->visual_motion = frame < 5 ? (100 - abs(spring)) * 6 / 100 : 0;
+    view->fade = opening && frame >= 3    ? (frame - 2) * 85
+                 : returning && frame < 2 ? 180 - frame * 90
+                                          : 0;
+    pos_device_show(view);
+    unsigned elapsed = (unsigned)((esp_timer_get_time() - start) / 32000);
+    unsigned next = frame + 1;
+    if (elapsed > next)
+      next = elapsed;
+    frame = next > 5 && frame < 5 ? 5 : next;
+  }
+  view->ribbon_offset = 0;
+  view->tile_scale = 100;
+  view->tile_lift = view->visual_motion = 0;
+  view->fade = 0;
+}
 bool pos_ui_take_home(void) { return pos_home_take(); }
 static bool cancelled(const pos_event_t *event) {
   if (!event->pressed)
@@ -18,7 +56,7 @@ static unsigned message_page(const char *title, const char *body, unsigned page,
                              bool notice) {
   pos_view_t v;
   pos_view_clear(&v, title);
-  v.black_background = true;
+  pos_ui_style(&v);
   unsigned line = 0;
   while (body && *body) {
     size_t n = 0;
@@ -90,7 +128,7 @@ static int menu(const char *title, const char *const *items, int count,
     if (redraw) {
       pos_view_t view;
       pos_view_clear(&view, title);
-      view.black_background = true;
+      pos_ui_style(&view);
       if (pages)
         pos_view_line(&view, 1, "Folder page %u/%u", page + 1, pages);
       if (status)
@@ -147,7 +185,7 @@ bool pos_ui_text(const char *title, const char *label, char *text,
     if (redraw) {
       pos_view_t v;
       pos_view_clear(&v, title);
-      v.black_background = true;
+      pos_ui_style(&v);
       pos_view_line(&v, 3, "%s", label);
       size_t start = n > 28 ? n - 28 : 0;
       if (secret) {
@@ -223,7 +261,7 @@ int pos_ui_progress(void *ctx, const char *phase, const char *name,
     last = now;
     pos_view_t v;
     pos_view_clear(&v, pos_ui_phase_title(phase));
-    v.black_background = true;
+    pos_ui_style(&v);
     pos_view_line(&v, 3, "%s", name);
     if (strlen(name) > 30)
       pos_view_line(&v, 4, "%.30s", name + 30);
@@ -247,4 +285,65 @@ int pos_ui_progress(void *ctx, const char *phase, const char *name,
     if (cancelled(&e))
       return 1;
   return 0;
+}
+
+int pos_ui_file_cards(const char *title, const char *const *names,
+                      const uint8_t *icons, int count, unsigned page,
+                      unsigned pages) {
+  if (count < 1 || pos_home_pending())
+    return -1;
+  int selected = count > 4 ? 4 : 3;
+  if (selected >= count)
+    selected = 0;
+  bool redraw = true, animate = false;
+  while (!pos_home_pending()) {
+    if (redraw) {
+      pos_view_t view;
+      pos_view_clear(&view, title);
+      pos_ui_style(&view);
+      view.visual = POS_VISUAL_FILES;
+      if (count == 4)
+        pos_view_line(&view, 1, "Empty folder - use Actions");
+      else
+        pos_view_line(&view, 1, "Page %u/%u    Item %d/%d", page + 1, pages,
+                      selected + 1, count);
+      pos_view_line(&view, 2, "%.30s", names[selected]);
+      char labels[3][11] = {{0}};
+      for (int tile = 0; tile < 3; ++tile) {
+        int at = selected + tile - 1;
+        view.visual_icons[tile] = at >= 0 && at < count ? icons[at] : 255;
+        if (at >= 0 && at < count)
+          snprintf(labels[tile], sizeof(labels[tile]), "%.10s", names[at]);
+      }
+      pos_view_line(&view, 12, "%-10.10s%-10.10s%-10.10s", labels[0], labels[1],
+                    labels[2]);
+      pos_view_line(&view, 14, "Enter:open Space:actions");
+      pos_view_line(&view, 15, "Esc:back  Fn+':close G0:home");
+      if (animate)
+        pos_ui_spring(&view, false, false);
+      else
+        pos_device_show(&view);
+      redraw = false;
+      animate = false;
+    }
+    pos_event_t e;
+    if (!pos_device_event(&e, 100) || !e.pressed)
+      continue;
+    if (e.key == POS_KEY_HOME || e.key == POS_KEY_ESCAPE)
+      return -1;
+    int key = pos_navigation(&e);
+    if (key == ' ')
+      return selected + count;
+    if (key == POS_KEY_ENTER)
+      return selected;
+    if (key == POS_KEY_LEFT || key == POS_KEY_UP) {
+      selected = (selected + count - 1) % count;
+      redraw = animate = true;
+    }
+    if (key == POS_KEY_RIGHT || key == POS_KEY_DOWN) {
+      selected = (selected + 1) % count;
+      redraw = animate = true;
+    }
+  }
+  return -1;
 }

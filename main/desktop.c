@@ -10,8 +10,8 @@
 #include "esp_vfs_fat.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "pos_ble.h"
 #include "pos_appdata.h"
+#include "pos_ble.h"
 #include "pos_device.h"
 #include "pos_fs.h"
 #include "pos_health.h"
@@ -37,7 +37,7 @@ typedef struct {
 typedef struct {
   services_t *services;
   int count;
-  uint64_t last;
+  uint64_t last, now;
 } counter_t;
 
 static void measurement(services_t *s, const char *phase) {
@@ -279,36 +279,50 @@ static bool backup(services_t *services) {
 static int counter_init(void *opaque, void *services) {
   counter_t *s = opaque;
   s->services = services;
-  pos_error_t e={0};
-  int result=pos_counter_load(s->services->root,&s->count,&e);
-  if(result<0) pos_ui_notice("Counter save preserved",e.message);
-  return result<0?-1:0;
+  pos_error_t e = {0};
+  int result = pos_counter_load(s->services->root, &s->count, &e);
+  if (result < 0)
+    pos_ui_notice("Counter save preserved", e.message);
+  return result < 0 ? -1 : 0;
 }
 static void counter_event(void *opaque, const pos_event_t *event) {
   counter_t *s = opaque;
   int key = pos_navigation(event);
-  if (key == POS_KEY_UP && s->count < 1000000)
+  if ((key == POS_KEY_UP || key == POS_KEY_ENTER || key == ' ') &&
+      s->count < 1000000) {
     ++s->count;
-  if (key == POS_KEY_DOWN && s->count > -1000000)
+    s->last = esp_timer_get_time() / 1000;
+  }
+  if (key == POS_KEY_DOWN && s->count > -1000000) {
     --s->count;
+    s->last = esp_timer_get_time() / 1000;
+  }
 }
 static int counter_save(void *opaque) {
   counter_t *s = opaque;
-  pos_error_t e={0};
-  return pos_counter_save(s->services->root,s->count,&e);
+  pos_error_t e = {0};
+  return pos_counter_save(s->services->root, s->count, &e);
+}
+static void counter_update(void *opaque, uint64_t now) {
+  ((counter_t *)opaque)->now = now;
 }
 static void counter_render(void *opaque, pos_view_t *v) {
   counter_t *s = opaque;
   pos_view_clear(v, "Counter");
-  pos_view_line(v, 4, "Count: %d", s->count);
-  pos_view_line(v, 7, "Up/Down changes the value");
-  pos_view_line(v, 10, "Saved when the app closes");
-  pos_view_line(v, 15, "Esc / Fn+Space: launcher");
+  pos_ui_style(v);
+  v->visual = POS_VISUAL_COUNTER;
+  static const int8_t press[] = {12, 8, 3, 0, 2, 0};
+  uint64_t frame = (s->now - s->last) / 40;
+  v->visual_motion = s->last && frame < sizeof(press) ? press[frame] : 0;
+  pos_view_line(v, 4, "%d", s->count);
+  pos_view_line(v, 14, "Enter/Space: +1   Down: -1");
+  pos_view_line(v, 15, "Fn+': close    G0: home");
 }
 static const pos_app_t counter_app = {.name = "Counter",
                                       .state_size = sizeof(counter_t),
                                       .initialize = counter_init,
                                       .event = counter_event,
+                                      .update = counter_update,
                                       .render = counter_render,
                                       .save = counter_save};
 
@@ -624,7 +638,8 @@ static void range_foreground(void *state) {
 }
 static void recorder_foreground(void *state) {
 #ifndef POS_INSTALLER
-  pos_ui_recorder((*(services_t **)state)->root);
+  services_t *s = *(services_t **)state;
+  pos_ui_recorder(s->root, &s->settings);
 #else
   (void)state;
 #endif
@@ -788,6 +803,8 @@ void pos_desktop(const char *root, bool recovery_only) {
   (void)pos_ui_take_home();
   pos_core_t core = {.services = services};
   int selected = 0;
+  pos_ui_set_theme(&services->settings.background);
+  pos_device_set_theme(&services->settings.background);
   uint64_t refreshed = 0;
   char *system_root = workspace->system_root;
   pos_fs_join(system_root, root, "POS");
@@ -795,10 +812,20 @@ void pos_desktop(const char *root, bool recovery_only) {
     pos_event_t event;
     if (pos_device_event(&event, 30)) {
       if (core.app) {
+        bool closing = event.pressed && (event.key == POS_KEY_HOME ||
+                                         event.key == POS_KEY_ESCAPE);
+        if (closing)
+          pos_device_fade_out();
         if (pos_core_event(&core, &event))
           pos_ui_notice("App save failed",
                         "The app closed, but its state could not be saved. "
                         "Existing saved files are retained.");
+        if (closing) {
+          pos_launcher_view(system_root, services->settings.device_name,
+                            &services->settings.background, selected,
+                            &workspace->view);
+          pos_ui_spring(&workspace->view, false, true);
+        }
       } else {
         int key = pos_launcher_action(&event);
         if (key == POS_KEY_RIGHT)
@@ -806,7 +833,18 @@ void pos_desktop(const char *root, bool recovery_only) {
         if (key == POS_KEY_LEFT)
           selected =
               (selected + POS_LAUNCHER_APP_COUNT - 1) % POS_LAUNCHER_APP_COUNT;
+        if (key == POS_KEY_RIGHT || key == POS_KEY_LEFT ||
+            key == POS_KEY_ENTER) {
+          pos_launcher_view(system_root, services->settings.device_name,
+                            &services->settings.background, selected,
+                            &workspace->view);
+          workspace->view.ribbon_offset = key == POS_KEY_RIGHT  ? 80
+                                          : key == POS_KEY_LEFT ? -80
+                                                                : 0;
+          pos_ui_spring(&workspace->view, key == POS_KEY_ENTER, false);
+        }
         if (key == POS_KEY_ENTER) {
+          pos_device_fade_next();
           if (selected == 0) {
             if (pos_core_open(&core, &counter_app))
               pos_ui_notice("App unavailable",
@@ -824,6 +862,13 @@ void pos_desktop(const char *root, bool recovery_only) {
               pos_ui_notice("App save failed",
                             "Existing saved files retained.");
             (void)pos_ui_take_home();
+            pos_device_fade_out();
+            pos_ui_set_theme(&services->settings.background);
+            pos_device_set_theme(&services->settings.background);
+            pos_launcher_view(system_root, services->settings.device_name,
+                              &services->settings.background, selected,
+                              &workspace->view);
+            pos_ui_spring(&workspace->view, false, true);
           }
           if (selected == 5)
             pos_core_open(&core, &info_app);
@@ -833,7 +878,11 @@ void pos_desktop(const char *root, bool recovery_only) {
       refreshed = 0;
     }
     uint64_t now = esp_timer_get_time() / 1000;
-    if (now - refreshed < 250 && refreshed)
+    unsigned interval =
+        core.app == &counter_app && now - ((counter_t *)core.state)->last < 300
+            ? 25
+            : 250;
+    if (now - refreshed < interval && refreshed)
       continue;
     refreshed = now;
     pos_view_t *view = &workspace->view;

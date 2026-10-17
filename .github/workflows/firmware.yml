@@ -62,6 +62,11 @@ jobs:
           python tools/posctl.py preview --screen picker --output dist/color-picker.png
           python tools/posctl.py preview --screen boot --output dist/boot-splash.png
           python tools/posctl.py preview --screen boot --animate --output dist/boot-animation.png
+          python tools/posctl.py preview --screen recorder --output dist/recorder.png
+          python tools/posctl.py preview --screen files --output dist/files.png
+          python tools/posctl.py preview --screen background --output dist/background.png
+          python tools/posctl.py preview --screen counter --output dist/counter.png
+          python tools/posctl.py preview --screen ui --animate --output dist/ui-animation.png
       - uses: actions/upload-artifact@v4
         with:
           name: pos-firmware-${{ steps.version.outputs.version }}

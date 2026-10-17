@@ -263,7 +263,7 @@ class FeatureTests(unittest.TestCase):
                     with self.subTest(code=code,layer=layer):
                         actual=[tuple(map(int,line.split())) for line in self.run_feature("keyboard-events",*prefix,code|128,code).stdout.splitlines()]
                         if base is None:expected=[]
-                        elif layer=="fn" and code==68:expected=[(263,4,1)] # POS global Home.
+                        elif layer=="fn" and code in (63,68):expected=[(263,4,1)] # POS global Home.
                         else:
                             key=shifted[row][column] if layer=="shift" else base
                             if layer=="fn":
@@ -373,7 +373,7 @@ class FeatureTests(unittest.TestCase):
         self.run_feature("settings-save","--name","Legacy identity")
         path=self.card/"POS/Users/settings.1.json"
         envelope=json.loads(path.read_text());body=json.loads(envelope["payload"])
-        body["format"]=1;del body["background"]
+        body["format"]=1;del body["background"];body.pop("microphone_gain",None)
         envelope["payload"]=json.dumps(body);envelope["sha256"]=hashlib.sha256(envelope["payload"].encode()).hexdigest()
         path.write_text(json.dumps(envelope));before=path.read_bytes()
         read=json.loads(self.run_feature("settings-read").stdout)
@@ -382,7 +382,7 @@ class FeatureTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(),before)
         self.run_feature("settings-save")
         upgraded=json.loads(json.loads((self.card/"POS/Users/settings.0.json").read_text())["payload"])
-        self.assertEqual(upgraded["format"],2)
+        self.assertEqual(upgraded["format"],3)
         self.assertEqual(upgraded["background"],["#FF218C","#FFD800","#21B1FF"])
 
     def test_invalid_background_settings_are_rejected_without_modification(self):
@@ -720,5 +720,46 @@ class FeatureTests(unittest.TestCase):
             with self.subTest(key=key):
                 self.run_feature('settings-ui-display-' + key)
 
+
+    def test_recorder_gain_menu_live_adjustment_and_persistence(self):
+        self.run_feature('recorder-ui-gain')
+        self.assertEqual(json.loads(self.run_feature('settings-read').stdout)['microphone_gain'],64)
+
+    def test_v2_settings_preserve_background_and_default_gain_without_rewriting(self):
+        self.run_feature('settings-save', '--name', 'Keep Stevie')
+        p=self.card/'POS/Users/settings.1.json'
+        outer=json.loads(p.read_text());body=json.loads(outer['payload'])
+        body['format']=2;body.pop('microphone_gain')
+        outer['payload']=json.dumps(body);outer['sha256']=hashlib.sha256(outer['payload'].encode()).hexdigest()
+        p.write_text(json.dumps(outer));before=p.read_bytes()
+        loaded=json.loads(self.run_feature('settings-read').stdout)
+        self.assertEqual((loaded['microphone_gain'],loaded['name']), (8,'Keep Stevie'))
+        self.assertEqual(p.read_bytes(), before)
+
+    def test_gain_schema_rejects_invalid_or_future_values_without_modifying_files(self):
+        self.run_feature('settings-save')
+        p=self.card/'POS/Users/settings.1.json';outer=json.loads(p.read_text());body=json.loads(outer['payload'])
+        for gain in (0,3,65,-1,8.5,'32'):
+            with self.subTest(gain=gain):
+                body['microphone_gain']=gain
+                outer['payload']=json.dumps(body);outer['sha256']=hashlib.sha256(outer['payload'].encode()).hexdigest()
+                p.write_text(json.dumps(outer));before=p.read_bytes()
+                self.run_feature('settings-read',expected=1)
+                self.assertEqual(p.read_bytes(),before)
+
+    def test_files_folder_icons_reflect_contents_and_do_not_follow_symlinks(self):
+        for path in ('Documents/note.txt','Music/song.wav','Pictures/photo.png','Mixed/note.txt','Mixed/song.mp3'):
+            self.write('POS/Users/Owner/'+path,b'content')
+        target=self.base/'outside.wav';target.write_bytes(b'keep outside')
+        links=self.card/'POS/Users/Owner/Links';links.mkdir()
+        (links/'reference.wav').symlink_to(target)
+        self.run_feature('files-ui-icons')
+        self.assertEqual(target.read_bytes(),b'keep outside')
+
+    def test_microphone_gain_survives_backup_and_restore(self):
+        self.run_feature('recorder-ui-gain')
+        self.run_feature('backup')
+        dest=self.destination();self.run_feature('restore','--archive',self.card/BACKUP,card=dest)
+        self.assertEqual(json.loads(self.run_feature('settings-read',card=dest).stdout)['microphone_gain'],64)
 
 if __name__=="__main__":unittest.main()

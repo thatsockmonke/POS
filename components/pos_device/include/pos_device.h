@@ -16,6 +16,9 @@ void pos_device_boot_flash(void);
 bool pos_device_event(pos_event_t *event, uint32_t timeout_ms);
 void pos_device_show(const pos_view_t *view);
 void pos_device_brightness(unsigned percent);
+void pos_device_fade_out(void);
+void pos_device_fade_next(void);
+void pos_device_set_theme(const pos_background_t *background);
 /* LCD/backlight only; CPU, charging and services continue. While hidden,
  * events are delivered without global Home or automatic battery redraw. */
 int pos_device_display_enabled(bool enabled);

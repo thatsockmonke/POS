@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 typedef struct {
   char folder[241], clipboard[241], selected[241], full[POS_FS_PATH];
@@ -21,6 +22,61 @@ static int progress(void *ctx, const char *phase, uint64_t done,
 static const char *basename_of(const char *p) {
   const char *slash = strrchr(p, '/');
   return slash ? slash + 1 : p;
+}
+static uint8_t file_kind(const char *name) {
+  const char *ext = strrchr(name, '.');
+  if (!ext)
+    return POS_ICON_FILE;
+  if (!strcasecmp(ext, ".txt") || !strcasecmp(ext, ".md") ||
+      !strcasecmp(ext, ".json") || !strcasecmp(ext, ".csv"))
+    return POS_ICON_DOCUMENT;
+  if (!strcasecmp(ext, ".wav") || !strcasecmp(ext, ".mp3") ||
+      !strcasecmp(ext, ".m3u"))
+    return POS_ICON_AUDIO;
+  if (!strcasecmp(ext, ".png") || !strcasecmp(ext, ".jpg") ||
+      !strcasecmp(ext, ".bmp"))
+    return POS_ICON_IMAGE;
+  return POS_ICON_FILE;
+}
+static uint8_t entry_icon(const char *root, const char *parent,
+                          const char *name) {
+  char relative[241], path[POS_FS_PATH];
+  struct stat st;
+  if (snprintf(relative, sizeof(relative), "%s%s%s", parent, *parent ? "/" : "",
+               name) >= (int)sizeof(relative) ||
+      pos_fs_join(path, root, relative) || pos_fs_lstat(path, &st))
+    return POS_ICON_FILE;
+  if (!S_ISDIR(st.st_mode))
+    return file_kind(name);
+  /* A bounded one-level scan: never load file contents, follow symlinks,
+   * recurse, or enumerate an entire large collection for decoration. */
+  DIR *folder = opendir(path);
+  unsigned kind = POS_ICON_FOLDER, scanned = 0;
+  struct dirent *entry;
+  if (folder) {
+    while (scanned < 24 && (entry = readdir(folder))) {
+      if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
+        continue;
+      ++scanned;
+      char child[POS_FS_PATH];
+      struct stat child_stat;
+      if (snprintf(child, sizeof(child), "%s/%s", path, entry->d_name) >=
+              (int)sizeof(child) ||
+          pos_fs_lstat(child, &child_stat) || !S_ISREG(child_stat.st_mode))
+        continue;
+      uint8_t candidate = file_kind(entry->d_name);
+      if (candidate == POS_ICON_FILE)
+        continue;
+      if (kind == POS_ICON_FOLDER)
+        kind = candidate;
+      else if (kind != candidate) {
+        kind = POS_ICON_MIXED;
+        break;
+      }
+    }
+    closedir(folder);
+  }
+  return 128 | kind;
 }
 static int listing(const char *root, files_ui_t *f) {
   if (pos_fs_join(f->full, root, f->folder))
@@ -293,11 +349,17 @@ void pos_ui_files_from(const char *root, const char *initial) {
         f->page + 1 < f->pages ? "Next >" : "Next (last)", "Folder actions"};
     for (unsigned i = 0; i < f->count; ++i)
       items[i + 4] = f->names[i];
-    int choice = pos_ui_menu_page(*f->folder ? f->folder : "SD root", items,
-                                  f->count + 4, f->page, f->pages,
-                                  f->total ? NULL : "Empty folder");
+    uint8_t icons[16] = {POS_ICON_PARENT, POS_ICON_PREV, POS_ICON_NEXT,
+                         POS_ICON_ACTIONS};
+    for (unsigned i = 0; i < f->count; ++i)
+      icons[i + 4] = entry_icon(root, f->folder, f->names[i]);
+    int choice = pos_ui_file_cards(*f->folder ? f->folder : "SD root", items,
+                                   icons, f->count + 4, f->page, f->pages);
     if (choice < 0)
       break;
+    bool context = choice >= (int)f->count + 4;
+    if (context)
+      choice -= f->count + 4;
     if (choice == 0) {
       char *slash = strrchr(f->folder, '/');
       if (slash)
@@ -329,6 +391,19 @@ void pos_ui_files_from(const char *root, const char *initial) {
     if (pos_fs_join(f->full, root, f->selected) || pos_fs_lstat(f->full, &st) ||
         (!S_ISDIR(st.st_mode) && !S_ISREG(st.st_mode)))
       continue;
+    if (!context && S_ISDIR(st.st_mode)) {
+      strcpy(f->folder, f->selected);
+      f->page = 0;
+      continue;
+    }
+    if (!context && pos_music_supported(f->selected)) {
+      pos_ui_music_file(root, f->selected);
+      continue;
+    }
+    if (!context && file_kind(f->selected) == POS_ICON_DOCUMENT) {
+      pos_ui_editor_open(root, f->selected);
+      continue;
+    }
     actions(root, f, S_ISDIR(st.st_mode));
   }
   free(f);

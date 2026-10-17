@@ -32,11 +32,71 @@ static int preview(const char *root, const char *output, unsigned screen,
     pos_color_rgb_hsv(0xff218c, &hue, &saturation, &value);
     pos_color_picker_view("Stripe 1 color", 0xff218c, hue, saturation, value,
                           &v);
+  } else if (screen >= 3 && screen <= 6) {
+    pos_view_clear(&v, screen == 3   ? "Recorder"
+                       : screen == 4 ? "Files"
+                       : screen == 5 ? "Background"
+                                     : "Counter");
+    v.black_background = true;
+    pos_background_defaults(&v.background);
+    if (screen == 3) {
+      v.visual = POS_VISUAL_MIC;
+      v.visual_level = frame < 10 ? 200 + frame * 65 : 650;
+      if (frame >= 100 && frame < 103)
+        v.fade = (frame - 99) * 85;
+      pos_view_line(&v, 1, "Recording");
+      pos_view_line(&v, 2, "Recording-00001.wav");
+      pos_view_line(&v, 3, "0:12");
+      pos_view_line(&v, 12, "            %u.%u%% Gain32x", v.visual_level / 10,
+                    v.visual_level % 10);
+      pos_view_line(&v, 13, "L/R: gain    Space: pause");
+      pos_view_line(&v, 14, "Enter/Esc: stop & save");
+      pos_view_line(&v, 15, "Fn+': close     G0: home");
+    } else if (screen == 4) {
+      v.visual = POS_VISUAL_FILES;
+      v.visual_icons[0] = 128 | POS_ICON_AUDIO;
+      v.visual_icons[1] = 128 | POS_ICON_DOCUMENT;
+      v.visual_icons[2] = 128 | POS_ICON_IMAGE;
+      pos_view_line(&v, 1, "Page 1/1    Item 5/7");
+      pos_view_line(&v, 2, "Documents");
+      pos_view_line(&v, 12, "Music     Documents Pictures");
+      pos_view_line(&v, 14, "Enter:open Space:actions");
+      pos_view_line(&v, 15, "Esc:back Fn+':close G0:home");
+    } else if (screen == 5) {
+      v.visual = POS_VISUAL_STRIPES;
+      v.visual_selection = 1;
+      v.visual_flash = frame < 2;
+      pos_view_line(&v, 1, "Draft - S saves / Esc cancels");
+      pos_view_line(&v, 2, "Stripe 2/3  #FFD800");
+      pos_view_line(&v, 14, "Up/Down:stripe Enter:color");
+      pos_view_line(&v, 15, "L/R:count  S:save P:pan");
+    } else {
+      static const int8_t press[] = {12, 8, 3, 0, 2, 0};
+      v.visual = POS_VISUAL_COUNTER;
+      v.visual_motion = frame < 6 ? press[frame] : 0;
+      pos_view_line(&v, 4, "42");
+      pos_view_line(&v, 14, "Enter/Space: +1   Down: -1");
+      pos_view_line(&v, 15, "Fn+': close     G0: home");
+    }
   } else {
     pos_background_t background;
     pos_background_defaults(&background);
     pos_launcher_view(root, "PANPUTER", &background, POS_LAUNCHER_APP_COUNT - 1,
                       &v);
+    if (screen == 7) {
+      unsigned f = frame % 6;
+      int spring = pos_motion_spring(f);
+      if (frame < 6) {
+        v.ribbon_offset = 80 * spring / 100;
+        v.tile_lift = f < 5 ? (100 - abs(spring)) * 8 / 100 : 0;
+      } else if (frame < 12) {
+        v.tile_scale = 100 + (100 - spring) * 48 / 100;
+        v.fade = f >= 3 ? (f - 2) * 85 : 0;
+      } else {
+        v.tile_scale = 100 + spring * 48 / 100;
+        v.fade = f < 2 ? 180 - f * 90 : 0;
+      }
+    }
   }
   /* Example UI state, not a measurement from a connected device. */
   v.battery_overlay = true;
@@ -82,6 +142,33 @@ int main(int argc, char **argv) {
     }
     return 0;
   }
+  if (!strcmp(command, "ui-frames")) {
+    if (argc != 4)
+      return 2;
+    for (unsigned frame = 0; frame < 29; ++frame) {
+      unsigned screen = frame < 12 || frame >= 23 ? 7 : 3;
+      unsigned pose = frame < 12    ? frame
+                      : frame >= 23 ? 12 + frame - 23
+                      : frame >= 20 ? 100 + frame - 20
+                                    : frame - 12;
+      char output[POS_FS_PATH];
+      if (snprintf(output, sizeof(output), "%s/%u.ppm", argv[3], frame) >=
+          (int)sizeof(output))
+        return 2;
+      if (preview(root, output, screen, pose))
+        return 1;
+      printf("%u\n", frame >= 20 && frame < 23  ? 35
+                     : frame >= 6 && frame < 12 ? 45
+                     : screen == 7              ? 65
+                                                : 120);
+    }
+    return 0;
+  }
+  const char *visuals[] = {"recorder-preview", "files-preview",
+                           "background-preview", "counter-preview"};
+  for (unsigned i = 0; i < 4; ++i)
+    if (!strcmp(command, visuals[i]))
+      return argc == 4 ? preview(root, argv[3], i + 3, 99) : 2;
   if (!strcmp(command, "preview") || !strcmp(command, "boot-preview") ||
       !strcmp(command, "color-preview"))
     return argc == 4 ? preview(root, argv[3],

@@ -1,3 +1,4 @@
+#include "esp_timer.h"
 #include "pos_device.h"
 #include "pos_fs.h"
 #include "pos_launcher.h"
@@ -63,80 +64,69 @@ bool pos_ui_color(const char *title, uint32_t *rgb) {
   return false;
 }
 
-static void preview(const char *root, const pos_settings_t *draft) {
-  char system[POS_FS_PATH];
-  if (pos_fs_join(system, root, "POS"))
-    return;
-  pos_view_t view;
-  pos_launcher_view(system, draft->device_name, &draft->background, 6, &view);
-  pos_view_line(&view, 14, "PREVIEW - not saved");
-  pos_view_line(&view, 15, "Enter/Esc: back to editor");
-  pos_device_show(&view);
-  pos_event_t event;
-  while (!pos_home_pending()) {
-    if (!pos_device_event(&event, 100) || !event.pressed)
-      continue;
-    if (event.key == POS_KEY_HOME) {
-      pos_home_request();
-      return;
-    }
-    if (event.key == POS_KEY_ENTER || event.key == POS_KEY_ESCAPE)
-      return;
-  }
-}
-
 bool pos_ui_background(const char *root, pos_settings_t *settings) {
   pos_settings_t draft = *settings;
-  int selected = 0;
+  unsigned selected = 0;
+  bool redraw = true;
+  uint64_t last = 0;
   while (!pos_home_pending()) {
-    char labels[POS_BACKGROUND_MAX_STRIPES + 5][32];
-    const char *items[POS_BACKGROUND_MAX_STRIPES + 5];
-    unsigned count = draft.background.count;
-    snprintf(labels[0], sizeof(labels[0]), "Stripe count: %u", count);
-    for (unsigned i = 0; i < count; ++i)
-      snprintf(labels[i + 1], sizeof(labels[i + 1]), "Stripe %u: #%06X", i + 1,
-               (unsigned)draft.background.colors[i]);
-    snprintf(labels[count + 1], sizeof(labels[0]), "Preview launcher");
-    snprintf(labels[count + 2], sizeof(labels[0]), "Save & Apply");
-    snprintf(labels[count + 3], sizeof(labels[0]), "Pan flag preset");
-    snprintf(labels[count + 4], sizeof(labels[0]), "Cancel");
-    for (unsigned i = 0; i < count + 5; ++i)
-      items[i] = labels[i];
-    selected =
-        pos_ui_menu_from("Background (draft)", items, count + 5, selected);
-    if (selected < 0 || selected == (int)count + 4)
+    uint64_t now = esp_timer_get_time() / 1000;
+    if (redraw || now - last >= 160) {
+      pos_view_t view;
+      pos_view_clear(&view, "Background");
+      pos_ui_style(&view);
+      view.visual = POS_VISUAL_STRIPES;
+      view.background = draft.background;
+      view.visual_selection = selected;
+      view.visual_flash = (now % 1400) < 180;
+      pos_view_line(&view, 1, "Draft - S saves / Esc cancels");
+      pos_view_line(&view, 2, "Stripe %u/%u  #%06X", selected + 1,
+                    draft.background.count,
+                    (unsigned)draft.background.colors[selected]);
+      pos_view_line(&view, 14, "Up/Down:stripe Enter:color");
+      pos_view_line(&view, 15, "L/R:count  S:save P:pan");
+      pos_device_show(&view);
+      last = now;
+      redraw = false;
+    }
+    pos_event_t e;
+    if (!pos_device_event(&e, 40) || !e.pressed)
+      continue;
+    if (e.key == POS_KEY_HOME || e.key == POS_KEY_ESCAPE)
       return false;
-    if (!selected) {
-      char amount[4];
-      snprintf(amount, sizeof(amount), "%u", count);
-      if (pos_ui_text("Stripe count", "Horizontal stripes: 1-12", amount,
-                      sizeof(amount), false)) {
-        char *end;
-        unsigned long next = strtoul(amount, &end, 10);
-        if (!*amount || *end || !pos_background_resize(&draft.background, next))
-          pos_ui_notice("Invalid stripe count",
-                        "Choose a number from 1 to 12.");
-      }
-    } else if (selected <= (int)count) {
+    int key = pos_navigation(&e);
+    unsigned count = draft.background.count;
+    if (key == POS_KEY_UP)
+      selected = (selected + count - 1) % count;
+    if (key == POS_KEY_DOWN)
+      selected = (selected + 1) % count;
+    if (key == POS_KEY_LEFT && count > 1)
+      pos_background_resize(&draft.background, count - 1);
+    if (key == POS_KEY_RIGHT && count < 12)
+      pos_background_resize(&draft.background, count + 1);
+    if (selected >= draft.background.count)
+      selected = draft.background.count - 1;
+    if (key == POS_KEY_ENTER) {
       char title[32];
-      snprintf(title, sizeof(title), "Stripe %d color", selected);
-      (void)pos_ui_color(title, &draft.background.colors[selected - 1]);
-    } else if (selected == (int)count + 1) {
-      preview(root, &draft);
-    } else if (selected == (int)count + 2) {
-      if (pos_settings_save(root, &draft)) {
-        pos_ui_notice(
-            "Background not saved",
-            "Your previous background is still active. Check SD space "
-            "and try again, or press Esc to discard this draft.");
-      } else {
-        *settings = draft;
-        return true;
-      }
-    } else if (selected == (int)count + 3) {
+      snprintf(title, sizeof(title), "Stripe %u color", selected + 1);
+      pos_ui_color(title, &draft.background.colors[selected]);
+    }
+    if (e.key == 'p' || e.key == 'P') {
       pos_background_defaults(&draft.background);
       selected = 0;
     }
+    if (e.key == 's' || e.key == 'S') {
+      if (pos_settings_save(root, &draft))
+        pos_ui_notice("Background not saved",
+                      "Previous background retained. Check SD space; Esc "
+                      "discards the draft.");
+      else {
+        *settings = draft;
+        pos_ui_set_theme(&draft.background);
+        return true;
+      }
+    }
+    redraw = true;
   }
   return false;
 }

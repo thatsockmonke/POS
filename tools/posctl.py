@@ -291,8 +291,8 @@ def native_helper() -> Path:
 
 
 def preview(output: Path, screen: str = "launcher", animate: bool = False) -> None:
-    if animate and screen != "boot":
-        raise ValueError("Animated preview is only available for the boot screen")
+    if animate and screen not in ("boot", "ui"):
+        raise ValueError("Animated preview is available for boot or ui")
     if output.exists():
         raise ValueError("Preview output exists; choose a fresh filename")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -317,7 +317,7 @@ def preview(output: Path, screen: str = "launcher", animate: bool = False) -> No
         payload = str(ROOT / "sd-payload")
         png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 240, 135, 8, 2, 0, 0, 0))
         if animate:
-            result = subprocess.run([helper, payload, "boot-frames", temp],
+            result = subprocess.run([helper, payload, "boot-frames" if screen=="boot" else "ui-frames", temp],
                                     check=True, capture_output=True, text=True)
             holds = [int(value) for value in result.stdout.splitlines()]
             if not holds or any(not 0 < value <= 65535 for value in holds):
@@ -336,7 +336,7 @@ def preview(output: Path, screen: str = "launcher", animate: bool = False) -> No
                     sequence += 1
         else:
             ppm = directory / "preview.ppm"
-            subprocess.run([helper, payload, {"boot": "boot-preview", "picker": "color-preview", "launcher": "preview"}[screen],
+            subprocess.run([helper, payload, {"boot": "boot-preview", "picker": "color-preview", "launcher": "preview", "recorder":"recorder-preview", "files":"files-preview", "background":"background-preview", "counter":"counter-preview", "ui":"preview"}[screen],
                             str(ppm)], check=True)
             png += chunk(b"IDAT", pixels(ppm))
         png += chunk(b"IEND", b"")
@@ -520,7 +520,7 @@ def main() -> int:
     p.add_argument("--output", type=Path, required=True)
     p = commands.add_parser("preview", help="Render the actual portable launcher primitives to PNG")
     p.add_argument("--output", type=Path, required=True)
-    p.add_argument("--screen", choices=["launcher", "boot", "picker"], default="launcher")
+    p.add_argument("--screen", choices=["launcher", "boot", "picker", "recorder", "files", "background", "counter", "ui"], default="launcher")
     p.add_argument("--animate", action="store_true", help="Export the boot sequence as an animated PNG")
     p = commands.add_parser("recovery", help="Run POS's portable backup/restore services on a Linux SD mount")
     p.add_argument("action", choices=["scan", "backup", "backup-set", "resume-backup", "verify", "restore"])

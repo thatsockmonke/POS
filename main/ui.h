@@ -3,6 +3,13 @@
 #include "pos_install.h"
 #include "pos_settings.h"
 bool pos_ui_take_home(void);
+void pos_ui_set_theme(const pos_background_t *background);
+void pos_ui_style(pos_view_t *view);
+/* Bounded spring frames; missed frames are skipped on slow displays. */
+void pos_ui_spring(pos_view_t *view, bool opening, bool returning);
+int pos_ui_file_cards(const char *title, const char *const *names,
+                       const uint8_t *icons, int count, unsigned page,
+                       unsigned pages);
 void pos_ui_message(const char *title, const char *body);
 void pos_ui_notice(const char *title, const char *body);
 int pos_ui_menu(const char *title, const char *const *items, int count);
@@ -45,7 +52,7 @@ bool pos_ui_timezone(char timezone[64]);
 void pos_ui_settings(const char *root, pos_settings_t *settings);
 void pos_ui_updates(const char *root);
 
-void pos_ui_recorder(const char *root);
+void pos_ui_recorder(const char *root, pos_settings_t *settings);
 void pos_ui_files_from(const char *root,const char *folder);
 void pos_ui_instruments(void);
 

@@ -55,10 +55,39 @@ enum {
                         POS_BOOT_STAGGER_FRAMES + POS_BOOT_FADE_FRAMES
 };
 extern const uint16_t pos_boot_colors[POS_BOOT_COLOR_COUNT];
+enum {
+  POS_VISUAL_NONE,
+  POS_VISUAL_STRIPES,
+  POS_VISUAL_MIC,
+  POS_VISUAL_COUNTER,
+  POS_VISUAL_FILES,
+  POS_VISUAL_MUSIC
+};
+enum {
+  POS_ICON_FILE,
+  POS_ICON_FOLDER,
+  POS_ICON_DOCUMENT,
+  POS_ICON_AUDIO,
+  POS_ICON_IMAGE,
+  POS_ICON_MIXED,
+  POS_ICON_PARENT,
+  POS_ICON_PREV,
+  POS_ICON_NEXT,
+  POS_ICON_ACTIONS
+};
 typedef struct {
   char lines[POS_ROWS][POS_COLS + 1];
   int selected_row;
   bool tiles;
+  int16_t ribbon_offset;
+  int16_t tile_lift;
+  uint16_t tile_scale; /* 0 means normal 100%; affects center tile only. */
+  uint8_t fade;
+  uint8_t visual, visual_selection;
+  int16_t visual_motion;
+  uint16_t visual_level; /* mono amplitude/progress, 0-1000 */
+  uint8_t visual_icons[3];
+  bool visual_flash;
   bool black_background;
   int selected_tile;
   uint8_t icons[3][8];
@@ -81,8 +110,12 @@ typedef struct {
 void pos_view_clear(pos_view_t *view, const char *title);
 void pos_view_line(pos_view_t *view, int row, const char *format, ...);
 uint16_t pos_view_pixel(const pos_view_t *view, int x, int y);
+/* Damped spring samples in percent. Final frame is always zero. */
+int pos_motion_spring(unsigned frame);
+bool pos_visual_pixel(const pos_view_t *, int x, int y, uint16_t *color);
 void pos_color_picker_view(const char *title, uint32_t rgb, uint16_t hue,
-                            uint16_t saturation, uint16_t value, pos_view_t *view);
+                           uint16_t saturation, uint16_t value,
+                           pos_view_t *view);
 /* Three color flashes, staggered flag slides, text fade, then a one-second
  * hold. False after the last frame. Frames require no SD assets. */
 bool pos_boot_frame(unsigned step, pos_view_t *view, uint32_t *hold_ms);
