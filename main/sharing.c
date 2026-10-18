@@ -173,8 +173,8 @@ done:
 }
 void pos_ui_share(const char *root, const char *relative) {
   const char *items[] = {"Save local copy", "Wi-Fi file transfer",
-                         "Send over BLE to POS / PC", "Back"};
-  int choice = pos_ui_menu("Share file", items, 4);
+                         "Send over BLE to POS / PC", "USB cable to PC", "Back"};
+  int choice = pos_ui_menu("Share file", items, 5);
   if (choice == 0) {
     char target[241];
     snprintf(target, sizeof(target), "Downloads/%s",
@@ -191,14 +191,16 @@ void pos_ui_share(const char *root, const char *relative) {
     pos_ui_wifi_export(root, relative);
   if (choice == 2)
     pos_ui_ble(root, relative, false);
+  if (choice == 3)
+    pos_ui_cable(root, relative);
 }
 void pos_ui_sharing(const char *root) {
   while (!pos_home_pending()) {
     const char *items[] = {"Share a file with POS / PC",
                            "Receive BLE file / PC", "Receive Wi-Fi files / PC",
-                           "Back"};
-    int choice = pos_ui_menu("Share with POS / PC", items, 4);
-    if (choice < 0 || choice == 3)
+                           "Receive USB cable / PC", "Back"};
+    int choice = pos_ui_menu("Share with POS / PC", items, 5);
+    if (choice < 0 || choice == 4)
       break;
     if (choice == 0) {
       char relative[241];
@@ -209,5 +211,7 @@ void pos_ui_sharing(const char *root) {
       pos_ui_ble(root, NULL, true);
     if (choice == 2)
       pos_ui_wifi_export(root, "");
+    if (choice == 3)
+      pos_ui_cable(root, "");
   }
 }

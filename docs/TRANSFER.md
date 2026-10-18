@@ -1,4 +1,4 @@
-# Simple Linux file transfer — Bluetooth and Wi-Fi
+# Simple Linux file transfer — USB cable, Wi-Fi and Bluetooth
 
 Download **pos-transfer** from the [latest POS release](https://github.com/thatsockmonke/POS/releases).
 It is also inside the installation ZIP and its source is `tools/pos_transfer.py`.
@@ -26,7 +26,65 @@ POS Transfer
 Choose a number (Ctrl+C cancels):
 ```
 
-After Send/Receive, choose **Wi-Fi** or **Bluetooth**.
+After Send/Receive, choose **USB cable**, **Wi-Fi** or **Bluetooth**.
+USB cable is recommended for Crostini when local Wi-Fi access is blocked.
+
+## USB cable — Linux and Chromebook/Crostini
+
+Requires **POS 0.8.3-dev or later** and its matching `pos-transfer`. Install that
+POS update once through Settings → System → Software Update. Normal file
+transfers then use the running OS; they do **not** flash or erase firmware,
+change partitions, enter the bootloader, or expose the SD as a raw USB disk.
+The SD stays inserted, and POS owns the filesystem throughout.
+
+1. Connect Panputer to the computer using a **USB data cable**. Boot POS normally.
+   Do not hold G0 or run pos-setup/esptool/a serial monitor at the same time.
+2. On Chromebook, open **Settings → Developers → Linux development environment →
+   Manage USB devices** and share the Cardputer/USB JTAG-serial device with Linux.
+   ChromeOS may also offer a “Connect to Linux” notification. This is the same
+   USB pass-through needed for flashing, but this tool does not perform flashing.
+3. On POS, for **PC → Cardputer**, open **Share → Receive USB cable / PC**.
+   For **Cardputer → PC**, select the file in **Files → Share → USB cable to PC**.
+   Leave the USB transfer screen open.
+4. Run `pos-transfer`, choose Send or Receive, then **3. USB cable**. Select the
+   listed port, normally `/dev/ttyACM0`. USB needs only Python's standard library:
+   no BlueZ, Wi-Fi connection, Python helper install, IP address or session key.
+5. For an upload, approve the filename and size on the Cardputer. Uploads go
+   into **Downloads**; PC downloads go into **~/Downloads/POS**. Progress appears
+   on both sides, and completed files must pass SHA-256 verification.
+6. A completed transfer closes the POS USB session. Esc or G0 also closes it.
+   Ctrl+C closes the PC tool. Interrupted files remain partial and can resume
+   when the same unchanged file/name is offered again. No different completed
+   file is overwritten; failed integrity checks retain partials for inspection.
+
+In this Chromebook's shared Downloads folder:
+
+```sh
+python3 "/mnt/shared/MyFiles/Downloads/pos-transfer"
+```
+
+Or choose USB directly:
+
+```sh
+python3 ~/Downloads/pos-transfer send ~/Documents/note.txt --usb
+python3 ~/Downloads/pos-transfer receive --usb --port /dev/ttyACM0
+```
+
+If no port appears, check the data cable and ChromeOS's Linux USB sharing, then
+choose Rescan. If permission is denied, check USB sharing and your distribution's
+serial-device access; do not make the device world-writable. Close flashing and
+serial-monitor programs before retrying. If the tool waits for POS, open the
+correct USB screen and ensure the firmware has USB file-transfer support. It
+waits for a valid device greeting before sending any bytes, so it will not
+probe old firmware by injecting serial keyboard commands.
+
+POS temporarily reserves USB console input, while physical keyboard/G0 remain
+active. CRC-framed traffic ignores console logs/noise; repeated acknowledgments
+are safe, and transfer frames arriving after exit are discarded by the console.
+The tool never sends bootloader commands or toggles RTS/DTR. Actual ChromeOS
+USB sharing, device scheduling and cable throughput still require hardware
+verification; the host tests use Linux pseudo-terminals with the actual C
+service/UI and PC tty transport, not a physical Cardputer.
 
 ## Wi-Fi (recommended for large files and Crostini)
 

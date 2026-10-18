@@ -91,11 +91,8 @@ static void channels(const char *root, pos_mesh_config_t *c) {
         free(text);
       }
       if (bad)
-        pos_ui_notice(
-            "Import refused",
-            "Use a Meshtastic channel URL in a plain text file (up to 2 KiB). "
-            "Only US/EU868 preset configurations are supported; custom RF "
-            "overrides are refused. Previous settings are retained.");
+        pos_ui_help(root, "Import refused",
+                    "notices.txt#meshtastic-import-refused");
       else {
         const char *confirm[] = {"Keep current channels",
                                  "Replace with imported channels"};
@@ -123,9 +120,7 @@ static void channels(const char *root, pos_mesh_config_t *c) {
         continue;
       if (pos_mesh_key_parse(key, ch)) {
         pos_secure_zero(key, sizeof(key));
-        pos_ui_notice("Invalid key",
-                      "Use the same Base64 key shown by Meshtastic, or 32/64 "
-                      "hex characters for AES-128/256.");
+        pos_ui_help(root, "Invalid key", "notices.txt#meshtastic-invalid-key");
         continue;
       }
       pos_secure_zero(key, sizeof(key));
@@ -293,7 +288,7 @@ static int choose_channel(void) {
   free(c);
   return a >= 0 && (unsigned)a < count ? (int)indices[a] : -1;
 }
-static __attribute__((noinline)) void nodes(void) {
+static __attribute__((noinline)) void nodes(const char *root) {
   for (;;) {
     char names[32][42];
     const char *items[33];
@@ -370,10 +365,8 @@ static __attribute__((noinline)) void nodes(void) {
     } else if (action == 2) {
       const char *confirm[] = {"Keep existing identity",
                                "Forget key; rediscover peer"};
-      pos_ui_notice("Verify identity",
-                    "Compare the full public key through another trusted "
-                    "channel. Forgetting accepts the next observed key; it "
-                    "does not authenticate the person.");
+      pos_ui_help(root, "Verify identity",
+                  "notices.txt#meshtastic-verify-identity");
       if (pos_ui_menu("Forget this node key?", confirm, 2) == 1) {
         int r = pos_meshtastic_forget(node.id, &e);
         pos_ui_notice(
@@ -750,7 +743,7 @@ static void telemetry_menu(void) {
     }
   }
 }
-static void history_menu(void) {
+static void history_menu(const char *root) {
   while (!pos_home_pending()) {
     bool tele, server;
     unsigned channel;
@@ -796,16 +789,8 @@ static void history_menu(void) {
               "may be busy or unavailable.");
     }
     if (n == 3)
-      pos_ui_notice(
-          "History controls",
-          "Opt-in server stores up to 128 broadcasts, 198 bytes each, on the "
-          "chosen channel. It never caches private DMs. Requests return up to "
-          "20 messages, at least 5 seconds apart and within normal airtime "
-          "limits. Valid UTC expires records after the requested window (max "
-          "24h); without a clock, only this boot is replayed. POS prefixes "
-          "original sender/ID inside freshly encrypted server-owned history "
-          "replies. Cached files remain readable in Radio/store-forward when "
-          "disabled.");
+      pos_ui_help(root, "History controls",
+                  "notices.txt#meshtastic-history-controls");
   }
 }
 void pos_ui_meshtastic(const char *root) {
@@ -840,7 +825,7 @@ void pos_ui_meshtastic(const char *root) {
     if (a == 15)
       telemetry_menu();
     if (a == 16)
-      history_menu();
+      history_menu(root);
     if (a == 9)
       conversations(root, false);
     if (a == 10)
@@ -907,7 +892,7 @@ void pos_ui_meshtastic(const char *root) {
                              : "Public-key encrypted. Check status for "
                                "destination ACK; delivery is not guaranteed.");
     } else if (a == 3)
-      nodes();
+      nodes(root);
     else if (a == 4 && tx_ready()) {
       int r = pos_meshtastic_announce(true, &e);
       pos_ui_notice(r ? "Not queued" : "Discovery queued",

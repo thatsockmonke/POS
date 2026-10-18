@@ -1,20 +1,26 @@
-# POS 0.8.2-dev
+# POS 0.8.3-dev
 
-Fixes “Not enough memory for streaming audio” when playing WAV recordings.
+Adds USB cable file transfer for Linux and Chromebook/Crostini, avoiding local
+Wi-Fi/BlueZ dependence and keeping the microSD inserted.
 
-- WAV playback uses a 2 KiB in-place PCM buffer, without MP3 decoding workspaces.
-- MP3 decoder, scratch, input and PCM buffers are separate allocations to tolerate
-  fragmented heap. Partial allocations are released on every failure.
-- Files allocates checkbox/clipboard storage only when used and shares filename
-  storage with its labels, reducing idle memory use by about 18 KiB.
-- Playback waits for interface cues to release their hardware/buffers and keeps
-  cues suspended through pause/dialogs, restoring sound preferences on exit.
+- PC tool: Send/Receive → **3. USB cable**; detect/select the serial port. Standard
+  Python only, with no additional USB/Bluetooth package installation.
+- On POS: **Share → Receive USB cable / PC**, or **Files → file → Share → USB
+  cable to PC**. Incoming filenames/sizes require on-device acceptance.
+- Streamed files, progress on both sides, CRC framing, SHA-256 verification,
+  interruption/resume, duplicate-ACK handling and no overwrite of existing data.
+- File transfer uses the running OS, without esptool, modem-control resets,
+  firmware/partition writes or raw USB disk access. Console input is reserved
+  during the explicit session; physical keyboard/G0 still work. Late packets
+  cannot act as serial keyboard shortcuts.
+- Existing explanatory notices are retained in a signed SD help catalog to
+  preserve both OTA slots and independent recovery within the flash limit.
 
-The [memory audit](BUG_REPORT_0.8.2.md) covers the root causes, constrained-heap
-regressions, sanitizer/source analysis and remaining physical checks.
+Update POS once through Settings → System → Software Update, then download the
+new `pos-transfer`. No SD formatting or repartition is required. On ChromeOS,
+share the Cardputer USB device with Linux and close flashing/serial monitors.
 
-Update through Settings → System → Software Update. Your files, wallpaper and
-settings are preserved; no SD formatting, USB reinstall or partition change is
-required. The independent recovery environment, both OTA slots, signed-update
-trust key and existing features remain. This is a development prerelease; no
-physical hardware tests were performed.
+[Step-by-step instructions](TRANSFER.md) · [verification and limits](BUG_REPORT_0.8.3.md).
+Native tests exercise actual C/PC code over pseudo-terminals. Physical Cardputer
+USB, ChromeOS sharing, actual throughput and unplug timing are not claimed tested.
+This is a development prerelease. Audio memory fixes remain included.

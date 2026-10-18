@@ -122,3 +122,32 @@ file selected on-device and returns `X-POS-SHA256`, plus `X-POS-Filename` in
 verify before no-overwrite publication. HTTP redirects are not followed with the
 key. Wi-Fi transfers do not currently resume. Closing the POS screen stops the
 server and discards its temporary key. The Linux client is `pos-transfer`.
+
+## POS USB file transfer v1
+
+An explicitly opened on-device USB session owns the USB serial console input.
+Frames are `0x1e`, ASCII `POS1`, lowercase hex of the little-endian uint32
+request ID plus payload plus little-endian CRC32, then LF. CRC covers the ID
+and payload. Payloads are 1–517 bytes; decoders discard oversized, malformed
+or bad-CRC frames and resynchronize on 0x1e. ID 0 is a periodic greeting:
+`H`, protocol byte 1, `R` (device receives) or `S` (device sends),
+`m5stack-cardputer-adv`, NUL, firmware version. PC waits for this before writing.
+
+Nonzero IDs identify checked requests/responses. `O` + the existing 158-byte
+POS offer requires on-device acceptance; `A`+offset or `Z`+size accepts/resumes
+or confirms an identical completed file. `D`+uint32 offset+up to 512 bytes writes
+and receives `K`+committed offset. `F` verifies and publishes, returning `Z`+size.
+For device export, `G` returns `O`+offer; `R`+offset returns `D`+offset+data from
+only the user-selected file. `Q` closes the session, returning `K`+offset.
+`E`+UTF-8 text reports refusal/error. Interim `V`+uint32 done+uint32 total
+reports hash/SD progress for the same request. The most recent checked request's
+reply is cached so a lost ACK can be retried without applying the operation twice.
+
+This protocol grants no raw block, firmware, arbitrary remote path, delete or
+terminal-command access. Uploads use protected Downloads staging/metadata and
+SHA-256 publication. Export paths are selected locally and checked as user-owned.
+CRC handles accidental framing damage; SHA-256 verifies the completed file.
+USB physical access and explicit on-device session/offer approval are the access
+boundary; this is not an encrypted transport or a replacement for authenticated
+firmware updates. Late frames are swallowed outside the session rather than
+being interpreted as keyboard input. Recovery/OTA partitions are unchanged.

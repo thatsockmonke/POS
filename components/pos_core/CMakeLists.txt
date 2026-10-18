@@ -25,3 +25,6 @@ target_sources(${COMPONENT_LIB} PRIVATE "pos_image.c")
 target_sources(${COMPONENT_LIB} PRIVATE "pos_wave.c")
 target_sources(${COMPONENT_LIB} PRIVATE "pos_graph.c")
 target_sources(${COMPONENT_LIB} PRIVATE "pos_mesh_cache.c")
+
+target_sources(${COMPONENT_LIB} PRIVATE "pos_cable.c")
+set_source_files_properties(pos_cable.c PROPERTIES COMPILE_OPTIONS "-Werror=frame-larger-than=3072")

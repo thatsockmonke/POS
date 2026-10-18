@@ -10,3 +10,6 @@ endif()
 
 set_source_files_properties(updates.c settings.c recorder.c instruments.c maps.c calculator.c PROPERTIES COMPILE_OPTIONS "-Werror=frame-larger-than=3072")
 target_sources(${COMPONENT_LIB} PRIVATE "image.c" "recording_edit.c")
+
+target_sources(${COMPONENT_LIB} PRIVATE "cable.c")
+set_source_files_properties(cable.c PROPERTIES COMPILE_OPTIONS "-Werror=frame-larger-than=3072")

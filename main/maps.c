@@ -57,9 +57,8 @@ static void download_run(const char *root, char raw[POS_FS_PATH],
   if (choice < 0 || choice == 2)
     return;
   if (!choice && !gps.fix) {
-    pos_ui_notice("Waiting for GPS fix",
-                  "Take the device outdoors or enter coordinates. A detected "
-                  "receiver alone does not establish your position.");
+    pos_ui_help(root, "Waiting for GPS fix",
+                "notices.txt#maps-waiting-for-gps-fix");
     return;
   }
   if (choice == 1 &&
@@ -76,9 +75,7 @@ static void download_run(const char *root, char raw[POS_FS_PATH],
                    false))
     return;
   if (!pos_map_region_valid(&m)) {
-    pos_ui_notice("Invalid region",
-                  "Use a short ASCII name and coordinates between -80/+80 "
-                  "latitude, away from the date line.");
+    pos_ui_help(root, "Invalid region", "notices.txt#maps-invalid-region");
     return;
   }
   const char *providers[] = {"OpenStreetMap (worldwide)",
@@ -102,9 +99,8 @@ static void download_run(const char *root, char raw[POS_FS_PATH],
   if (pos_home_pending() || !pos_network_status().connected)
     return;
   if (time(NULL) < 1704067200 && pos_network_sync_time()) {
-    pos_ui_notice("Time needed for HTTPS",
-                  "Sync time over Wi-Fi or set UTC in Settings. Certificate "
-                  "validation remains enabled.");
+    pos_ui_help(root, "Time needed for HTTPS",
+                "notices.txt#maps-time-needed-for-https");
     return;
   }
   char relative[80], url[512];
@@ -153,10 +149,7 @@ static void download_run(const char *root, char raw[POS_FS_PATH],
         "notice and source .osm files when sharing maps.\n";
     if (!pos_fs_join(folder, root, "POS/Maps/Map-data-license.txt"))
       (void)pos_fs_write_new(folder, notice, strlen(notice));
-    pos_ui_notice("Map saved",
-                  "Available in Saved regions without Internet. Original OSM "
-                  "data stays in POS/Maps. Enter opens road search and offline "
-                  "route planning. Choose a travel mode before routing.");
+    pos_ui_help(root, "Map saved", "notices.txt#maps-map-saved");
   }
 }
 
@@ -280,9 +273,7 @@ static bool delete_region(const char *root, const char *path, const char *name,
   if (pos_files_trash(root, w->relative, w->entry, &e))
     goto failed;
   deleted = true;
-  pos_ui_notice("Region deleted",
-                "Map, sources and saved routes moved to Files > Trash. Restore "
-                "them there, or delete them from Trash to free SD space.");
+  pos_ui_help(root, "Region deleted", "notices.txt#maps-region-deleted");
   goto done;
 failed: {
   char message[256];
@@ -297,8 +288,9 @@ done:
   free(w);
   return deleted;
 }
-static bool plan_route(const char *map, workspace_t *s, double start_lat,
-                       double start_lon, double target_lat, double target_lon) {
+static bool plan_route(const char *root, const char *map, workspace_t *s,
+                       double start_lat, double start_lon, double target_lat,
+                       double target_lon) {
   char *path = malloc(POS_FS_PATH);
   pos_error_t e = {0};
   if (!path)
@@ -308,11 +300,7 @@ static bool plan_route(const char *map, workspace_t *s, double start_lat,
     free(path);
     return false;
   }
-  pos_ui_notice("Offline route",
-                "Start: current GPS fix, or saved region center when no fix is "
-                "available. End: the nearest usable road point within 75m of "
-                "your selection. Routes stay inside the cached graph. Check "
-                "real signs and conditions.");
+  pos_ui_help(root, "Offline route", "notices.txt#maps-offline-route");
   const char *confirm[] = {"Calculate route", "Cancel"};
   if (pos_ui_menu(s->mode == POS_NAV_WALK    ? "Calculate walking route?"
                   : s->mode == POS_NAV_CYCLE ? "Calculate cycling route?"
@@ -392,8 +380,8 @@ static bool resume_route(const char *map, workspace_t *s) {
   free(paths);
   return next != NULL;
 }
-static bool road_search(const char *map, workspace_t *s, double *lat,
-                        double *lon) {
+static bool road_search(const char *root, const char *map, workspace_t *s,
+                        double *lat, double *lon) {
   char query[64] = "";
   if (!pos_ui_text("Find a road", "Road name (part is OK)", query,
                    sizeof(query), false) ||
@@ -409,10 +397,8 @@ static bool road_search(const char *map, workspace_t *s, double *lat,
                      NULL, &e))
     pos_ui_notice("Search unavailable", e.message);
   else if (!count)
-    pos_ui_notice(
-        "No matching roads",
-        "Try fewer letters, check the travel mode, or download a larger "
-        "region. Search is offline and limited to this region.");
+    pos_ui_help(root, "No matching roads",
+                "notices.txt#maps-no-matching-roads");
   else {
     const char *items[POS_NAV_RESULTS];
     for (unsigned i = 0; i < count; ++i)
@@ -648,7 +634,7 @@ static __attribute__((noinline)) void open_map(const char *root,
       if (c == 9 && delete_region(root, path, m.name, s))
         break;
       if (c == 1) {
-        if (road_search(path, s, &lat, &lon)) {
+        if (road_search(root, path, s, &lat, &lon)) {
           follow = false;
           target_lat = lat;
           target_lon = lon;
@@ -664,10 +650,9 @@ static __attribute__((noinline)) void open_map(const char *root,
         if (c == 8 && !target)
           pos_ui_notice("No destination", "Choose a road or map point first.");
         else if (c == 8 && !gps.fix)
-          pos_ui_notice("GPS fix needed",
-                        "Wait for a fresh position before recalculating. Your "
-                        "saved route is retained.");
-        else if (plan_route(path, s, gps.fix ? gps.latitude : m.latitude,
+          pos_ui_help(root, "GPS fix needed",
+                      "notices.txt#maps-gps-fix-needed");
+        else if (plan_route(root, path, s, gps.fix ? gps.latitude : m.latitude,
                             gps.fix ? gps.longitude : m.longitude, tolat,
                             tolon)) {
           pos_nav_destination(s->route, &target_lat, &target_lon);
@@ -911,10 +896,8 @@ static void world(const char *root) {
 
 void pos_ui_maps(const char *root) {
   if (!pos_expansion_maps_available()) {
-    pos_ui_notice("Maps need the GPS cap",
-                  "No GPS receiver detected. Fit the LoRa/GPS cap, restart, "
-                  "and check Settings > Expansion hardware. A satellite fix is "
-                  "only needed for your live position.");
+    pos_ui_help(root, "Maps need the GPS cap",
+                "notices.txt#maps-maps-need-the-gps-cap");
     return;
   }
   int selected = 4;

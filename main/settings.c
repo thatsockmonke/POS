@@ -197,12 +197,8 @@ static void firmware_history(const char *root) {
               : "Previous firmware and matching System archived and verified.");
       continue;
     }
-    pos_ui_notice("Roll back firmware + System",
-                  "This verifies the archived signature and every file, "
-                  "archives the current installation, writes the inactive "
-                  "firmware slot, and switches its matching System. User files "
-                  "stay in place. Old app/settings formats may be unsupported; "
-                  "unknown data is preserved. Keep the SD inserted.");
+    pos_ui_help(root, "Roll back firmware + System",
+                "notices.txt#settings-roll-back-firmware-system");
     const char *confirm[] = {"Cancel", "Verify and roll back"};
     if (pos_ui_menu(w->entries[choice].release, confirm, 2) == 1) {
       pos_ui_message("Firmware history",
@@ -234,13 +230,11 @@ static void system_settings(const char *root) {
       const char *options[] = {"Cancel", "Enable safe mode next boot"};
       if (pos_ui_menu("Safe mode", options, 2) == 1) {
         if (pos_health_request_safe(true))
-          pos_ui_notice("Safe mode not saved",
-                        "Boot preference could not be saved to NVS. Try "
-                        "again without erasing stored data.");
+          pos_ui_help(root, "Safe mode not saved",
+                      "notices.txt#settings-safe-mode-not-saved");
         else
-          pos_ui_notice("Safe mode requested",
-                        "The next restart opens recovery before optional "
-                        "services. No restart was forced.");
+          pos_ui_help(root, "Safe mode requested",
+                      "notices.txt#settings-safe-mode-requested");
       }
     }
     if (action == 3)
@@ -341,7 +335,7 @@ void pos_ui_settings(const char *root, pos_settings_t *settings) {
       }
     }
     if (choice == 9)
-      pos_ui_instruments();
+      pos_ui_instruments(root);
     if (choice == 10)
       pos_ui_deploy(root);
     if (choice == 11)

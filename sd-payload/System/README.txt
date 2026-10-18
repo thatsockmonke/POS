@@ -1,4 +1,4 @@
-POS 0.8.2-dev - Pan Operating System
+POS 0.8.3-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -113,3 +113,7 @@ Read MESHTASTIC.md in the installation bundle for scope and physical checks.
 
 0.8.2-dev: low-memory WAV playback, fragmented-heap MP3 allocation, on-demand
 Files selection/clipboard memory and exclusive playback/interface-cue handling.
+
+0.8.3-dev: Share and POS Transfer offer USB cable files for Linux/Crostini.
+The SD remains inserted; file sessions do not flash firmware or export a disk.
+Existing explanatory notices are stored in System/Help/notices.txt.

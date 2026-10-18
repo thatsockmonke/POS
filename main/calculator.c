@@ -302,12 +302,8 @@ static void graph(calculator_t *s) {
           if (pos_graph_analyze(&s->calc, curves[0], curves[1],
                                 (unsigned)choice - 3, bounds[0], bounds[1], &x,
                                 &y))
-            pos_ui_notice(
-                "No reliable result",
-                "Use a finite, continuous interval. Root/intersection "
-                "endpoints must straddle a zero; extrema need an interior "
-                "turning point. Integral must converge. Narrow the interval "
-                "around the desired feature.");
+            pos_ui_help(s->root, "No reliable result",
+                        "notices.txt#calculator-no-reliable-result");
           else {
             char result[128];
             snprintf(result, sizeof(result),
@@ -729,9 +725,8 @@ void pos_ui_calculator_open(const char *root, const char *relative) {
     }
   }
   if (s->dirty && !s->readonly && load_save(root, s, true))
-    pos_ui_notice("Calculator save failed",
-                  "Existing saved variables are retained. This session's "
-                  "changes were not saved.");
+    pos_ui_help(s->root, "Calculator save failed",
+                "notices.txt#calculator-calculator-save-failed");
   pos_ui_message("Launcher", "");
   free(s);
 #else

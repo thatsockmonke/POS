@@ -35,7 +35,7 @@ class FeatureTests(unittest.TestCase):
         cls.runner=Path(cls.compilation.name)/"features"
         sdk=Path(os.environ.get("IDF_PATH","/workspace/pos-cloud/esp-idf-v5.5.5"));cjson=sdk/"components/json/cJSON"
         sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/settings.c",ROOT/"main/browser.c",ROOT/"main/background.c",ROOT/"main/editor.c",ROOT/"main/wifi.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
-        sources += [ROOT/"main/image.c",ROOT/"main/recording_edit.c",ROOT/"main/files.c",ROOT/"main/music.c",ROOT/"main/recorder.c",ROOT/"main/instruments.c",ROOT/"main/sharing.c",ROOT/"main/expansion.c",ROOT/"main/maps.c",ROOT/"main/calculator.c",ROOT/"main/meshtastic.c"]
+        sources += [ROOT/"main/cable.c",ROOT/"main/image.c",ROOT/"main/recording_edit.c",ROOT/"main/files.c",ROOT/"main/music.c",ROOT/"main/recorder.c",ROOT/"main/instruments.c",ROOT/"main/sharing.c",ROOT/"main/expansion.c",ROOT/"main/maps.c",ROOT/"main/calculator.c",ROOT/"main/meshtastic.c"]
         for component in ("pos_core","pos_recovery","pos_update"):
             sources.extend((ROOT/"components"/component).glob("*.c"))
         command=["gcc","-std=c11","-D_POSIX_C_SOURCE=200809L","-Wall","-Wextra","-Werror","-g","-fsanitize=undefined","-fno-sanitize-recover=all"]
@@ -888,6 +888,30 @@ class FeatureTests(unittest.TestCase):
         for mode in ('files-audio-memory','wave-audio-memory','audio-open-memory-error','files-clipboard-memory-error','files-selection-memory-error'):
             with self.subTest(mode=mode):self.run_feature(mode)
         self.assertEqual(file.read_bytes(),before)
+
+    def test_sd_notice_sections_are_bounded_and_missing_or_damaged_text_is_reported(self):
+        p=self.write('POS/System/Help/notices.txt',b'@first\nWrong text\n\f\n@selected\nSelected help\n\f\n@last\nOther text\n\f\n')
+        self.assertEqual(self.run_feature('help-section','notices.txt#selected').stdout.strip(),'Selected help')
+        self.assertIn('Help unavailable',self.run_feature('help-section','notices.txt#absent').stdout)
+        for bad in (b'@selected\n' + b'x'*2050 + b'\f',b'@selected\nNull\0text\f',b'@selected\nIncomplete'):
+            p.write_bytes(bad)
+            self.assertIn('Help unavailable',self.run_feature('help-section','notices.txt#selected').stdout)
+
+    def test_every_resident_notice_reference_has_one_complete_sd_section(self):
+        import re
+        catalog=(ROOT/'sd-payload/System/Help/notices.txt').read_text()
+        sections={}
+        for block in catalog.split('\f'):
+            block=block.strip()
+            if not block:continue
+            name,body=block.split('\n',1)
+            self.assertTrue(name.startswith('@'))
+            self.assertNotIn(name[1:],sections)
+            sections[name[1:]]=body
+            self.assertLessEqual(len(body.encode()),2048)
+        refs=[]
+        for p in (ROOT/'main').glob('*.c'):refs+=re.findall(r'"notices.txt#([a-z0-9-]+)"',p.read_text())
+        self.assertEqual(set(refs),set(sections))
 
     def test_recorder_saves_buffered_tail_on_home_and_creates_header_before_capture(self):
         self.run_feature('recorder-ui-tail')

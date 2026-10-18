@@ -1,4 +1,4 @@
-# POS development status — 0.8.2-dev
+# POS development status — 0.8.3-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -213,3 +213,18 @@ MP3 workspaces are allocated separately; Files selection/clipboard storage is
 created on demand and freed on close. Playback holds interface cues through
 pause and dialogs. See [the memory audit](BUG_REPORT_0.8.2.md). Physical heap,
 SD latency and radio/audio coexistence measurements remain device checks.
+
+## 0.8.3-dev USB cable file transfer
+
+Share and the PC tool offer explicit USB cable sessions for uploads to Downloads
+and export of one locally selected user file. CRC framing, SHA-256, confirmation,
+resume, no-overwrite publication and console ownership keep file operations
+separate from flashing. Physical keyboard/G0 stay active. No dependencies beyond
+standard Python are needed for USB on Linux/Crostini; ChromeOS must expose the
+USB serial device to Linux. This is file copying, not USB mass storage.
+
+Explanatory notices move unchanged into one bounded, signed SD help catalog to
+make room without removing features, either OTA slot or independent recovery.
+Missing/corrupt help fails with a clear notice. See [TRANSFER.md](TRANSFER.md)
+and [the verification report](BUG_REPORT_0.8.3.md). Real USB hardware, ChromeOS
+pass-through, throughput and cable-disconnect timing remain physical checks.

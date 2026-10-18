@@ -7,6 +7,11 @@
 #include "pos_network_service.h"
 #include "pos_update_service.h"
 #include "ui.h"
+void pos_ui_help(const char *root, const char *title, const char *file) {
+  (void)root;
+  (void)file;
+  pos_ui_notice(title, "SD help resource");
+}
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>

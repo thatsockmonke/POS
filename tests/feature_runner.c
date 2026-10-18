@@ -27,6 +27,7 @@
 #include "pos_timezone.h"
 #include "pos_update_service.h"
 #include "ui.h"
+#include "esp_app_desc.h"
 #include <assert.h>
 #include <dirent.h>
 #include <limits.h>
@@ -39,6 +40,11 @@ uint32_t esp_random(void) { return 0x13572468u; }
 static char calculator_answer[100];
 static unsigned audio_holds, wifi_activity_steps, wifi_activity_seen;
 static bool wifi_activity_test;
+static bool cable_ui_test, cable_decline;
+const esp_app_desc_t *esp_app_get_description(void) {
+  static const esp_app_desc_t description = {"0.8.3-dev"};
+  return &description;
+}
 static bool maps_download_test, maps_guidance_seen, maps_turn_seen;
 static bool map_controls_record;
 static struct {
@@ -298,10 +304,28 @@ static void replace_field(const char *text) {
   push_key(POS_KEY_ENTER, 0);
 }
 int64_t esp_timer_get_time(void) {
+  if (cable_ui_test) {
+    struct timespec now; clock_gettime(CLOCK_MONOTONIC, &now);
+    return (int64_t)now.tv_sec * 1000000 + now.tv_nsec / 1000;
+  }
   static int64_t time;
   return time += 200000;
 }
 bool pos_device_event(pos_event_t *event, uint32_t timeout) {
+  if (cable_ui_test) {
+    static unsigned approval;
+    if (!strcmp(ui_last.lines[0], "Incoming USB file")) {
+      *event = (pos_event_t){POS_KEY_ENTER, 0, true};
+      return true;
+    }
+    if (!strcmp(ui_last.lines[0], "Receive USB file?")) {
+      *event = (pos_event_t){cable_decline || approval++ ? POS_KEY_ENTER : POS_KEY_DOWN, 0, true};
+      return true;
+    }
+    approval = 0;
+    struct timespec pause = {0,1000000}; nanosleep(&pause,NULL);
+    return false;
+  }
   if (!timeout && ui_next < ui_count && ui_events[ui_next].key == INT_MIN) {
     return false; /* Later input arrives after the current operation finishes.
                    */
@@ -1891,6 +1915,20 @@ static int search_match(void *ctx, const char *relative, bool body) {
 int main(int argc, char **argv) {
   if (argc < 3)
     return 2;
+  if (!strcmp(argv[2], "help-section")) {
+    push_key(POS_KEY_ENTER, 0);
+    pos_ui_help(argv[1], "Section test", argv[3]);
+    printf("%s\n", ui_last.lines[2]);
+    return 0;
+  }
+  if (!strcmp(argv[2], "cable-ui") || !strcmp(argv[2], "cable-ui-decline")) {
+    limit = single = 16384; /* Bounded application heap, excluding libc/SDK. */
+    cable_ui_test = true;
+    cable_decline = !strcmp(argv[2], "cable-ui-decline");
+    pos_ui_cable(argv[1], argc > 3 ? argv[3] : "");
+    assert(!used && !audio_holds);
+    return 0;
+  }
   if (!strcmp(argv[2], "audio-open-memory-error")) {
     limit = single = 1024;
     push_key(POS_KEY_ENTER, 0); /* Allocation failure notice. */
@@ -2196,6 +2234,16 @@ int main(int argc, char **argv) {
     assert(!pipe(descriptors));
     assert(!pos_console_nonblocking(descriptors[0]));
     assert(pos_console_poll(descriptors[0]) == -1);
+    assert(pos_console_claim());
+    assert(!pos_console_claim());
+    assert(write(descriptors[1], "x", 1) == 1);
+    assert(pos_console_poll(descriptors[0]) == -1);
+    char held;
+    assert(read(descriptors[0], &held, 1) == 1 && held == 'x');
+    pos_console_release();
+    /* Late framed traffic, including controls, cannot select/close apps. */
+    assert(write(descriptors[1], "\036POS1\0\035\nq", 9) == 9);
+    assert(pos_console_poll(descriptors[0]) == 'q');
     assert(write(descriptors[1], "w", 1) == 1);
     assert(pos_console_poll(descriptors[0]) == 'w');
     assert(pos_console_poll(descriptors[0]) == -1);

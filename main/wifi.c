@@ -211,10 +211,7 @@ static void transfer(const char *root) {
 }
 void pos_ui_wifi_export(const char *root, const char *selected) {
   const char *confirm[] = {"Start trusted-LAN session", "Cancel"};
-  pos_ui_notice("Local transfer",
-                "This uses HTTP on your local Wi-Fi with a temporary session "
-                "key. Use a trusted network. Uploads only go to Downloads; "
-                "existing files are preserved.");
+  pos_ui_help(root, "Local transfer", "notices.txt#wifi-local-transfer");
   if (pos_ui_menu("Start file transfer?", confirm, 2) != 0)
     return;
   char key[17];
@@ -278,11 +275,8 @@ void pos_ui_wifi_export(const char *root, const char *selected) {
   pos_audio_feedback_hold(false);
   pos_secure_zero(key, sizeof(key));
   if (network_changed && !pos_home_pending())
-    pos_ui_notice("Wi-Fi connection changed",
-                  "Transfer session closed. "
-                  "Reconnect Wi-Fi, then reopen sharing for the current IP and "
-                  "a new key. "
-                  "Incomplete files are retained.");
+    pos_ui_help(root, "Wi-Fi connection changed",
+                "notices.txt#wifi-wi-fi-connection-changed");
 }
 void pos_ui_wifi(const char *root) {
   pos_network_auto_pause(true);

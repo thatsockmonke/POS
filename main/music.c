@@ -223,12 +223,7 @@ void pos_ui_music(const char *root) {
     if (choice < 0 || choice == 3)
       break;
     if (choice == 2) {
-      pos_ui_notice(
-          "POS Music",
-          "Put MP3 or PCM 16-bit WAV files in Music (folders are supported). "
-          "Space pauses; Left/Right changes tracks; Up/Down changes volume; R "
-          "toggles "
-          "shuffle; P adds to a .m3u playlist. Audio stops on closing.");
+      pos_ui_help(root, "POS Music", "notices.txt#music-pos-music");
       continue;
     }
     char path[241];
@@ -245,9 +240,7 @@ void pos_ui_music(const char *root) {
       char track[241];
       unsigned total;
       if (pos_music_playlist_track(root, path, 0, track, &total))
-        pos_ui_notice("Playlist empty",
-                      "Use an .m3u file with SD-root-relative user audio "
-                      "paths. Add tracks with P during playback.");
+        pos_ui_help(root, "Playlist empty", "notices.txt#music-playlist-empty");
       else
         player(root, track, path, false);
     }

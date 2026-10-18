@@ -177,3 +177,19 @@ link and locates the matching GCC plugin. `POS_OPTIMIZE_LINK=OFF` is available f
 diagnostics, but an unoptimized runtime can exceed the unchanged OTA slot.
 Both runtime and installer must pass ordinary IDF size checks before packaging.
 Assertions, panic/backtraces, certificate validation and signed updates remain.
+
+## USB file-session validation
+
+```sh
+PYTHONPATH=tests python -m unittest test_cable -v
+POS_TEST_ASAN=1 ASAN_OPTIONS=detect_leaks=1:allocator_may_return_null=1:halt_on_error=1 \
+  PYTHONPATH=tests python -m unittest test_cable -v
+```
+
+These tests connect the real Linux tty client and real C USB file service/UI
+through pseudo-terminals, including a 256 KiB round-trip under a 16 KiB POS
+allocation budget. No ChromeOS USB pass-through, native ESP32 serial/JTAG driver,
+physical device, cable throughput or power-loss test is implied. The versioned
+SD notice catalog must travel with its matching firmware; ordinary signed
+updates install and verify it before selecting the new runtime. Both OTA slots
+and the factory recovery layout remain unchanged.

@@ -61,10 +61,8 @@ static bool network_ready(const char *root) {
   if (time(NULL) < 1704067200) {
     pos_ui_message("Preparing secure update check", "Synchronizing time...");
     if (pos_network_sync_time()) {
-      pos_ui_notice(
-          "Time needed for HTTPS",
-          "Connect to the Internet and retry, or set UTC in Settings > "
-          "Date & time. Certificate validation stays enabled.");
+      pos_ui_help(root, "Time needed for HTTPS",
+                  "notices.txt#updates-time-needed-for-https");
       return false;
     }
   }
@@ -135,9 +133,8 @@ static void source(const char *root, pos_update_source_t *s) {
       char fingerprint[65];
       if (bad || n > 512 || memchr(pem, 0, n) ||
           pos_update_key_fingerprint(pem, fingerprint)) {
-        pos_ui_notice("Invalid public key",
-                      "Choose a P-256 public key in PEM format (at most 512 "
-                      "bytes). Private keys are never installed.");
+        pos_ui_help(root, "Invalid public key",
+                    "notices.txt#updates-invalid-public-key");
         continue;
       }
       pos_ui_notice("Verify signing key", fingerprint);
@@ -199,9 +196,8 @@ static bool install_url(const char *root, const char *url,
     if (pos_device_install_update(root, u, &error))
       pos_ui_notice("Update not completed", error.message);
     else {
-      pos_ui_notice("Asset update installed",
-                    "System files verified. No firmware was flashed. "
-                    "Previous System remains under POS/Updates.");
+      pos_ui_help(root, "Asset update installed",
+                  "notices.txt#updates-asset-update-installed");
       pos_update_source_load(s);
       success = true;
     }
@@ -214,9 +210,8 @@ void pos_ui_updates(const char *root) {
   if (!s)
     return;
   if (pos_update_source_load(s)) {
-    pos_ui_notice("Update settings unavailable",
-                  "Existing update settings were preserved. Check internal "
-                  "NVS; do not erase it to bypass this error.");
+    pos_ui_help(root, "Update settings unavailable",
+                "notices.txt#updates-update-settings-unavailable");
     free(s);
     return;
   }
@@ -236,12 +231,8 @@ void pos_ui_updates(const char *root) {
     if (choice != 0)
       continue;
     if (!*s->url || !*s->key) {
-      pos_ui_notice(
-          "Configure Software Update",
-          "Set an HTTPS manifest URL and import a trusted publisher's P-256 "
-          "public key. Choose Use official POS updates to restore the built-in "
-          "source "
-          "and trusted signing key.");
+      pos_ui_help(root, "Configure Software Update",
+                  "notices.txt#updates-configure-software-update");
       continue;
     }
     if (network_ready(root))
@@ -259,20 +250,13 @@ void pos_ui_deploy(const char *root) {
     return;
   }
   if (pos_update_source_load(source) || !*source->key) {
-    pos_ui_notice(
-        "Configure trusted signing key",
-        "Software Update must have a separately verified publisher public key. "
-        "Development sessions use the same signed update checks.");
+    pos_ui_help(root, "Configure trusted signing key",
+                "notices.txt#updates-configure-trusted-signing-key");
     goto done;
   }
   const char *items[] = {"Cancel", "USB recovery and OTA tested: open session"};
-  pos_ui_notice(
-      "Developer deployment",
-      "Use only after testing USB/factory recovery, OTA confirmation, rollback "
-      "and filesystem interruption recovery on this device/build. posctl "
-      "requires your recorded physical evidence before requesting an update. "
-      "Use a trusted LAN. Session expires after five minutes; each signed "
-      "update still requires approval here.");
+  pos_ui_help(root, "Developer deployment",
+              "notices.txt#updates-developer-deployment");
   if (pos_ui_menu("Have those physical tests passed?", items, 2) != 1)
     goto done;
   char key[17];

@@ -284,8 +284,7 @@ static void actions(const char *root, files_ui_t *f, bool folder) {
   }
   if (choice == 5) {
     if (folder)
-      pos_ui_notice("Choose a file", "Share transfers one file. Copy a folder "
-                                     "locally, or choose a file inside it.");
+      pos_ui_help(root, "Choose a file", "notices.txt#files-choose-a-file");
     else
       pos_ui_share(root, f->selected);
   }
@@ -348,10 +347,7 @@ static void folder_actions(const char *root, files_ui_t *f) {
       f->checked = NULL;
     }
     if (op == 3)
-      pos_ui_notice("Files controls",
-                    "Space: checkbox. Ctrl+A: select folder. Ctrl+C: copy. "
-                    "Ctrl+X: cut. Ctrl+V: paste. Ctrl+F: search. Enter: file "
-                    "actions. Cut/paste never overwrites existing names.");
+      pos_ui_help(root, "Files controls", "notices.txt#files-files-controls");
   }
   if (choice == 2) {
     strcpy(f->selected, f->folder);

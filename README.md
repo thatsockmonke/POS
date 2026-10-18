@@ -4,7 +4,7 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**Current release: [0.8.2-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.8.2-dev) — low-memory audio playback and Files memory fixes.**
+**Current release: [0.8.3-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.8.3-dev) — USB cable file transfer for Linux/Crostini.**
 
 New: an offline **[Calculator](docs/CALCULATOR.md)** with scientific-function
 buttons, saved variables, fractions and polynomial CAS. **[POS Transfer](docs/TRANSFER.md)**
@@ -32,7 +32,7 @@ its route, next maneuver/road name and remaining distance.
 **Download your regions again after updating from 0.6.3** to include access and
 restriction data. Existing road maps remain viewable. Routes cover the selected
 cached graph; unsupported conditional/via-way rules are blocked conservatively.
-[World map preview](downloads/0.8.2-dev/world.png) · See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.8.2-dev/maps.png).
+[World map preview](downloads/0.8.3-dev/world.png) · See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.8.3-dev/maps.png).
 
 Earlier Recorder playback, launcher, editor and Wi-Fi improvements remain:
 The launcher keeps its selection box fixed while crisp 32×32 icons slide on an
@@ -66,7 +66,7 @@ Upgrade through **0.6.0-dev** first if using an older installation. Active updat
 metadata stays at exactly seven fields; the old bridge feed remains frozen.
 Black-start flag/logo boot, microphone gain and themed app visuals remain.
 
-[Animated UI preview](downloads/0.8.2-dev/ui-animation.png) · [Recorder](downloads/0.8.2-dev/recorder.png) · [Files](downloads/0.8.2-dev/files.png) · [Background](downloads/0.8.2-dev/background.png) · [Counter](downloads/0.8.2-dev/counter.png)
+[Animated UI preview](downloads/0.8.3-dev/ui-animation.png) · [Recorder](downloads/0.8.3-dev/recorder.png) · [Files](downloads/0.8.3-dev/files.png) · [Background](downloads/0.8.3-dev/background.png) · [Counter](downloads/0.8.3-dev/counter.png)
 
 Previews use the actual portable renderer with example state; they are not
 hardware recordings or device frame-rate measurements.
@@ -182,14 +182,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.8.2-dev/launcher.png)
-![Color picker](downloads/0.8.2-dev/color-picker.png)
+![Launcher](downloads/0.8.3-dev/launcher.png)
+![Color picker](downloads/0.8.3-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.8.2-dev/boot-animation.png)
+![POS boot animation](downloads/0.8.3-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.8.2-dev/boot-splash.png)
+[Final splash frame](downloads/0.8.3-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -206,7 +206,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.8.2-dev --zip-output dist/pos-0.8.2-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.8.3-dev --zip-output dist/pos-0.8.3-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -328,11 +328,11 @@ See [Developer tooling](docs/DEVELOPMENT.md) for `posctl flash`, `files` and gat
 existing OTA layout; validation remains enabled and unsupported roots are rejected.
 
 Transfer files between POS and Linux with the simple **[POS Transfer tool](docs/TRANSFER.md)**:
-[download pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.8.2-dev/pos-transfer),
+[download pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/pos-transfer),
 then run `python3 ~/Downloads/pos-transfer`. Choose Send/Receive and Wi-Fi/Bluetooth.
 Wi-Fi works without Bluetooth helpers and is the preferred Crostini route.
 
-## Meshtastic radio mode (0.8.2-dev)
+## Meshtastic radio mode (0.8.3-dev)
 
 Settings → Expansion hardware → Radio protocol / Meshtastic selects compatible
 channels, modern encrypted DMs, node discovery, bounded client relaying and
@@ -376,3 +376,13 @@ tolerate fragmented heap, Files creates selection/clipboard storage only when
 needed, and playback drains interface cues before allocating. See the
 [memory audit and verification report](docs/BUG_REPORT_0.8.2.md). Update through
 Settings → System → Software Update; no formatting or partition change is needed.
+
+## USB cable file transfer (0.8.3-dev)
+
+The updated [pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/pos-transfer)
+adds a USB cable option using only standard Python on Linux/Crostini. Install
+0.8.3 once, share the Cardputer USB device with Linux, and open Share → Receive
+USB cable / PC, or Files → file → Share → USB cable to PC. Send/receive files
+with the SD inserted; this does not reflash firmware or export a raw disk.
+See [step-by-step Chromebook instructions](docs/TRANSFER.md#usb-cable--linux-and-chromebookcrostini)
+and [verification and hardware limits](docs/BUG_REPORT_0.8.3.md).

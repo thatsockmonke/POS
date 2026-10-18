@@ -55,7 +55,7 @@ void pos_ui_updates(const char *root);
 
 void pos_ui_recorder(const char *root, pos_settings_t *settings);
 void pos_ui_files_from(const char *root, const char *folder);
-void pos_ui_instruments(void);
+void pos_ui_instruments(const char *root);
 
 void pos_ui_deploy(const char *root);
 
@@ -71,3 +71,5 @@ int pos_ui_files_menu(const char *, const char *const *, int, unsigned,
                       unsigned, const char *, int *, pos_event_t *);
 void pos_ui_image(const char *, const char *);
 void pos_ui_recording_edit(const char *, const char *);
+
+void pos_ui_cable(const char *root, const char *selected);

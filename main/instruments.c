@@ -58,7 +58,7 @@ static bool byte(const char *title, char text[4], uint8_t *out) {
   *out = (uint8_t)n;
   return true;
 }
-void pos_ui_instruments(void) {
+void pos_ui_instruments(const char *root) {
   const char *items[] = {"Live IMU readings", "Send infrared / NEC",
                          "Hardware information", "Back"};
   while (!pos_home_pending()) {
@@ -83,11 +83,7 @@ void pos_ui_instruments(void) {
       }
     }
     if (choice == 2)
-      pos_ui_notice(
-          "IR & motion hardware",
-          "ADV: BMI270 at I2C 69 (68 fallback), +/-4 g and +/-1000 degrees/s, "
-          "100 Hz sensor rate. Values use raw sensor axes; no compass or "
-          "calibrated heading. IR emitter: GPIO44, 38 kHz NEC transmit. The "
-          "ADV has no built-in IR receiver. Services start only when used.");
+      pos_ui_help(root, "IR & motion hardware",
+                  "notices.txt#instruments-ir-motion-hardware");
   }
 }

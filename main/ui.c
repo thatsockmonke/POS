@@ -310,17 +310,33 @@ int pos_ui_progress(void *ctx, const char *phase, const char *name,
 
 void pos_ui_help(const char *root, const char *title, const char *file) {
   char relative[128], path[POS_FS_PATH];
+  const char *section = strchr(file, '#');
+  size_t file_length = section ? (size_t)(section - file) : strlen(file);
   char *text = calloc(1, 2049);
   FILE *f = NULL;
   if (text &&
-      snprintf(relative, sizeof(relative), "POS/System/Help/%s", file) <
-          (int)sizeof(relative) &&
+      snprintf(relative, sizeof(relative), "POS/System/Help/%.*s",
+               (int)file_length, file) < (int)sizeof(relative) &&
       !pos_fs_join(path, root, relative))
     f = fopen(path, "rb");
   bool good = false;
   if (f) {
-    size_t n = fread(text, 1, 2048, f);
-    good = !ferror(f) && fgetc(f) == EOF && !memchr(text, 0, n);
+    if (section) {
+      char marker[128];
+      snprintf(marker, sizeof(marker), "@%s\n", section + 1);
+      while (fgets(text, 2049, f) && strcmp(text, marker)) {
+      }
+      if (!strcmp(text, marker)) {
+        size_t n = fread(text, 1, 2048, f);
+        char *end = memchr(text, '\f', n);
+        good = !ferror(f) && end && !memchr(text, 0, (size_t)(end - text));
+        if (end)
+          *end = 0;
+      }
+    } else {
+      size_t n = fread(text, 1, 2048, f);
+      good = !ferror(f) && fgetc(f) == EOF && !memchr(text, 0, n);
+    }
     fclose(f);
   }
   pos_ui_notice(title, good ? text
