@@ -1,0 +1,1 @@
+Arrows pan; P changes step; +/- zoom; C follows GPS. Enter: road search, travel mode, offline route planning and resume. Yellow line = route; arrow = next maneuver. Off route? Recalculate from a fresh fix. Route limits follow the downloaded graph and selected mode. Old 0.6.3 maps need a fresh download for routing. Real signs and access rules take priority.
