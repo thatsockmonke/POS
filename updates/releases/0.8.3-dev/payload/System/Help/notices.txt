@@ -1,0 +1,96 @@
+@maps-waiting-for-gps-fix
+Take the device outdoors or enter coordinates. A detected receiver alone does not establish your position.
+
+@maps-invalid-region
+Use a short ASCII name and coordinates between -80/+80 latitude, away from the date line.
+
+@maps-time-needed-for-https
+Sync time over Wi-Fi or set UTC in Settings. Certificate validation remains enabled.
+
+@maps-map-saved
+Available in Saved regions without Internet. Original OSM data stays in POS/Maps. Enter opens road search and offline route planning. Choose a travel mode before routing.
+
+@maps-region-deleted
+Map, sources and saved routes moved to Files > Trash. Restore them there, or delete them from Trash to free SD space.
+
+@maps-offline-route
+Start: current GPS fix, or saved region center when no fix is available. End: the nearest usable road point within 75m of your selection. Routes stay inside the cached graph. Check real signs and conditions.
+
+@maps-no-matching-roads
+Try fewer letters, check the travel mode, or download a larger region. Search is offline and limited to this region.
+
+@maps-gps-fix-needed
+Wait for a fresh position before recalculating. Your saved route is retained.
+
+@maps-maps-need-the-gps-cap
+No GPS receiver detected. Fit the LoRa/GPS cap, restart, and check Settings > Expansion hardware. A satellite fix is only needed for your live position.
+
+@meshtastic-import-refused
+Use a Meshtastic channel URL in a plain text file (up to 2 KiB). Only US/EU868 preset configurations are supported; custom RF overrides are refused. Previous settings are retained.
+
+@meshtastic-invalid-key
+Use the same Base64 key shown by Meshtastic, or 32/64 hex characters for AES-128/256.
+
+@meshtastic-verify-identity
+Compare the full public key through another trusted channel. Forgetting accepts the next observed key; it does not authenticate the person.
+
+@meshtastic-history-controls
+Opt-in server stores up to 128 broadcasts, 198 bytes each, on the chosen channel. It never caches private DMs. Requests return up to 20 messages, at least 5 seconds apart and within normal airtime limits. Valid UTC expires records after the requested window (max 24h); without a clock, only this boot is replayed. POS prefixes original sender/ID inside freshly encrypted server-owned history replies. Cached files remain readable in Radio/store-forward when disabled.
+
+@music-pos-music
+Put MP3 or PCM 16-bit WAV files in Music (folders are supported). Space pauses; Left/Right changes tracks; Up/Down changes volume; R toggles shuffle; P adds to a .m3u playlist. Audio stops on closing.
+
+@music-playlist-empty
+Use an .m3u file with SD-root-relative user audio paths. Add tracks with P during playback.
+
+@files-choose-a-file
+Share transfers one file. Copy a folder locally, or choose a file inside it.
+
+@files-files-controls
+Space: checkbox. Ctrl+A: select folder. Ctrl+C: copy. Ctrl+X: cut. Ctrl+V: paste. Ctrl+F: search. Enter: file actions. Cut/paste never overwrites existing names.
+
+@updates-time-needed-for-https
+Connect to the Internet and retry, or set UTC in Settings > Date & time. Certificate validation stays enabled.
+
+@updates-invalid-public-key
+Choose a P-256 public key in PEM format (at most 512 bytes). Private keys are never installed.
+
+@updates-asset-update-installed
+System files verified. No firmware was flashed. Previous System remains under POS/Updates.
+
+@updates-update-settings-unavailable
+Existing update settings were preserved. Check internal NVS; do not erase it to bypass this error.
+
+@updates-configure-software-update
+Set an HTTPS manifest URL and import a trusted publisher's P-256 public key. Choose Use official POS updates to restore the built-in source and trusted signing key.
+
+@updates-configure-trusted-signing-key
+Software Update must have a separately verified publisher public key. Development sessions use the same signed update checks.
+
+@updates-developer-deployment
+Use only after testing USB/factory recovery, OTA confirmation, rollback and filesystem interruption recovery on this device/build. posctl requires your recorded physical evidence before requesting an update. Use a trusted LAN. Session expires after five minutes; each signed update still requires approval here.
+
+@settings-roll-back-firmware-system
+This verifies the archived signature and every file, archives the current installation, writes the inactive firmware slot, and switches its matching System. User files stay in place. Old app/settings formats may be unsupported; unknown data is preserved. Keep the SD inserted.
+
+@settings-safe-mode-not-saved
+Boot preference could not be saved to NVS. Try again without erasing stored data.
+
+@settings-safe-mode-requested
+The next restart opens recovery before optional services. No restart was forced.
+
+@instruments-ir-motion-hardware
+ADV: BMI270 at I2C 69 (68 fallback), +/-4 g and +/-1000 degrees/s, 100 Hz sensor rate. Values use raw sensor axes; no compass or calibrated heading. IR emitter: GPIO44, 38 kHz NEC transmit. The ADV has no built-in IR receiver. Services start only when used.
+
+@wifi-local-transfer
+This uses HTTP on your local Wi-Fi with a temporary session key. Use a trusted network. Uploads only go to Downloads; existing files are preserved.
+
+@wifi-wi-fi-connection-changed
+Transfer session closed. Reconnect Wi-Fi, then reopen sharing for the current IP and a new key. Incomplete files are retained.
+
+@calculator-no-reliable-result
+Use a finite, continuous interval. Root/intersection endpoints must straddle a zero; extrema need an interior turning point. Integral must converge. Narrow the interval around the desired feature.
+
+@calculator-calculator-save-failed
+Existing saved variables are retained. This session's changes were not saved.
+

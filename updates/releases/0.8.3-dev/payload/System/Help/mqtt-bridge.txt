@@ -1,0 +1,1 @@
+Connects matching channels across the Internet. Only channel text is bridged; GPS and private direct messages stay off MQTT. Broker credentials are used for this session only. Start again after reboot. Sound and microphone continue to own audio normally.
