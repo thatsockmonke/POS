@@ -5,24 +5,30 @@
 void pos_background_defaults(pos_background_t *background) {
   (void)pos_background_preset(background, POS_BACKGROUND_PANSEXUAL);
 }
+const char *const pos_background_preset_names[POS_BACKGROUND_PRESET_COUNT] = {
+    "Pansexual", "Nonbinary",   "Rainbow",     "Lesbian",
+    "Gay men",   "Bisexual",    "Transgender", "Asexual",
+    "Aromantic", "Genderqueer", "Genderfluid", "Agender"};
 bool pos_background_preset(pos_background_t *background,
                            pos_background_preset_t preset) {
-  if (!background || (preset != POS_BACKGROUND_PANSEXUAL &&
-                      preset != POS_BACKGROUND_NONBINARY))
+  static const pos_background_t flags[] = {
+      {3, {0xff218c, 0xffd800, 0x21b1ff}},
+      {4, {0xfff430, 0xffffff, 0x9c59d1, 0x000000}},
+      {6, {0xe40303, 0xff8c00, 0xffed00, 0x008026, 0x24408e, 0x732982}},
+      {5, {0xd52d00, 0xff9a56, 0xffffff, 0xd362a4, 0xa30262}},
+      {7,
+       {0x078d70, 0x26ceaa, 0x98e8c1, 0xffffff, 0x7bade2, 0x5049cc, 0x3d1a78}},
+      {3, {0xd60270, 0x9b4f96, 0x0038a8}},
+      {5, {0x5bcefa, 0xf5a9b8, 0xffffff, 0xf5a9b8, 0x5bcefa}},
+      {4, {0x000000, 0xa3a3a3, 0xffffff, 0x800080}},
+      {5, {0x3da542, 0xa7d379, 0xffffff, 0xa9a9a9, 0x000000}},
+      {3, {0xb57edc, 0xffffff, 0x4a8123}},
+      {5, {0xff75a2, 0xffffff, 0xbe18d6, 0x000000, 0x333ebd}},
+      {7,
+       {0x000000, 0xb9b9b9, 0xffffff, 0xb8f483, 0xffffff, 0xb9b9b9, 0x000000}}};
+  if (!background || (unsigned)preset >= POS_BACKGROUND_PRESET_COUNT)
     return false;
-  memset(background, 0, sizeof(*background));
-  if (preset == POS_BACKGROUND_PANSEXUAL) {
-    background->count = 3;
-    background->colors[0] = 0xff218c;
-    background->colors[1] = 0xffd800;
-    background->colors[2] = 0x21b1ff;
-  } else {
-    background->count = 4;
-    background->colors[0] = 0xfff430;
-    background->colors[1] = 0xffffff;
-    background->colors[2] = 0x9c59d1;
-    background->colors[3] = 0x000000;
-  }
+  *background = flags[preset];
   return true;
 }
 bool pos_background_valid(const pos_background_t *background) {

@@ -1,4 +1,4 @@
-POS 0.7.0-stable - Pan Operating System
+POS 0.8.0-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -107,3 +107,6 @@ preset, slot and channels; confirm antenna/TX, then announce/discover in Radio.
 Channel default keys are public. DMs require discovered unchanged public keys.
 GPS sharing is explicit once; not all upstream modules/APIs are implemented.
 Read MESHTASTIC.md in the installation bundle for scope and physical checks.
+
+0.8.0-dev: conversations, MQTT text bridge, Calculator modes and worksheets,
+12 stripe-only pride presets and hex colour entry. Help is stored in System/Help.

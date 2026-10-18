@@ -1,0 +1,8 @@
+{
+  "provenance": "Official PyPI meshtastic==2.7.8 generated protobufs; fixture tools are not linked into POS.",
+  "mqtt": "0a310d78563412152143658718082a15c0c99ee6632a2d412c3039c34c929e41ad262b0634354030201048035001780398017812084c6f6e67466173741a09213132333435363738",
+  "wire": "2143658778563412403020106b080078c0c99ee6632a2d412c3039c34c929e41ad262b0634",
+  "trace": "0a087856341221436587120b14f8ffffffffffffffff01",
+  "trace_append": "0a0c785634122143658744332211120b14f8ffffffffffffffff01",
+  "url": "https://meshtastic.org/e/#Cg0SAQEaCExvbmdGYXN0CisSIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fGgdQcml2YXRlEgYIATgBQAM"
+}

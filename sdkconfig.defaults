@@ -53,3 +53,11 @@ CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
 # POS configures IPv4 STA/DHCP and IPv4-only LAN sessions. No IPv6 netif is
 # configured; omit its unused protocol machinery, keeping both OTA slots.
 CONFIG_LWIP_IPV6=n
+
+# The optional MQTT bridge uses ordinary TLS, not WebSocket transports.
+# CONFIG_MQTT_TRANSPORT_WEBSOCKET is not set
+# CONFIG_MQTT_TRANSPORT_WEBSOCKET_SECURE is not set
+# CONFIG_WS_TRANSPORT is not set
+
+# TLS clients use ordinary software keys; no digital-signature peripheral keys.
+# CONFIG_ESP_TLS_USE_DS_PERIPHERAL is not set

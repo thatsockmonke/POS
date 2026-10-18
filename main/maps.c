@@ -3,6 +3,7 @@
 #include "pos_device.h"
 #include "pos_files.h"
 #include "pos_maps.h"
+#include "pos_mesh_service.h"
 #include "pos_navigation.h"
 #include "pos_network_service.h"
 #include "pos_peripherals.h"
@@ -426,6 +427,29 @@ static bool road_search(const char *map, workspace_t *s, double *lat,
   free(results);
   return selected;
 }
+static void node_pins(pos_view_t *v, double lat, double lon, unsigned scale,
+                      bool world) {
+  uint64_t now = esp_timer_get_time() / 1000;
+  for (unsigned i = 0; i < 32; ++i) {
+    pos_mesh_node_t node;
+    if (pos_meshtastic_node(i, &node) || !node.id || !node.has_position)
+      continue;
+    int x, y;
+    if (world)
+      pos_world_project(node.latitude / 1e7, node.longitude / 1e7, lat, lon,
+                        scale, &x, &y);
+    else
+      pos_map_project(node.latitude / 1e7, node.longitude / 1e7, lat, lon,
+                      scale, &x, &y);
+    if (x < 0 || x >= 240 || y < 0 || y >= 88)
+      continue;
+    unsigned n = v->map_node_count++;
+    v->map_node_x[n] = x;
+    v->map_node_y[n] = y;
+    v->map_node_stale[n] =
+        now < node.position_ms || now - node.position_ms > 15 * 60 * 1000;
+  }
+}
 static __attribute__((noinline)) void open_map(const char *root,
                                                const char *path) {
   pos_map_info_t m;
@@ -484,6 +508,7 @@ static __attribute__((noinline)) void open_map(const char *root,
       v->map_pixels = s->pixels;
       v->map_generation = generation;
       v->map_region = true;
+      node_pins(v, lat, lon, width, false);
       double dy = m.width_m / (2 * 111195.08);
       double dx = dy / cos(m.latitude * 3.14159265358979323846 / 180);
       int bx, by;
@@ -680,15 +705,7 @@ static __attribute__((noinline)) void open_map(const char *root,
         s->route = NULL;
       }
       if (c == 7)
-        pos_ui_notice(
-            "Offline map controls",
-            "Arrows pan; P changes step; +/- zoom; C follows GPS. Enter: road "
-            "search, travel "
-            "mode, offline route planning and resume. Yellow line = route; "
-            "arrow = next maneuver. Off route? Recalculate from a fresh fix. "
-            "Route limits follow the downloaded graph and selected mode. Old "
-            "0.6.3 maps need a fresh download for routing. Real signs and "
-            "access rules take priority.");
+        pos_ui_help(root, "Offline map controls", "offline-map-controls.txt");
       redraw = true;
     }
   }
@@ -824,6 +841,7 @@ static void world(const char *root) {
       pos_ui_style(v);
       v->map_pixels = s->pixels;
       v->map_world = true;
+      node_pins(v, lat, lon, zoom, true);
       v->map_generation = generation;
       v->map_fix = gps.fix;
       int x, y;
@@ -917,15 +935,7 @@ void pos_ui_maps(const char *root) {
     if (choice == 2)
       pos_ui_location(root);
     if (choice == 3)
-      pos_ui_notice("Map data & credits",
-                    "World overview: Natural Earth, public domain. Regional "
-                    "roads: (c) OpenStreetMap contributors. "
-                    "https://www.openstreetmap.org/copyright. ODbL 1.0. "
-                    "Downloads use OpenStreetMap or the selected Overpass "
-                    "service; availability is "
-                    "not guaranteed. Raw .osm files remain in POS/Maps. Small "
-                    "areas only. Offline routing uses the selected travel mode "
-                    "and downloaded restrictions.");
+      pos_ui_help(root, "Map data & credits", "map-data-credits.txt");
   }
 }
 #else

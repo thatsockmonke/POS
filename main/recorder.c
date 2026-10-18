@@ -218,16 +218,6 @@ void pos_ui_recorder(const char *root, pos_settings_t *settings) {
       }
     }
     if (choice == 4)
-      pos_ui_notice(
-          "Recorder controls",
-          "Enter starts recording. Left/Right changes microphone gain from 1x "
-          "to 4096x. Enter any whole-number gain in Microphone gain. More gain "
-          "makes quiet speech louder; lower it when Clipping "
-          "appears. Gain is saved after capture stops. Space pauses/resumes. "
-          "Enter or Esc stops and saves. Fn+apostrophe or G0 saves and closes. "
-          "The microphone and single level bar use your wallpaper colors. "
-          "Files are standard 16 kHz mono WAV in Recordings. Interrupted "
-          ".wav.part files remain recoverable. Playback and recording are "
-          "exclusive.");
+      pos_ui_help(root, "Recorder controls", "recorder-controls.txt");
   }
 }

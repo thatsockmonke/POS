@@ -1,5 +1,6 @@
 #include "nvs.h"
 #include "pos_fs.h"
+#include "pos_mesh_mqtt.h"
 #include "pos_mesh_service.h"
 #include <assert.h>
 #include <errno.h>
@@ -93,6 +94,37 @@ int main(int argc, char **argv) {
     assert(!pos_meshtastic_send(0, UINT32_MAX, 1, "persist this message", 20,
                                 false, &e));
     assert(pos_meshtastic_status().queued == 1);
+  } else if (!strcmp(argv[1], "mqtt")) {
+    uint8_t private_key[32] = {1}, wire[255];
+    pos_mesh_t *peer = calloc(1, sizeof(*peer));
+    assert(peer);
+    assert(!pos_mesh_init(peer, 0x22222222, &c, private_key));
+    pos_mesh_message_t m = {.header = {.from = peer->node,
+                                       .to = UINT32_MAX,
+                                       .id = 123,
+                                       .flags = 0x63},
+                            .data = {.port = POS_MESH_TEXT, .length = 5}};
+    memcpy(m.data.payload, "Hello", 5);
+    size_t n = pos_mesh_encode(peer, &m, wire);
+    assert(n);
+    uint32_t generation = pos_meshtastic_status().generation;
+    assert(pos_meshtastic_mqtt_accept(wire, n, 0, generation + 1, true) < 0);
+    assert(!pos_meshtastic_mqtt_accept(wire, n, 0, generation, true));
+    assert(!pos_meshtastic_mqtt_accept(wire, n, 0, generation, true));
+    assert(pos_meshtastic_status().stats.received == 1 &&
+           pos_meshtastic_status().queued == 1);
+    char text[64];
+    bool sound;
+    assert(pos_meshtastic_notification(text, &sound) && sound &&
+           strstr(text, "Hello"));
+    assert(!pos_meshtastic_notifications_configure(false, false));
+    assert(!pos_meshtastic_notification(text, &sound));
+    m.data.port = POS_MESH_POSITION;
+    m.header.id = 124;
+    n = pos_mesh_encode(peer, &m, wire);
+    assert(n);
+    assert(pos_meshtastic_mqtt_accept(wire, n, 0, generation, true) < 0);
+    free(peer);
   } else if (!strcmp(argv[1], "retry")) {
     assert(!pos_meshtastic_retry(&e));
     clock_ms = 2000;

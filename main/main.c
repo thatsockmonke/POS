@@ -863,7 +863,6 @@ void app_main(void) {
            "POS / booting...\ndisplay...%s\nkeyboard...%s\nstorage...waiting",
            device.display_ok ? "ok" : "serial fallback",
            device.keyboard_ok ? "ok" : "USB fallback");
-  pos_ui_message("PANPUTER", boot);
   uint32_t flash_size = 0;
   if (esp_flash_get_size(NULL, &flash_size) != ESP_OK ||
       flash_size < 0x400000) {
@@ -885,6 +884,15 @@ void app_main(void) {
     if (pos_ui_menu("Storage unavailable", options, 2) == 1)
       pos_device_sleep();
   }
+  /* The SD must be mounted before the saved wallpaper can be read. Refresh
+   * the boot status accent immediately; an absent/corrupt save uses defaults.
+   */
+  pos_settings_t boot_settings;
+  pos_settings_defaults(&boot_settings);
+  (void)pos_settings_load(SD_ROOT, &boot_settings);
+  pos_ui_set_theme(&boot_settings.background);
+  pos_device_set_theme(&boot_settings.background);
+  pos_ui_message("PANPUTER", boot);
 #ifdef POS_INSTALLER
   pos_health_export(SD_ROOT);
   installer();

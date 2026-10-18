@@ -54,7 +54,7 @@ void pos_ui_settings(const char *root, pos_settings_t *settings);
 void pos_ui_updates(const char *root);
 
 void pos_ui_recorder(const char *root, pos_settings_t *settings);
-void pos_ui_files_from(const char *root,const char *folder);
+void pos_ui_files_from(const char *root, const char *folder);
 void pos_ui_instruments(void);
 
 void pos_ui_deploy(const char *root);
@@ -62,3 +62,7 @@ void pos_ui_deploy(const char *root);
 void pos_ui_maps(const char *root);
 
 void pos_ui_calculator(const char *root);
+
+void pos_ui_calculator_open(const char *root, const char *relative);
+
+void pos_ui_help(const char *root, const char *title, const char *file);

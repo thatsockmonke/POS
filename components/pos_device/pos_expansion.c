@@ -14,6 +14,7 @@
 #include "pos_capabilities.h"
 #include "pos_device.h"
 #include "pos_files.h"
+#include "pos_mesh_mqtt.h"
 #include "pos_mesh_service.h"
 #include "pos_peripherals.h"
 #include "vendor/sx126x/sx126x.h"
@@ -483,6 +484,7 @@ static void run(void *unused) {
             hw.snr = signal.snr_pkt_in_db;
             pos_meshtastic_receive(bytes, buffer.pld_len_in_bytes, hw.rssi,
                                    (int)hw.snr);
+            pos_mesh_mqtt_uplink(bytes, buffer.pld_len_in_bytes);
           }
           sx126x_clear_irq_status(NULL, SX126X_IRQ_ALL);
           clear_channel_at = now + 500 + esp_random() % 1000;
@@ -518,6 +520,8 @@ static void run(void *unused) {
             pos_mesh_airtime_charge(&mesh_airtime, now_ms(),
                                     airtime ? airtime : estimated);
             pos_meshtastic_tx_result(result == 0);
+            if (!result)
+              pos_mesh_mqtt_uplink(bytes, length);
             next_tx = now_ms() + 300 + esp_random() % 700;
             if (result)
               snprintf(hw.error, sizeof(hw.error),

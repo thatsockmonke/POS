@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Meshtastic LoRa v2 wire protocol. No phone, MQTT or remote-admin server. */
+/* Meshtastic LoRa v2 wire protocol. No phone or remote-admin server. */
 #define POS_MESH_WIRE 255
 #define POS_MESH_PAYLOAD 233
 #define POS_MESH_CHANNELS 8
@@ -15,7 +15,8 @@ enum {
   POS_MESH_POSITION = 3,
   POS_MESH_USER = 4,
   POS_MESH_ROUTING = 5,
-  POS_MESH_REPLY = 32
+  POS_MESH_REPLY = 32,
+  POS_MESH_TRACEROUTE = 70
 };
 enum {
   POS_MESH_LONG_FAST,
@@ -63,7 +64,7 @@ typedef struct {
   uint8_t public_key[32];
   bool has_key, key_changed, has_position;
   int32_t latitude, longitude;
-  uint64_t seen_ms;
+  uint64_t seen_ms, position_ms;
   uint32_t position_time;
   int16_t rssi;
   int8_t snr, hops;
@@ -75,7 +76,8 @@ typedef enum {
   POS_MESH_ACKED,
   POS_MESH_NAK,
   POS_MESH_TIMEOUT,
-  POS_MESH_FORWARDED
+  POS_MESH_FORWARDED,
+  POS_MESH_QUEUED
 } pos_mesh_event_t;
 typedef struct {
   pos_mesh_header_t header;
@@ -165,3 +167,11 @@ int pos_mesh_receive(pos_mesh_t *, const void *, size_t, int rssi, int snr,
 int pos_mesh_due(pos_mesh_t *, uint64_t now, const uint8_t **wire, size_t *);
 void pos_mesh_tx_result(pos_mesh_t *, bool success, uint64_t now);
 void pos_mesh_cancel(pos_mesh_t *);
+
+int pos_mesh_export_url(const pos_mesh_config_t *, char *, size_t);
+int pos_mesh_trace_route(pos_mesh_data_t *, uint32_t node, bool endpoint);
+int pos_mesh_trace_text(const pos_mesh_data_t *, char *, size_t);
+
+size_t pos_mesh_envelope(const void *,size_t,const char *,const char *,uint8_t *,size_t);
+int pos_mesh_unenvelope(const void *,size_t,const char *,const char *,uint8_t[255],size_t *);
+const char *pos_mesh_channel_name(const pos_mesh_config_t *,unsigned);

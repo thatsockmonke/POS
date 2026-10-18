@@ -103,7 +103,10 @@ static void actions(const char *root, files_ui_t *f, bool folder) {
     if (folder) {
       strcpy(f->folder, f->selected);
       f->page = 0;
-    } else if (pos_music_supported(f->selected))
+    } else if (strrchr(f->selected, '.') &&
+               !strcmp(strrchr(f->selected, '.'), ".calc"))
+      pos_ui_calculator_open(root, f->selected);
+    else if (pos_music_supported(f->selected))
       pos_ui_music_file(root, f->selected);
     else {
       const char *open[] = {"Text Editor", "Preview", "Share", "Back"};

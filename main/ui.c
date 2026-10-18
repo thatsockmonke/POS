@@ -1,6 +1,7 @@
 #include "ui.h"
 #include "esp_timer.h"
 #include "pos_device.h"
+#include "pos_fs.h"
 #include "pos_peripherals.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -287,4 +288,25 @@ int pos_ui_progress(void *ctx, const char *phase, const char *name,
     if (cancelled(&e))
       return 1;
   return 0;
+}
+
+void pos_ui_help(const char *root, const char *title, const char *file) {
+  char relative[128], path[POS_FS_PATH];
+  char *text = calloc(1, 2049);
+  FILE *f = NULL;
+  if (text &&
+      snprintf(relative, sizeof(relative), "POS/System/Help/%s", file) <
+          (int)sizeof(relative) &&
+      !pos_fs_join(path, root, relative))
+    f = fopen(path, "rb");
+  bool good = false;
+  if (f) {
+    size_t n = fread(text, 1, 2048, f);
+    good = !ferror(f) && fgetc(f) == EOF && !memchr(text, 0, n);
+    fclose(f);
+  }
+  pos_ui_notice(title, good ? text
+                            : "Help unavailable. Check System files; guides "
+                              "are included in the installation download.");
+  free(text);
 }

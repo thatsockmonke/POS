@@ -39,6 +39,32 @@ class MeshtasticTests(unittest.TestCase):
         self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
         return result.stdout.strip()
 
+
+    def test_channel_export_roundtrip_and_official_envelope_import(self):
+        exported=self.run_mesh('export')
+        self.assertEqual(self.run_mesh('export', exported),exported)
+        fixture=json.loads((ROOT/'tests/fixtures/meshtastic-extensions.json').read_text())
+        actual=bytes.fromhex(self.run_mesh('unenvelope',fixture['mqtt'],'!99999999'))
+        expected=bytearray.fromhex(fixture['wire']);expected[12]|=16
+        self.assertEqual(actual,expected)
+        self.run_mesh('unenvelope',fixture['mqtt'],'!12345678',success=False)
+        encoded=self.run_mesh('envelope',fixture['wire'])
+        self.assertEqual(bytes.fromhex(self.run_mesh('unenvelope',encoded,'!99999999')),expected)
+        self.run_mesh('unenvelope',fixture['mqtt']+'12086261646368616e6e','!99999999',success=False)
+        self.run_mesh('unenvelope',fixture['mqtt'][:-2],'!99999999',success=False)
+
+    def test_traceroute_preserves_official_route_and_snr_fields(self):
+        fixture=json.loads((ROOT/'tests/fixtures/meshtastic-extensions.json').read_text())
+        # Protobuf field order is immaterial; POS writes both route lists first.
+        def fields(hexed):
+            data=bytes.fromhex(hexed);out=[];at=0
+            while at<len(data):
+                tag=data[at];at+=1;size=data[at];at+=1;out.append((tag,data[at:at+size]));at+=size
+            return sorted(out)
+        self.assertEqual(fields(self.run_mesh('trace',fixture['trace'],0)),fields(fixture['trace_append']))
+        self.assertEqual(fields(self.run_mesh('trace',fixture['trace'],1)),fields(fixture['trace']))
+        self.run_mesh('trace','0a03ffffff',0,success=False)
+
     def test_public_keys_match_independent_x25519_implementation(self):
         for who in ('a', 'b'):
             self.assertEqual(self.run_mesh('public', VECTORS['private_' + who]), VECTORS['public_' + who])

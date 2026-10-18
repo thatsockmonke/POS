@@ -41,7 +41,7 @@ void pos_color_picker_view(const char *title, uint32_t rgb, uint16_t hue,
   view->picker_saturation = saturation;
   view->picker_value = value;
   view->picker_rgb = rgb;
-  pos_view_line(view, 1, "Arrows:color Q/E:hue");
+  pos_view_line(view, 1, "Arrows:color Q/E:hue H:hex");
   pos_view_line(view, 2, "Shift: fine adjustment");
   pos_view_line(view, 9, "%23s#%06X", "", (unsigned)rgb);
   pos_view_line(view, 10, "%23sH %u", "", (unsigned)hue);
@@ -51,6 +51,18 @@ void pos_color_picker_view(const char *title, uint32_t rgb, uint16_t hue,
   pos_view_line(view, 15, "Fn+Space: close app");
 }
 
+static bool notification_pixel(const pos_view_t *v, int x, int y,
+                               uint16_t *color) {
+  if (!*v->notification || y < 16 || y >= 32)
+    return false;
+  unsigned cell = (unsigned)(y - 16) / 8 * 30 + (unsigned)x / 8;
+  size_t len = strlen(v->notification);
+  unsigned char c = cell < len ? (unsigned char)v->notification[cell] : ' ';
+  if (c < 32 || c > 126)
+    c = '?';
+  *color = (font8x8_basic[c][(y - 16) % 8] >> (x % 8)) & 1 ? 0xffff : 0;
+  return true;
+}
 static bool picker_pixel(const pos_view_t *v, int x, int y, uint16_t *color) {
   if (x >= 8 && x < 168 && y >= 28 && y < 100) {
     unsigned saturation = (x - 8) * 1000 / 159;
@@ -152,6 +164,9 @@ static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
   uint16_t picker;
   if (v->color_picker && picker_pixel(v, x, y, &picker))
     return picker;
+  uint16_t notice_color;
+  if (notification_pixel(v, x, y, &notice_color))
+    return notice_color;
   if (v->map_pixels && y >= 16 && y < 104) {
     int my = y - 16;
     if (v->map_turn && x >= 4 && x < 37 && my >= 4 && my < 34) {
@@ -195,6 +210,11 @@ static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
                           ((my == v->map_top || my == v->map_bottom) &&
                            x >= v->map_left && x <= v->map_right)))
       return 0xffff;
+    for (unsigned i = 0; i < v->map_node_count && i < 32; ++i) {
+      int dx = abs(x - v->map_node_x[i]), dy = abs(my - v->map_node_y[i]);
+      if (dx + dy == 3 || (!v->map_node_stale[i] && dx + dy < 3))
+        return v->map_node_stale[i] ? 0x8410 : 0x07ff;
+    }
     unsigned p = (unsigned)(my * 240 + x);
     if (v->map_route_pixels && ((v->map_route_pixels[p / 8] >> (p % 8)) & 1))
       return 0xfec0;

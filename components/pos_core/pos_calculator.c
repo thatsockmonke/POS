@@ -495,6 +495,75 @@ static int show_poly(poly a, char out[POS_CALC_TEXT]) {
     strcpy(out, "0");
   return 0;
 }
+/* Isolate real polynomial roots using derivative critical points, including
+ * repeated roots. Degree <=8 bounds recursion and work. Higher-degree complex
+ * roots are deliberately not represented by this real solver. */
+static double polynomial_value(const double *c, unsigned degree, double x) {
+  double y = c[degree];
+  while (degree)
+    y = y * x + c[--degree];
+  return y;
+}
+static bool near_root(const double *c, unsigned degree, double x, double y) {
+  double scale = fabs(c[degree]);
+  while (degree)
+    scale = scale * fabs(x) + fabs(c[--degree]);
+  return isfinite(y) && isfinite(scale) &&
+         fabs(y) <= fmax(1e-14, scale * 1e-12);
+}
+static int real_roots(const double *c, unsigned d, double roots[8]) {
+  if (d == 1) {
+    roots[0] = -c[0] / c[1];
+    return isfinite(roots[0]) ? 1 : -1;
+  }
+  double derivative[9] = {0}, critical[8], points[10];
+  for (unsigned i = 1; i <= d; ++i)
+    derivative[i - 1] = i * c[i];
+  int count = real_roots(derivative, d - 1, critical);
+  if (count < 0)
+    return -1;
+  double bound = 1;
+  for (unsigned i = 0; i < d; ++i)
+    bound = fmax(bound, 1 + fabs(c[i] / c[d]));
+  if (!isfinite(bound) || bound > 1e30)
+    return -1;
+  unsigned n = 0;
+  points[n++] = -bound;
+  for (int i = 0; i < count; ++i)
+    if (critical[i] > -bound && critical[i] < bound)
+      points[n++] = critical[i];
+  points[n++] = bound;
+  unsigned found = 0;
+  for (unsigned i = 0; i < n; ++i) {
+    double x = points[i], y = polynomial_value(c, d, x);
+    if (!isfinite(y))
+      return -1;
+    if (near_root(c, d, x, y) && found < d)
+      roots[found++] = x;
+    if (i + 1 == n)
+      continue;
+    double hi = points[i + 1], hy = polynomial_value(c, d, hi);
+    if (!isfinite(hy))
+      return -1;
+    if (near_root(c, d, x, y) || near_root(c, d, hi, hy) ||
+        signbit(y) == signbit(hy))
+      continue;
+    double lo = x;
+    for (unsigned step = 0; step < 100; ++step) {
+      double mid = lo + (hi - lo) / 2, my = polynomial_value(c, d, mid);
+      if (!isfinite(my))
+        return -1;
+      if (signbit(my) == signbit(y))
+        lo = mid;
+      else
+        hi = mid;
+    }
+    if (found < d)
+      roots[found++] = lo + (hi - lo) / 2;
+  }
+  return (int)found;
+}
+
 int pos_calc_run(pos_calc_t *calc, const char *text, pos_calc_action_t action,
                  char out[POS_CALC_TEXT]) {
   if (!calc || !text || strlen(text) > 160 || action > POS_CALC_INTEGRATE) {
@@ -539,8 +608,26 @@ int pos_calc_run(pos_calc_t *calc, const char *text, pos_calc_action_t action,
       return 0;
     }
     if (d > 2) {
-      snprintf(out, POS_CALC_TEXT, "Solve supports linear/quadratic equations");
-      return -1;
+      double roots[8];
+      int count = real_roots(a.c, (unsigned)d, roots);
+      if (count < 0) {
+        snprintf(out, POS_CALC_TEXT, "Root range/conditioning limit");
+        return -1;
+      }
+      snprintf(out, POS_CALC_TEXT, "Real roots (numeric): ");
+      size_t used = strlen(out);
+      if (!count) {
+        strcpy(out, "No real roots (higher-degree complex roots not solved)");
+        return 0;
+      }
+      for (int i = 0; i < count; ++i) {
+        int n = snprintf(out + used, POS_CALC_TEXT - used, "%s%.10g",
+                         i ? ", " : "", roots[i]);
+        if (n < 0 || (size_t)n >= POS_CALC_TEXT - used)
+          return -1;
+        used += n;
+      }
+      return 0;
     }
     double scale = fmax(fabs(a.c[0]), fmax(fabs(a.c[1]), fabs(a.c[2])));
     for (int i = 0; i <= d; ++i)

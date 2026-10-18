@@ -445,13 +445,7 @@ static bool edit(pos_editor_t *e) {
       if (choice == 15 || choice == 16)
         page_move(e, screen, choice == 15 ? -1 : 1);
       if (choice == 17)
-        pos_ui_notice("Editor controls",
-                      "Shift + arrows: select. Ctrl+A: select all. Ctrl+C/X/V: "
-                      "copy/cut/paste. Ctrl+Z: undo; Ctrl+Y or Ctrl+Shift+Z: "
-                      "redo (32 edits each). Ctrl+arrows: words/document ends. "
-                      "Ctrl+U/D: page up/down. Ctrl+L/E: line start/end. "
-                      "Ctrl+F/G: find/go to line. Ctrl+S: save. Clipboard and "
-                      "history are SD-backed and last for this open document.");
+        pos_ui_help(e->root, "Editor controls", "editor-controls.txt");
       if (choice == 8 || pos_home_pending()) {
         bool requested = pos_home_pending();
         leave = close_document(e);

@@ -21,7 +21,7 @@ Type an expression and press **Enter**:
 DEG is the default. **Tab → Toggle DEG / RAD** changes the angle mode.
 **Esc** or the global Home shortcut closes Calculator. Variables, angle mode
 and Ans save on a normal close, using checksummed redundant app-save slots in
-`POS/Users/Owner/Saves/calculator`. Recent expressions are session-only.
+`POS/Users/Owner/Saves/calculator`. Recent expressions persist in a separate readable SD journal.
 Corrupt/future saves are retained and not overwritten by a temporary session.
 
 ## Typing and buttons
@@ -81,10 +81,9 @@ to make it symbolic again. Use `*` between named variables. Implicit products su
 as `2x`, `2pi`, and `2(3+4)` also work.
 
 This is a **bounded polynomial CAS**, not an unrestricted symbolic algebra engine.
-Polynomials may have degree up to 8; equation solving supports degree 1/2, with
-complex conjugate roots for quadratics. General symbolic trig functions, rational
-functions with x in the denominator, multivariate algebra, arbitrary precision,
-matrices and higher-degree root solvers are not implemented. Unsupported operations
+Polynomials may have degree up to 8; equation solving supports degrees 1/2 (real/complex) and degrees 3–8 (numeric real roots). General symbolic trig functions, rational
+functions with x in the denominator, multivariate algebra, arbitrary precision
+and unrestricted symbolic systems are not implemented. Bounded matrices and higher-degree real root isolation are available in 0.8.0-dev. Unsupported operations
 fail explicitly. Numeric scientific functions can still operate on assigned x.
 
 Calculations use finite IEEE double precision, with about 12 displayed significant
@@ -95,3 +94,51 @@ is rejected instead of silently truncated. These bounds keep the device stack an
 work space predictable. Native tests cover algebra, scientific domains, parsing,
 independent arithmetic cases, actual keypad/text routing and saved-variable reopen.
 Physical keypad/readability/stack measurements still need Cardputer verification.
+
+## 0.8.0-dev modes, graphs and worksheets
+
+**Tab → More modes / worksheets** opens the new tools:
+
+- **Exact fractions:** integer/decimal `+ - * / ^` and parentheses use checked
+  signed 64-bit rational arithmetic. `0.1+0.2` returns exactly `3/10`.
+  Overflow, zero division, excessive nesting and noninteger exponents fail
+  explicitly. This mode is separate from the scientific double-precision mode.
+- **Linear systems:** enter `2*x+y=3;x-y=0` for `x=1; y=1`. Use 2–4 equations
+  in x,y,z,w, in that order. Coefficients can be decimals or simple fractions.
+  Nonlinear products/functions are refused. Augmented rows are also accepted:
+  `2,1,3;1,-1,0`. There must be a unique, reasonably conditioned solution.
+- **Matrices / vectors:** rows use semicolons and entries use commas, e.g.
+  `1,2;3,4`. Add, subtract, multiply, determinant and inverse support up to 4×4.
+  Dot product takes two single-row vectors of equal length, up to four entries.
+  Inversion uses scaled partial pivoting; singular/range failures are explicit.
+- **Unit conversion:** the value can be a scientific expression using saved
+  variables. Enter source/destination units separately. Supported units are
+  `m km cm mm mi ft in yd`, `kg g lb oz`, `s min h`, `m/s km/h mph`,
+  `m2 km2 acre`, `L mL gal` (US gallon), and `C F K`.
+  Incompatible dimensions fail; temperatures use their affine offsets.
+- **Programmer:** choose unsigned 8/16/32/64-bit width. Enter decimal, `0x` hex,
+  `0b` binary (first operand), or leading-zero octal. One `& | ^ << >>` operation
+  or unary `~` is supported. Results show decimal, padded hex and binary.
+  Values wrap to the selected width. Negative/overflowing literals and shifts
+  at least as wide as the selected word are rejected.
+- **Graph y=f(x):** graphs the current numeric expression with x substituted,
+  without changing saved variables or Ans. Arrows pan, `+/-` zoom, `0` resets,
+  Escape returns. It uses a 2,640-byte monochrome raster; invalid samples and
+  large jumps are not joined across the screen. DEG/RAD follows the calculator.
+- **Save named worksheet:** writes a new `.calc` JSON file under
+  `POS/Users/Owner/Documents`, with the expression, variables, Ans and angle mode.
+  A temporary file is synced and CRC checked before publication. Existing names
+  and system paths are protected. **Files → open a .calc file** reopens Calculator;
+  **Open worksheet** also works from Calculator. Unsupported/corrupt worksheets
+  remain untouched and leave the session unchanged.
+
+**Recent expressions** now loads the last 16 complete expressions from a bounded
+16-KiB tail of `POS/Users/Owner/calculator-history.jsonl`. Choose one to reuse it,
+then use **Edit expression** to edit it. The complete readable journal remains on
+SD. Its append path isolates partial records left by interrupted writes.
+
+The existing polynomial CAS additionally isolates **numeric real roots of degrees
+3–8**, including repeated roots, using derivative critical points and bisection.
+Degree 1/2 retains its previous real/complex solver. Higher-degree complex roots,
+general symbolic trig/rational functions and arbitrary precision remain outside
+this bounded implementation; range and conditioning limits are reported.

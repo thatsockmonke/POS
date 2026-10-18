@@ -105,8 +105,8 @@ workspace is heap allocated only when Meshtastic is selected and released when
 returning to POS radio. Large logs and resources remain on SD.
 
 This is **POS interoperability**, not the complete upstream Meshtastic firmware.
-It does not provide the Meshtastic mobile/USB client API, MQTT, remote admin,
-telemetry modules, traceroute UI, store-and-forward, compressed-text decoding,
+It does not provide the Meshtastic mobile/USB client API, remote admin,
+telemetry modules, store-and-forward, compressed-text decoding,
 key-verification handshake or every upstream routing role/module. POS handles
 standard text, node info, position and routing acknowledgements; unsupported
 application payloads are not presented as decoded text. POS/PC BLE file sharing
@@ -134,3 +134,75 @@ tested in the cloud.** The requested `0.7.0-stable` name/publication channel is
 not a hardware certification. Before relying on it, exchange both channel and
 direct messages with a current genuine Meshtastic node, test an intervening relay,
 check ACK/retry behaviour and verify GPS remains private until requested.
+
+## 0.8.0-dev conversations and contacts
+
+**Radio → Conversations / unread** groups channel broadcasts and direct messages.
+Choose a message to read its full text/status, or write/send a message. Outgoing
+text is retained before radio transmission. Status distinguishes queued, radio
+sent, destination acknowledged, rejected and timed out; a broadcast has no
+individual delivery guarantee. A restored old outbox may lack its original text
+because older firmware did not retain it.
+
+Each thread displays up to 16 messages from a bounded 64-KiB journal tail. Unread
+badges count this retained tail. Leaving the displayed thread saves its read
+position; older messages remain available in the complete readable
+`POS/Users/Owner/Radio/meshtastic.jsonl` file. Retry duplicates do not create a
+second visible entry. A truncated log is isolated before subsequent appends.
+
+**Contacts / favourites** offers a friendly alias, favourite marker (sorted first),
+an editable quick message and a conversation shortcut. Contact/read metadata uses
+redundant versioned SD saves; peer cryptographic key pins remain separate.
+**Notifications** selects banner + alert sound, banner only, or off. Incoming text
+shows a five-second banner without stealing input. Sound still follows global
+sound/alert settings and microphone/music ownership; hiding the screen does not
+wake it for a notification.
+
+Peer-shared coordinates appear as cyan diamonds on both Maps views. Hollow grey
+markers are older than 15 minutes since receipt. Nearby nodes → shared coordinates
+shows age and GPS-derived distance when a local GPS fix exists. Signal strength
+is never converted into distance. Positions are not assumed current across boots.
+
+**Traceroute** sends standard port-70 RouteDiscovery requests; Status shows the
+latest reply's outbound/back relay IDs. POS relays append their own ID on the
+appropriate path and endpoints answer requests. Paths can differ and may omit
+unknown/unsupported hops; no guaranteed route or continuous ping flood is implied.
+
+**Export channel URL** writes an official ChannelSet URL to a new text file in
+Documents after explicit confirmation. It includes channel secrets. Enabled
+channels are packed in order, so disabled gaps are omitted. Imports retain their
+existing conservative radio-parameter checks. URL export does not publish a
+private node identity key.
+
+## Optional MQTT text bridge
+
+**Radio → MQTT bridge** starts/stops a session, or shows its status. First connect
+Wi-Fi, choose a channel, broker `mqtts://hostname:8883`, matching topic root
+(e.g. `msh/US`), and any broker username/password. Public brokers can require
+credentials; consult that broker's policy. The default host is a convenience,
+not a guarantee of availability. Broker certificates and hostnames are checked
+against the ESP-IDF CA bundle; a correct clock and sufficient TLS heap are needed.
+HTTP/MQTT plaintext and disabled certificate checking are not supported.
+
+Choose uplink-only, or explicitly allow downlink to the radio. A matching remote
+Meshtastic gateway must enable encrypted MQTT on the same channel/root. The wire
+format is standard binary ServiceEnvelope/MeshPacket on
+`<root>/2/e/<channel-name>/<gateway-id>`. Only **channel text broadcasts** are
+bridged: automatic positions, private DMs, node information and other module data
+are excluded. Channel AES-CTR follows Meshtastic and is not an authenticated
+cipher; a private key alone is not a guarantee against message forgery.
+
+Credentials stay in the SDK client's RAM for this session, never plaintext on SD;
+start again after reboot. Changing radio configuration stops the bridge. Buffer,
+outbox and duplicate caches are bounded. QoS 0 text forwarding is best effort;
+retained, fragmented, own-gateway and malformed envelopes are ignored. Generation,
+channel decryption and payload checks precede inbound processing. MQTT-origin
+packets are marked so they cannot loop back onto MQTT. Radio downlink continues
+through the existing relay setting, TX consent gate, CAD/backoff and airtime budget.
+
+The bridge needs live device/broker and multi-node testing. Native tests exercise
+the actual event-handler/configuration code with an SDK adapter and independent
+protobuf fixtures; they do not establish an on-device TLS/radio test result.
+
+Checking software updates closes the MQTT session to free its TLS heap. Start
+the bridge again afterwards if the check does not install/reboot.

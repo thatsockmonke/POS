@@ -23,7 +23,7 @@ import zlib
 SERVICE = '73f5ae10-5c12-4b83-9d48-bae023504f53'
 RX = '73f5ae11-5c12-4b83-9d48-bae023504f53'
 TX = '73f5ae12-5c12-4b83-9d48-bae023504f53'
-VERSION = "0.7.0-stable"
+VERSION = "0.8.0-dev"
 MAX_SIZE = 0x7fffffff
 
 

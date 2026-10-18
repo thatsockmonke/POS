@@ -33,3 +33,7 @@ int pos_meshtastic_due(uint8_t wire[255], size_t *length);
 void pos_meshtastic_tx_result(bool success);
 void pos_meshtastic_pause(void);
 void pos_meshtastic_stop(void);
+
+/* Cached text only, nonblocking; no SD access on the display path. */
+uint32_t pos_meshtastic_notification(char text[64], bool *sound);
+int pos_meshtastic_notifications_configure(bool banner, bool sound);

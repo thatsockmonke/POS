@@ -23,6 +23,9 @@ static bool selected;
 static uint32_t identity, generation, next_id, id_limit;
 static char storage[POS_FS_PATH], error[128], latest[240];
 static uint64_t announce_at;
+static uint32_t notice_sequence;
+static bool notice_enabled = true, notice_sound = true;
+static char notice_text[64];
 static uint64_t now_ms(void) { return esp_timer_get_time() / 1000; }
 static int fail(pos_error_t *e, const char *s) {
   if (e)
@@ -234,7 +237,7 @@ static int append_event(pos_mesh_event_t type, const pos_mesh_message_t *m) {
   snprintf(id, sizeof(id), "%08x", (unsigned)m->header.id);
   static const char *const events[] = {"received",     "sent",     "relayed",
                                        "acknowledged", "rejected", "timeout",
-                                       "forwarded"};
+                                       "forwarded",    "queued"};
   char body[POS_MESH_PAYLOAD + 1];
   memcpy(body, m->data.payload, m->data.length);
   body[m->data.length] = 0;
@@ -248,13 +251,7 @@ static int append_event(pos_mesh_event_t type, const pos_mesh_message_t *m) {
   if (ok && m->data.port == POS_MESH_TEXT)
     ok = cJSON_AddStringToObject(j, "text", body) != NULL;
   char *text = ok ? cJSON_PrintUnformatted(j) : NULL;
-  FILE *f = text ? fopen(path, "ab") : NULL;
-  int bad = !f;
-  if (f) {
-    bad = fprintf(f, "%s\n", text) < 0 || fflush(f) || fsync(fileno(f));
-    if (fclose(f))
-      bad = 1;
-  }
+  int bad = !text || pos_fs_append_line(path, text);
   free(text);
   cJSON_Delete(j);
   return bad ? -1 : 0;
@@ -262,12 +259,24 @@ static int append_event(pos_mesh_event_t type, const pos_mesh_message_t *m) {
 static int sink(void *unused, pos_mesh_event_t type,
                 const pos_mesh_message_t *m) {
   (void)unused;
+  if (type == POS_MESH_QUEUED)
+    return append_event(type, m);
+  if (type == POS_MESH_RX && m->data.port == POS_MESH_TRACEROUTE) {
+    char route[220] = "Direct path (no relay IDs)";
+    if (!pos_mesh_trace_text(&m->data, route, sizeof(route)))
+      snprintf(latest, sizeof(latest), "Trace !%08x: %.210s",
+               (unsigned)m->header.from, *route ? route : "Direct path");
+  }
   if (type == POS_MESH_RX && m->data.port == POS_MESH_TEXT) {
     if (memchr(m->data.payload, 0, m->data.length) || append_event(type, m)) {
       snprintf(error, sizeof(error),
                "Cannot retain received text; no delivery ACK sent.");
       return -1;
     }
+    snprintf(notice_text, sizeof(notice_text), "!%08x: %.*s",
+             (unsigned)m->header.from,
+             (int)(m->data.length > 50 ? 50 : m->data.length), m->data.payload);
+    ++notice_sequence;
     snprintf(latest, sizeof(latest), "!%08x: %.*s", (unsigned)m->header.from,
              (int)m->data.length, m->data.payload);
   }
@@ -351,6 +360,15 @@ int pos_meshtastic_init(const char *root, uint32_t id) {
     pos_mesh_defaults(&saved);
     snprintf(error, sizeof(error),
              "Saved mesh settings are invalid; preserved, mesh disabled.");
+  }
+  nvs_handle_t notify;
+  if (nvs_open("pos_mesh", NVS_READONLY, &notify) == ESP_OK) {
+    uint32_t mode = 0;
+    if (nvs_get_u32(notify, "notifications", &mode) == ESP_OK && mode < 3) {
+      notice_enabled = mode != 2;
+      notice_sound = mode == 0;
+    }
+    nvs_close(notify);
   }
   char path[POS_FS_PATH];
   pos_fs_join(path, root, "POS/Users/Owner/Radio/mesh-outbox");
@@ -660,4 +678,64 @@ void pos_meshtastic_stop(void) {
     mesh = NULL;
   }
   xSemaphoreGive(lock);
+}
+
+uint32_t pos_meshtastic_notification(char text[64], bool *sound) {
+  *text = 0;
+  *sound = false;
+  if (!lock || xSemaphoreTake(lock, 0) != pdTRUE)
+    return 0;
+  uint32_t sequence = notice_enabled ? notice_sequence : 0;
+  if (sequence) {
+    snprintf(text, 64, "%s", notice_text);
+    *sound = notice_sound;
+  }
+  xSemaphoreGive(lock);
+  return sequence;
+}
+int pos_meshtastic_notifications_configure(bool banner, bool sound) {
+  if (!lock)
+    return -1;
+  nvs_handle_t h;
+  if (nvs_open("pos_mesh", NVS_READWRITE, &h) != ESP_OK)
+    return -1;
+  int r = nvs_set_u32(h, "notifications", !banner ? 2 : sound ? 0 : 1);
+  if (r == ESP_OK)
+    r = nvs_commit(h);
+  nvs_close(h);
+  if (r != ESP_OK)
+    return -1;
+  xSemaphoreTake(lock, portMAX_DELAY);
+  notice_enabled = banner;
+  notice_sound = sound;
+  xSemaphoreGive(lock);
+  return 0;
+}
+
+int pos_meshtastic_mqtt_accept(const uint8_t *wire, size_t length,
+                               unsigned channel, uint32_t expected_generation,
+                               bool incoming) {
+  if (!lock || !wire || length > 255)
+    return -1;
+  xSemaphoreTake(lock, portMAX_DELAY);
+  pos_mesh_message_t message;
+  int r = !selected || !mesh || generation != expected_generation ||
+          pos_mesh_decode(mesh, wire, length, &message) ||
+          message.channel_index != channel || message.pki ||
+          message.header.to != UINT32_MAX || message.data.port != POS_MESH_TEXT;
+  if (!r && incoming) {
+    if (message.header.from == mesh->node)
+      r = -1;
+    else {
+      uint8_t copy[255];
+      memcpy(copy, wire, length);
+      unsigned hops = copy[12] & 7;
+      if (hops > mesh->config.hops)
+        hops = mesh->config.hops;
+      copy[12] = (copy[12] & 0xf8) | hops | 16;
+      r = pos_mesh_receive(mesh, copy, length, 0, 0, now_ms()) < 0 ? -1 : 0;
+    }
+  }
+  xSemaphoreGive(lock);
+  return r ? -1 : 0;
 }

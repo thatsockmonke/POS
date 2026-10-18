@@ -11,6 +11,21 @@ static unsigned clamp(int value, unsigned maximum) {
   return value < 0 ? 0 : (unsigned)value > maximum ? maximum : (unsigned)value;
 }
 
+static bool hex_color(const char *title, uint32_t *rgb) {
+  char text[9];
+  snprintf(text, sizeof(text), "#%06X", (unsigned)*rgb);
+  while (pos_ui_text(title, "Hex RGB: #RRGGBB", text, sizeof(text), false)) {
+    uint32_t color;
+    if (pos_color_parse(text, &color)) {
+      *rgb = color;
+      return true;
+    }
+    pos_ui_notice("Invalid color",
+                  "Enter exactly six hex digits, optionally with #.");
+  }
+  return false;
+}
+
 bool pos_ui_color(const char *title, uint32_t *rgb) {
   if (!rgb || *rgb > 0xffffff)
     return false;
@@ -39,6 +54,12 @@ bool pos_ui_color(const char *title, uint32_t *rgb) {
     if (event.key == POS_KEY_ENTER) {
       *rgb = picked;
       return true;
+    }
+    if (event.key == 'h' || event.key == 'H') {
+      if (hex_color(title, &picked)) {
+        pos_color_rgb_hsv(picked, &hue, &saturation, &value);
+      }
+      redraw = true;
     }
     int step = event.modifiers & POS_MOD_SHIFT ? 5 : 25;
     int hstep = event.modifiers & POS_MOD_SHIFT ? 1 : 10;
@@ -84,7 +105,7 @@ bool pos_ui_background(const char *root, pos_settings_t *settings) {
                     draft.background.count,
                     (unsigned)draft.background.colors[selected]);
       pos_view_line(&view, 14, "Up/Down:stripe Enter:color");
-      pos_view_line(&view, 15, "L/R:count S:save P:presets");
+      pos_view_line(&view, 15, "L/R:count S:save P:flags H:hex");
       pos_device_show(&view);
       last = now;
       redraw = false;
@@ -111,10 +132,13 @@ bool pos_ui_background(const char *root, pos_settings_t *settings) {
       snprintf(title, sizeof(title), "Stripe %u color", selected + 1);
       pos_ui_color(title, &draft.background.colors[selected]);
     }
+    if (e.key == 'h' || e.key == 'H')
+      hex_color("Stripe hex color", &draft.background.colors[selected]);
     if (e.key == 'p' || e.key == 'P') {
-      const char *presets[] = {"Pansexual flag", "Nonbinary flag", "Cancel"};
-      int preset = pos_ui_menu("Background presets", presets, 3);
-      if (preset == 0 || preset == 1) {
+      int preset =
+          pos_ui_menu("Stripe flag presets", pos_background_preset_names,
+                      POS_BACKGROUND_PRESET_COUNT);
+      if (preset >= 0) {
         pos_background_preset(&draft.background,
                               (pos_background_preset_t)preset);
         selected = 0;

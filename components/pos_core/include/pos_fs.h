@@ -26,3 +26,6 @@ int pos_fs_file_size(const char *path, uint32_t *size);
 int pos_fs_crc_file_progress(const char *path, uint32_t size, uint32_t *crc,
                              int (*progress)(void *, uint64_t, uint64_t),
                              void *ctx);
+
+/* Durable line journal; isolate a truncated final record after power loss. */
+int pos_fs_append_line(const char *path,const char *line);

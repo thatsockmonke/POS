@@ -242,3 +242,30 @@ int pos_fs_file_size(const char *path, uint32_t *size) {
 #endif
   return 0;
 }
+
+int pos_fs_append_line(const char *path, const char *line) {
+  FILE *f = fopen(path, "a+b");
+  if (!f)
+    return -1;
+  bool bad = false, separator = false;
+  if (fseek(f, 0, SEEK_END))
+    bad = true;
+  long size = ftell(f);
+  if (size < 0)
+    bad = true;
+  if (size > 0) {
+    if (fseek(f, -1, SEEK_END))
+      bad = true;
+    else
+      separator = fgetc(f) != '\n';
+  }
+  if (fseek(f, 0, SEEK_END))
+    bad = true;
+  if (separator && fputc('\n', f) == EOF)
+    bad = true;
+  if (!bad && (fprintf(f, "%s\n", line) < 0 || fflush(f) || fsync(fileno(f))))
+    bad = true;
+  if (fclose(f))
+    bad = true;
+  return bad ? -1 : 0;
+}

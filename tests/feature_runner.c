@@ -15,6 +15,8 @@
 #include "pos_network_service.h"
 #include "pos_peripherals.h"
 #include "pos_mesh_service.h"
+#include "pos_chat.h"
+#include "pos_mesh_mqtt.h"
 #include "pos_recovery.h"
 #include "pos_settings.h"
 #include "pos_timezone.h"
@@ -50,6 +52,10 @@ static unsigned folder_pages_seen, picker_frames;
 static bool background_preview_seen;
 static pos_view_t picker_last;
 static pos_expansion_status_t fake_expansion;
+int pos_meshtastic_notifications_configure(bool a,bool b){(void)a;(void)b;return 0;}
+int pos_mesh_mqtt_start(const pos_mesh_mqtt_config_t *c){(void)c;return 0;}
+void pos_mesh_mqtt_stop(void){}
+void pos_mesh_mqtt_status(char out[128]){snprintf(out,128,"Off");}
 static pos_meshtastic_status_t fake_mesh;
 static pos_mesh_config_t fake_mesh_config;
 static unsigned mesh_sends, mesh_locations, mesh_changes;
@@ -709,16 +715,16 @@ static int boot_splash_tests(void) {
   uint32_t hold = 0, total = 0;
   /* Independently check every pixel while each stripe grows over black.
    * Boot artwork also takes priority over the normal battery overlay. */
-  for (unsigned frame = 0; frame <= 20; ++frame) {
+  for (unsigned frame = 0; frame <= 12; ++frame) {
     assert(pos_boot_frame(frame, &view, &hold));
     assert(hold == 40 && view.boot_splash && !view.solid_color);
     assert(!view.boot_text_alpha);
     view.battery_overlay = true;
     view.battery_available = true;
     view.battery_percent = 75;
-    unsigned pink = frame < 10 ? frame * 24 : 240;
-    unsigned yellow = frame <= 5 ? 0 : frame < 15 ? (frame - 5) * 24 : 240;
-    unsigned blue = frame <= 10 ? 0 : frame < 20 ? (frame - 10) * 24 : 240;
+    unsigned pink = frame < 6 ? frame * 40 : 240;
+    unsigned yellow = frame <= 3 ? 0 : frame < 9 ? (frame - 3) * 40 : 240;
+    unsigned blue = frame <= 6 ? 0 : frame < 12 ? (frame - 6) * 40 : 240;
     for (int y = 0; y < 135; ++y)
       for (int x = 0; x < 240; ++x) {
         uint16_t expected = y < 45 && x < (int)pink ? pos_boot_colors[0]
@@ -733,7 +739,7 @@ static int boot_splash_tests(void) {
   uint16_t previous[3] = {pos_boot_colors[0], pos_boot_colors[1],
                           pos_boot_colors[2]};
   for (unsigned frame = 1; frame <= 10; ++frame) {
-    assert(pos_boot_frame(20 + frame, &view, &hold));
+    assert(pos_boot_frame(12 + frame, &view, &hold));
     assert(hold == (frame == 10 ? 1000 : 40) && view.boot_pink_width == 240 &&
            view.boot_yellow_width == 240 && view.boot_blue_width == 240);
     for (unsigned stripe = 0; stripe < 3; ++stripe) {
@@ -775,7 +781,7 @@ static int boot_splash_tests(void) {
   for (unsigned i = 0; i < 3; ++i)
     assert(ink[i] > 500 && ink_stripes[i] > 500);
   assert(left == 21 && right == 218 && top == 22 && bottom == 112);
-  assert(total == 2200);
+  assert(total == 1880);
   assert(!pos_boot_frame(POS_BOOT_HOLD_FRAME + 1, &view, &hold));
   assert(!pos_boot_frame(UINT32_MAX, &view, &hold));
   assert(!pos_boot_frame(0, NULL, &hold));
@@ -1855,6 +1861,30 @@ int main(int argc, char **argv) {
       }
     }
     assert(ui_next==ui_count && pos_home_pending());return 0;
+  }
+
+  if(!strcmp(argv[2],"chat-read")) {
+    assert(argc==6);pos_chat_message_t messages[16];unsigned count,unread;uint32_t end;
+    uint32_t peer=(uint32_t)strtoul(argv[3],NULL,16);unsigned ch=strtoul(argv[4],NULL,10);
+    assert(!pos_chat_read(argv[1],0x12345678,peer,ch,messages,&count,&end,&unread));
+    if(atoi(argv[5])){pos_chat_contact_t contact;assert(!pos_chat_contact(argv[1],peer,ch,&contact,false));contact.read_offset=end;strcpy(contact.alias,"Friend");strcpy(contact.quick,"Hello");contact.favourite=true;assert(!pos_chat_contact(argv[1],peer,ch,&contact,true));}
+    cJSON *j=cJSON_CreateObject(),*rows=cJSON_AddArrayToObject(j,"messages");cJSON_AddNumberToObject(j,"unread",unread);cJSON_AddNumberToObject(j,"end",end);
+    for(unsigned i=0;i<count;++i){cJSON *m=cJSON_CreateObject();cJSON_AddStringToObject(m,"text",messages[i].text);cJSON_AddStringToObject(m,"status",messages[i].status);cJSON_AddBoolToObject(m,"incoming",messages[i].incoming);cJSON_AddItemToArray(rows,m);}
+    char *text=cJSON_PrintUnformatted(j);puts(text);free(text);cJSON_Delete(j);return 0;
+  }
+  if(!strcmp(argv[2],"flags")) {
+    pos_background_t bg;pos_view_t view;
+    for(unsigned i=0;i<POS_BACKGROUND_PRESET_COUNT;++i){assert(pos_background_preset(&bg,(pos_background_preset_t)i)&&pos_background_valid(&bg));pos_view_clear(&view,"Boot");view.background=bg;
+      for(int x=0;x<240;++x)assert(pos_view_pixel(&view,x,134)==pos_color_rgb565(bg.colors[x*bg.count/240]));
+    }assert(!pos_background_preset(&bg,POS_BACKGROUND_PRESET_COUNT));return 0;
+  }
+  if(!strcmp(argv[2],"hex-ui")) {
+    assert(!pos_fs_layout(argv[1]));pos_settings_t settings;pos_settings_defaults(&settings);
+    push_key('h',0);for(unsigned i=0;i<7;++i)push_key(POS_KEY_BACKSPACE,0);push_text("#Ab12F0");push_key(POS_KEY_ENTER,0);push_key('s',0);
+    assert(pos_ui_background(argv[1],&settings)&&settings.background.colors[0]==0xab12f0&&ui_next==ui_count);return 0;
+  }
+  if(!strcmp(argv[2],"worksheet-open")) {
+    assert(argc==4);assert(!pos_fs_layout(argv[1]));push_key(POS_KEY_ENTER,0);push_key(POS_KEY_ESCAPE,0);pos_ui_calculator_open(argv[1],argv[3]);assert(!strcmp(calculator_answer,"21"));assert(ui_next==ui_count);return 0;
   }
   if (!strncmp(argv[2], "calculator-", 11)) {
     const char *mode=argv[2];

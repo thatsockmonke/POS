@@ -1,3 +1,7 @@
+#include "pos_chat.h"
+#include "pos_mesh_mqtt.h"
+static void pos_ui_mesh_mqtt(const char *root);
+#include "esp_timer.h"
 #include "pos_device.h"
 #include "pos_files.h"
 #include "pos_mesh_service.h"
@@ -36,6 +40,7 @@ static bool integer(const char *title, unsigned *out, unsigned max) {
   return true;
 }
 static void apply(pos_mesh_config_t *c, bool enabled) {
+  pos_mesh_mqtt_stop();
   pos_error_t e = {0};
   int r = pos_meshtastic_configure(c, enabled, &e);
   pos_ui_notice(r ? "Not applied" : "Radio settings saved",
@@ -181,7 +186,7 @@ void pos_ui_mesh_settings(const char *root) {
                            "Antenna / transmit settings",
                            "Back"};
     int a = pos_ui_menu("Radio protocol", items, 10);
-    if (a < 0 || a == 9)
+    if (a < 0 || a == 15)
       break;
     if (a == 8) {
       pos_ui_radio_transmit();
@@ -339,13 +344,26 @@ static __attribute__((noinline)) void nodes(void) {
                           "acknowledgement. A send is not proof of delivery.");
       }
     } else if (action == 1) {
-      if (node.has_position)
+      if (node.has_position) {
+        pos_location_t gps = pos_expansion_location();
+        uint64_t now = esp_timer_get_time() / 1000;
+        char distance[64] = "Distance unavailable (no local GPS fix)";
+        if (gps.fix)
+          snprintf(distance, sizeof(distance), "Distance: %.0f m",
+                   pos_location_distance(gps.latitude, gps.longitude,
+                                         node.latitude / 1e7,
+                                         node.longitude / 1e7));
         snprintf(text, sizeof(text),
-                 "Latitude: %.7f\nLongitude: %.7f\nPeer time: %u\nPosition may "
-                 "be old. Signal strength does not establish distance.",
+                 "Latitude: %.7f\nLongitude: %.7f\nPeer time: %u\nReceived "
+                 "%llu seconds ago\n%s\nCyan map diamonds show peer positions; "
+                 "hollow diamonds are over 15 minutes old.",
                  node.latitude / 1e7, node.longitude / 1e7,
-                 (unsigned)node.position_time);
-      else
+                 (unsigned)node.position_time,
+                 (unsigned long long)(now >= node.position_ms
+                                          ? (now - node.position_ms) / 1000
+                                          : 0),
+                 distance);
+      } else
         strcpy(text,
                "This peer has not shared coordinates during this session.");
       pos_ui_notice("Shared location", text);
@@ -366,6 +384,269 @@ static __attribute__((noinline)) void nodes(void) {
     }
   }
 }
+static void conversation(const char *root, uint32_t peer_id, unsigned ch) {
+  pos_chat_message_t *messages = calloc(16, sizeof(*messages));
+  if (!messages)
+    return;
+  while (!pos_home_pending()) {
+    unsigned count, unread;
+    uint32_t end;
+    pos_chat_contact_t contact;
+    if (pos_chat_contact(root, peer_id, ch, &contact, false) ||
+        pos_chat_read(root, pos_meshtastic_status().node, peer_id, ch, messages,
+                      &count, &end, &unread)) {
+      pos_ui_notice("Conversation unavailable",
+                    "Check storage; existing data preserved.");
+      break;
+    }
+    char labels[19][50];
+    const char *items[19];
+    for (unsigned i = 0; i < count; ++i) {
+      snprintf(labels[i], sizeof(labels[i]), "%s %.22s [%.19s]",
+               messages[i].incoming ? "<" : ">", messages[i].text,
+               messages[i].status);
+      items[i] = labels[i];
+    }
+    items[count] = "Write / send message";
+    items[count + 1] = "Quick message";
+    items[count + 2] = "Back";
+    char title[60];
+    snprintf(title, sizeof(title), "%s %u unread",
+             *contact.alias          ? contact.alias
+             : peer_id == UINT32_MAX ? "Channel"
+                                     : "Direct",
+             unread);
+    int i = pos_ui_menu(title, items, count + 3);
+    /* Mark the displayed tail only after its menu has been presented. */
+    contact.read_offset = end;
+    (void)pos_chat_contact(root, peer_id, ch, &contact, true);
+    if (i < 0 || i == (int)count + 2)
+      break;
+    if (i < (int)count) {
+      char text[360];
+      snprintf(text, sizeof(text), "!%08x / %08x\n%s\n%s",
+               (unsigned)messages[i].from, (unsigned)messages[i].id,
+               messages[i].status, messages[i].text);
+      pos_ui_notice("Message", text);
+      continue;
+    }
+    char text[161] = "";
+    if (i == (int)count + 1)
+      snprintf(text, sizeof(text), "%s",
+               *contact.quick ? contact.quick : "On my way.");
+    if (tx_ready() &&
+        pos_ui_text("Send message", "Enter sends; Esc cancels", text,
+                    sizeof(text), false) &&
+        *text) {
+      pos_error_t e = {0};
+      if (pos_meshtastic_send(ch, peer_id, POS_MESH_TEXT, text, strlen(text),
+                              false, &e))
+        pos_ui_notice("Not queued", e.message);
+    }
+  }
+  free(messages);
+}
+static void conversations(const char *root, bool contacts) {
+  while (!pos_home_pending()) {
+    typedef struct {
+      char labels[40][70];
+      const char *items[40];
+      uint32_t ids[40];
+      unsigned channels[40];
+    } list_t;
+    list_t *list = calloc(1, sizeof(*list));
+    if (!list)
+      return;
+    char (*labels)[70] = list->labels;
+    const char **items = list->items;
+    uint32_t *ids = list->ids;
+    unsigned *channels = list->channels;
+    unsigned count = 0;
+    pos_mesh_config_t config;
+    if (pos_meshtastic_settings(&config)) {
+      free(list);
+      return;
+    }
+    pos_chat_message_t *messages = calloc(16, sizeof(*messages));
+    if (!messages) {
+      free(list);
+      return;
+    }
+    for (unsigned i = 0; i < (contacts ? 0 : 8); ++i)
+      if (config.channels[i].enabled) {
+        unsigned n, u;
+        uint32_t end;
+        pos_chat_read(root, pos_meshtastic_status().node, UINT32_MAX, i,
+                      messages, &n, &end, &u);
+        snprintf(labels[count], sizeof(labels[count]), "#%u %s [%u unread]",
+                 i + 1, config.channels[i].name, u);
+        ids[count] = UINT32_MAX;
+        channels[count] = i;
+        ++count;
+      }
+    for (unsigned i = 0; i < 32; ++i) {
+      pos_mesh_node_t node;
+      if (pos_meshtastic_node(i, &node) || !node.id)
+        continue;
+      pos_chat_contact_t c = {0};
+      pos_chat_contact(root, node.id, 0, &c, false);
+      unsigned n, u;
+      uint32_t end;
+      pos_chat_read(root, pos_meshtastic_status().node, node.id, 0, messages,
+                    &n, &end, &u);
+      snprintf(labels[count], sizeof(labels[count]), "%s%.39s !%08x [%u]",
+               c.favourite ? "* " : "", *c.alias ? c.alias : node.long_name,
+               (unsigned)node.id, u);
+      ids[count] = node.id;
+      channels[count] = 0;
+      ++count;
+    }
+    free(messages);
+    for (unsigned a = 0; a < count; ++a)
+      for (unsigned b = a + 1; b < count; ++b)
+        if (labels[b][0] == '*' && labels[a][0] != '*') {
+          char swap[70];
+          memcpy(swap, labels[a], 70);
+          memcpy(labels[a], labels[b], 70);
+          memcpy(labels[b], swap, 70);
+          uint32_t id = ids[a];
+          ids[a] = ids[b];
+          ids[b] = id;
+          unsigned ch = channels[a];
+          channels[a] = channels[b];
+          channels[b] = ch;
+        }
+    for (unsigned i = 0; i < count; ++i)
+      items[i] = labels[i];
+    if (!count) {
+      pos_ui_notice("Contacts", "Discover a nearby node first.");
+      free(list);
+      return;
+    }
+    int i = pos_ui_menu(contacts ? "Contacts / * favourites"
+                                 : "Conversations / unread tail",
+                        items, count);
+    if (i < 0) {
+      free(list);
+      return;
+    }
+    uint32_t chosen_id = ids[i];
+    unsigned chosen_channel = channels[i];
+    char chosen_label[70];
+    snprintf(chosen_label, sizeof(chosen_label), "%s", labels[i]);
+    free(list);
+    if (!contacts) {
+      conversation(root, chosen_id, chosen_channel);
+      continue;
+    }
+    pos_chat_contact_t c;
+    if (pos_chat_contact(root, chosen_id, 0, &c, false)) {
+      pos_ui_notice("Contact unavailable", "Saved data preserved.");
+      continue;
+    }
+    const char *actions[] = {"Open conversation", "Edit friendly name",
+                             "Toggle favourite", "Edit quick message", "Back"};
+    int a = pos_ui_menu(chosen_label, actions, 5);
+    if (a == 0) {
+      conversation(root, chosen_id, 0);
+      continue;
+    }
+    bool save = false;
+    if (a == 1)
+      save =
+          pos_ui_text("Contact alias", "Friendly name (blank uses node name)",
+                      c.alias, sizeof(c.alias), false);
+    if (a == 2) {
+      c.favourite = !c.favourite;
+      save = true;
+    }
+    if (a == 3)
+      save = pos_ui_text("Quick message", "Editable before sending", c.quick,
+                         sizeof(c.quick), false);
+    if (save && pos_chat_contact(root, chosen_id, 0, &c, true))
+      pos_ui_notice("Contact not saved", "Check SD space.");
+  }
+}
+static void export_channels(const char *root) {
+  const char *confirm[] = {"Cancel", "Save channel keys to Documents"};
+  if (pos_ui_menu("Export contains PRIVATE channel keys", confirm, 2) != 1)
+    return;
+  pos_mesh_config_t c;
+  char *text = calloc(1, 1024);
+  char name[65] = "Meshtastic-channels", path[POS_FS_PATH], rel[241];
+  if (!text)
+    return;
+  if (!pos_meshtastic_settings(&c) && !pos_mesh_export_url(&c, text, 1024) &&
+      pos_ui_text("Export channel URL",
+                  "New filename; existing files protected", name, sizeof(name),
+                  false) &&
+      *name && !strpbrk(name, "/\\:")) {
+    snprintf(rel, sizeof(rel), "POS/Users/Owner/Documents/%s.txt", name);
+    int r = !pos_files_mutable(root, rel) || pos_fs_join(path, root, rel) ||
+            pos_fs_write_new(path, text, strlen(text));
+    pos_ui_notice(r ? "Not saved" : "Channel URL saved",
+                  r ? "Check SD space or choose a new name."
+                    : "Share/import this text URL. Enabled secondary channels "
+                      "are packed in order. Keep it private.");
+  }
+  pos_secure_zero(text, 1024);
+  pos_secure_zero(&c, sizeof(c));
+  free(text);
+}
+
+static void pos_ui_mesh_mqtt(const char *root) {
+  const char *items[] = {"Start text bridge (TLS)", "Stop bridge", "Status",
+                         "Back"};
+  int i = pos_ui_menu("Meshtastic MQTT / Internet", items, 4);
+  if (i == 1) {
+    pos_mesh_mqtt_stop();
+    return;
+  }
+  if (i == 2) {
+    char text[128];
+    pos_mesh_mqtt_status(text);
+    pos_ui_notice("MQTT status", text);
+    return;
+  }
+  if (i != 0)
+    return;
+  pos_mesh_mqtt_config_t *c = calloc(1, sizeof(*c));
+  if (!c)
+    return;
+  strcpy(c->uri, "mqtts://mqtt.meshtastic.org:8883");
+  strcpy(c->root, "msh/US");
+  int ch = channel();
+  if (ch < 0) {
+    free(c);
+    return;
+  }
+  c->channel = ch;
+  const char *direction[] = {"Uplink text only", "Text uplink + radio downlink",
+                             "Cancel"};
+  pos_ui_help(root, "MQTT bridge", "mqtt-bridge.txt");
+  int d = pos_ui_menu("Internet text sharing", direction, 3);
+  c->downlink = d == 1;
+  if (d >= 0 && d < 2 &&
+      pos_ui_text("TLS broker", "mqtts://hostname:8883", c->uri, sizeof(c->uri),
+                  false) &&
+      pos_ui_text("Topic root", "Must match distant gateways (e.g. msh/US)",
+                  c->root, sizeof(c->root), false) &&
+      pos_ui_text("MQTT username", "Blank if broker allows anonymous", c->user,
+                  sizeof(c->user), false) &&
+      pos_ui_text("MQTT password", "Session only; not saved to SD", c->password,
+                  sizeof(c->password), true)) {
+    int r = pos_mesh_mqtt_start(c);
+    pos_ui_notice(
+        r ? "MQTT not started" : "MQTT starting",
+        r ? "Connect Wi-Fi and check broker/channel. TLS certificate checking "
+            "is required."
+          : "See MQTT Status for connection results. Radio downlink follows "
+            "the existing transmit gate, relay setting and airtime budget.");
+  }
+  pos_secure_zero(c, sizeof(*c));
+  free(c);
+}
+
 void pos_ui_meshtastic(const char *root) {
   while (!pos_home_pending()) {
     pos_meshtastic_status_t s = pos_meshtastic_status();
@@ -382,11 +663,42 @@ void pos_ui_meshtastic(const char *root) {
                            "Recent received messages",
                            "Retry saved outbox",
                            "Radio settings",
+                           "Conversations / unread",
+                           "Contacts / favourites",
+                           "Traceroute",
+                           "Export channel URL",
+                           "MQTT bridge",
+                           "Notifications",
                            "Back"};
-    int a = pos_ui_menu(title, items, 10);
-    if (a < 0 || a == 9)
+    int a = pos_ui_menu(title, items, 16);
+    if (a < 0 || a == 15)
       break;
     pos_error_t e = {0};
+    if (a == 9)
+      conversations(root, false);
+    if (a == 10)
+      conversations(root, true);
+    if (a == 11 && tx_ready()) {
+      uint32_t id;
+      if (peer(&id, false)) {
+        int r =
+            pos_meshtastic_send(0, id, POS_MESH_TRACEROUTE, NULL, 0, true, &e);
+        pos_ui_notice(r ? "Not queued" : "Traceroute queued",
+                      r ? e.message
+                        : "Response appears in Status / latest message. Paths "
+                          "can differ in each direction.");
+      }
+    }
+    if (a == 12)
+      export_channels(root);
+    if (a == 13)
+      pos_ui_mesh_mqtt(root);
+    if (a == 14) {
+      const char *options[] = {"Banner and alert sound", "Banner only", "Off"};
+      int option = pos_ui_menu("Incoming text notifications", options, 3);
+      if (option >= 0)
+        pos_meshtastic_notifications_configure(option != 2, option == 0);
+    }
     if (a == 0) {
       char body[900];
       static const char *const states[] = {

@@ -2,6 +2,7 @@
 #include "esp_random.h"
 #include "esp_timer.h"
 #include "pos_device.h"
+#include "pos_mesh_mqtt.h"
 #include "pos_network_service.h"
 #include "pos_update_service.h"
 #include "ui.h"
@@ -159,6 +160,8 @@ static void source(const char *root, pos_update_source_t *s) {
 }
 static bool install_url(const char *root, const char *url,
                         pos_update_source_t *s) {
+  /* Avoid retaining a second TLS client while downloading/verifying updates. */
+  pos_mesh_mqtt_stop();
   char parent[POS_FS_PATH], folder[80], full[POS_FS_PATH];
   snprintf(folder, sizeof(folder), "POS/Updates/check-%08x",
            (unsigned)esp_random());

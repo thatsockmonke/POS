@@ -314,7 +314,8 @@ short G0 are global close controls; Fn+Space remains supported. Escape backs out
 of nested screens, and closes non-modal apps. Held recovery shortcuts remain.
 
 Background edits its live striped canvas: Up/Down selects, Enter picks color,
-Left/Right changes count, S saves, P resets the draft to the pan flag, Escape
+Left/Right changes count, S saves, P opens 12 common stripe flag presets, H enters
+hex RGB (also available in the picker), Escape
 cancels. Selected stripes pulse white briefly, at a slow interval. No Preview
 button or separate preview state remains.
 

@@ -58,6 +58,33 @@ class FeatureTests(unittest.TestCase):
         result=subprocess.run([str(self.runner),str(card or self.card),command,*map(str,args)],capture_output=True,text=True)
         self.assertEqual(result.returncode,expected,result.stdout+result.stderr);return result
 
+
+    def test_stripe_flags_boot_accents_and_hex_input(self):
+        self.run_feature('flags');self.run_feature('hex-ui')
+
+    def test_chat_threads_status_unread_and_duplicate_retry(self):
+        path='POS/Users/Owner/Radio/meshtastic.jsonl'
+        def row(event,sender,to,ident,text=None,ch=0):
+            record=dict(event=event,**{'from':sender},to=to,id=ident,channel=ch)
+            if text is not None:record['text']=text
+            return json.dumps(record)+'\n'
+        records=row('queued','!12345678','!87654321','00000001','Hello')+row('sent','!12345678','!87654321','00000001')+row('acknowledged','!12345678','!87654321','00000001')
+        records+=row('received','!87654321','!12345678','00000002','Reply')*2
+        records+=row('received','!88888888','!ffffffff','00000003','Other channel',ch=1)
+        self.write(path,records.encode())
+        result=json.loads(self.run_feature('chat-read','87654321',0,1).stdout)
+        self.assertEqual(result['unread'],1);self.assertEqual(len(result['messages']),2)
+        self.assertEqual(result['messages'][0]['status'],'acknowledged')
+        self.assertEqual(json.loads(self.run_feature('chat-read','87654321',0,0).stdout)['unread'],0)
+        broadcast=json.loads(self.run_feature('chat-read','ffffffff',1,0).stdout)
+        self.assertEqual([m['text'] for m in broadcast['messages']],['Other channel'])
+
+    def test_named_worksheet_restores_variables_and_expression(self):
+        relative='POS/Users/Owner/Documents/Test.calc'
+        values=[0.0]*26;values[0]=7
+        self.write(relative,json.dumps(dict(format=1,values=values,mask=1,ans=0,degrees=False,expression='a*3')).encode())
+        self.run_feature('worksheet-open',relative)
+
     def test_wifi_card_screen_shows_transfer_verification_completion_and_releases_audio_hold(self):
         self.run_feature('wifi-ui-progress')
 
@@ -572,7 +599,7 @@ class FeatureTests(unittest.TestCase):
             kind=png[offset+4:offset+8];data=png[offset+8:offset+8+size]
             self.assertEqual(zlib.crc32(kind+data),struct.unpack_from(">I",png,offset+8+size)[0])
             offset+=size+12
-            if kind==b"acTL":self.assertEqual(struct.unpack(">II",data),(31,0))
+            if kind==b"acTL":self.assertEqual(struct.unpack(">II",data),(23,0))
             if kind==b"fcTL":
                 if payload is not None:frames.append(zlib.decompress(payload))
                 seq,width,height,x,y,delay,denom,dispose,blend=struct.unpack(">IIIIIHHBB",data)
@@ -584,24 +611,24 @@ class FeatureTests(unittest.TestCase):
                 sequence+=1;payload+=data[4:]
             if kind==b"IEND":
                 frames.append(zlib.decompress(payload));break
-        self.assertEqual(offset,len(png));self.assertEqual(len(frames),31)
-        self.assertEqual(holds,[40]*30+[1000])
+        self.assertEqual(offset,len(png));self.assertEqual(len(frames),23)
+        self.assertEqual(holds,[40]*22+[1000])
         for frame in frames:
             self.assertEqual(len(frame),135*721)
             self.assertTrue(all(frame[y*721]==0 for y in range(135)))
         def pixel(frame,x,y):return tuple(frames[frame][y*721+1+x*3:y*721+4+x*3])
         black=(0,0,0)
         self.assertFalse(any(frames[0]))
-        pink,yellow,blue=[pixel(20,239,y) for y in (0,45,134)]
-        self.assertEqual(pixel(5,119,0),pink);self.assertEqual(pixel(5,120,0),black)
-        self.assertEqual(pixel(5,0,60),black)
-        self.assertEqual(pixel(6,23,60),yellow);self.assertEqual(pixel(6,24,60),black)
-        self.assertEqual(pixel(10,119,60),yellow);self.assertEqual(pixel(10,120,60),black)
-        self.assertEqual(pixel(10,0,100),black)
-        self.assertEqual(pixel(11,23,100),blue);self.assertEqual(pixel(11,24,100),black)
-        self.assertEqual(pixel(20,30,22),pink)
-        self.assertNotIn(pixel(21,30,22),(pink,black))
-        self.assertEqual(pixel(30,30,22),black);self.assertNotEqual(frames[29],frames[30])
+        pink,yellow,blue=[pixel(12,239,y) for y in (0,45,134)]
+        self.assertEqual(pixel(3,119,0),pink);self.assertEqual(pixel(3,120,0),black)
+        self.assertEqual(pixel(3,0,60),black)
+        self.assertEqual(pixel(4,39,60),yellow);self.assertEqual(pixel(4,40,60),black)
+        self.assertEqual(pixel(6,119,60),yellow);self.assertEqual(pixel(6,120,60),black)
+        self.assertEqual(pixel(6,0,100),black)
+        self.assertEqual(pixel(7,39,100),blue);self.assertEqual(pixel(7,40,100),black)
+        self.assertEqual(pixel(12,30,22),pink)
+        self.assertNotIn(pixel(13,30,22),(pink,black))
+        self.assertEqual(pixel(22,30,22),black);self.assertNotEqual(frames[21],frames[22])
         static=self.base/"boot-splash.png"
         subprocess.run([sys.executable,str(ROOT/"tools/posctl.py"),"preview",
                         "--screen","boot","--output",str(static)],check=True)

@@ -25,6 +25,7 @@
 #include "pos_battery.h"
 #include "pos_console.h"
 #include "pos_health.h"
+#include "pos_mesh_service.h"
 #include "pos_peripherals.h"
 #include "pos_timezone.h"
 #include <stdatomic.h>
@@ -296,6 +297,9 @@ int pos_device_init(void) {
   return 0;
 }
 
+static uint32_t notification_seen;
+static uint64_t notification_until;
+static char notification_text[64];
 bool pos_device_event(pos_event_t *event, uint32_t timeout_ms) {
   bool received = events && xQueueReceive(events, event,
                                           pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
@@ -311,6 +315,26 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout_ms) {
       event->key == POS_KEY_HOME)
     pos_home_request();
   pos_health_tick();
+  char text[64];
+  bool sound = false;
+  uint32_t sequence = pos_meshtastic_notification(text, &sound);
+  uint64_t now = esp_timer_get_time() / 1000;
+  bool update = false;
+  if (sequence && sequence != notification_seen) {
+    notification_seen = sequence;
+    snprintf(notification_text, sizeof(notification_text), "%s", text);
+    notification_until = now + 5000;
+    update = true;
+    if (sound && !display_hidden)
+      pos_audio_feedback(POS_SOUND_NOTICE);
+  }
+  if (notification_until && now >= notification_until) {
+    notification_until = 0;
+    *notification_text = 0;
+    update = true;
+  }
+  if (update && !display_hidden && previous_valid)
+    pos_device_show(&previous);
   if (!display_hidden && !pos_microphone_active() && previous_valid &&
       (uint64_t)esp_timer_get_time() / 1000 - battery_refresh >= 5000)
     pos_device_show(&previous);
@@ -353,6 +377,8 @@ static void show_view(const pos_view_t *input) {
   }
   static pos_view_t composed, comparable;
   composed = *input;
+  snprintf(composed.notification, sizeof(composed.notification), "%s",
+           notification_text);
   if (!pos_background_valid(&composed.background)) {
     if (!pos_background_valid(&display_theme))
       pos_background_defaults(&display_theme);
@@ -394,8 +420,8 @@ static void show_view(const pos_view_t *input) {
         dirty[row] = memcmp(v->lines[row], previous.lines[row],
                             sizeof(v->lines[row])) != 0 ||
                      (((int)row == v->selected_row ||
-                      (int)row == previous.selected_row) &&
-                         v->selected_row != previous.selected_row);
+                       (int)row == previous.selected_row) &&
+                      v->selected_row != previous.selected_row);
         if (v->text_editor && row >= 2 && row < 14)
           dirty[row] |= v->editor_selected[row - 2] !=
                             previous.editor_selected[row - 2] ||

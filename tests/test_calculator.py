@@ -56,6 +56,13 @@ class CalculatorTests(unittest.TestCase):
   self.assertIn('All x',self.calc('x=x','solve'))
   self.assertEqual(self.calc('x=x+1','solve'),'No solution')
   self.assertEqual(self.calc('1e200*x^2-5e200*x+6e200','solve'),'x = 3 or 2')
+
+ def test_higher_degree_real_root_isolation_and_repeated_roots(self):
+  for expression,expected in [('(x-1)*(x-2)*(x-3)',[1,2,3]),('(x-1)^2*(x+2)',[-2,1]),('x^4-5*x^2+4',[-2,-1,1,2])]:
+   out=self.calc(expression,'solve');values=[float(v) for v in out.split(': ',1)[1].split(', ')]
+   self.assertEqual(len(values),len(expected))
+   for a,b in zip(values,expected):self.assertAlmostEqual(a,b,places=7)
+  self.assertIn('No real roots',self.calc('x^4+1','solve'))
  def test_invalid_input_and_domains_fail_without_hanging_or_nonfinite_answers(self):
   for text in ['','1/0','sqrt(-1)','ln(0)','asin(2)','tan(pi/2)','1700!','ncr(5,7)','std(2)','root(-8,2)','unknown(2)','min(1e999,2)','1+','2=2','e=2','E=2','x/x','x^x','x^9','a','sin(x)','(' * 30+'1'+')'*30,'2^'*40+'2','-'*100+'2','1'*161]:
    with self.subTest(text=text):self.assertEqual(self.commands(('eval',text))[0][0],-1)

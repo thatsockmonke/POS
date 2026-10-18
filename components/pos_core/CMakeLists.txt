@@ -14,3 +14,9 @@ set_source_files_properties(pos_music.c PROPERTIES COMPILE_OPTIONS "-Werror=fram
 set_source_files_properties(pos_recorder.c pos_appdata.c pos_instruments.c PROPERTIES COMPILE_OPTIONS "-Werror=frame-larger-than=3072")
 
 set_source_files_properties(pos_maps.c pos_navigation.c PROPERTIES COMPILE_OPTIONS "-Werror=frame-larger-than=3072")
+
+target_sources(${COMPONENT_LIB} PRIVATE "pos_calc_tools.c")
+
+target_sources(${COMPONENT_LIB} PRIVATE "pos_chat.c")
+
+set_source_files_properties(pos_calc_tools.c pos_chat.c PROPERTIES COMPILE_OPTIONS "-Werror=frame-larger-than=3072")

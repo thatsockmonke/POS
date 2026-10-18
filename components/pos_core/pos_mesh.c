@@ -58,7 +58,7 @@ static bool string_ok(const char *p, size_t n) {
 static const char *const presets[] = {
     "LongFast",  "LongSlow",  NULL,      "MediumSlow", "MediumFast",
     "ShortSlow", "ShortFast", "LongMod", "ShortTurbo", "LongTurbo"};
-static const char *channel_name(const pos_mesh_config_t *c, unsigned i) {
+const char *pos_mesh_channel_name(const pos_mesh_config_t *c, unsigned i) {
   return *c->channels[i].name ? c->channels[i].name : presets[c->preset];
 }
 void pos_mesh_defaults(pos_mesh_config_t *c) {
@@ -102,7 +102,7 @@ uint8_t pos_mesh_channel_hash(const pos_mesh_config_t *c, unsigned i) {
     return 0;
   for (int j = 0; j < n; ++j)
     h ^= key[j];
-  const char *name = channel_name(c, i);
+  const char *name = pos_mesh_channel_name(c, i);
   for (; *name; ++name)
     h ^= (uint8_t)*name;
   pos_secure_zero(key, sizeof(key));
@@ -127,7 +127,7 @@ int pos_mesh_modem(const pos_mesh_config_t *c, pos_mesh_modem_t *m) {
   if (!slots || c->slot > slots)
     return -1;
   uint32_t hash = 5381;
-  const char *name = channel_name(c, 0);
+  const char *name = pos_mesh_channel_name(c, 0);
   for (; *name; ++name)
     hash = hash * 33 + (unsigned char)*name;
   unsigned slot = c->slot ? (unsigned)c->slot - 1 : hash % slots;
@@ -472,6 +472,127 @@ int pos_mesh_import_url(const char *text, pos_mesh_config_t *c) {
   pos_secure_zero(payload, sizeof(payload));
   return 0;
 }
+int pos_mesh_export_url(const pos_mesh_config_t *c, char *out, size_t cap) {
+  if (!c || pos_mesh_config_valid(c) || !out)
+    return -1;
+  uint8_t p[640], ch[64], rf[40];
+  size_t n = 0;
+  for (unsigned i = 0; i < 8; ++i)
+    if (c->channels[i].enabled) {
+      size_t k = 0;
+      k += bytes(ch + k, 2, c->channels[i].key, c->channels[i].key_len);
+      k += bytes(ch + k, 3, c->channels[i].name, strlen(c->channels[i].name));
+      n += bytes(p + n, 1, ch, k);
+    }
+  size_t k = 0;
+  k += number(rf + k, 1, 1);
+  k += number(rf + k, 2, c->preset);
+  k += number(rf + k, 7, c->region);
+  k += number(rf + k, 8, c->hops);
+  k += number(rf + k, 11, c->slot);
+  n += bytes(p + n, 2, rf, k);
+  static const char alphabet[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  static const char prefix[] = "https://meshtastic.org/e/#";
+  size_t need = sizeof(prefix) - 1 + (n * 8 + 5) / 6 + 1;
+  if (cap < need) {
+    pos_secure_zero(p, sizeof(p));
+    return -1;
+  }
+  strcpy(out, prefix);
+  size_t at = sizeof(prefix) - 1;
+  unsigned acc = 0, bits = 0;
+  for (size_t i = 0; i < n; ++i) {
+    acc = (acc << 8) | p[i];
+    bits += 8;
+    while (bits >= 6) {
+      bits -= 6;
+      out[at++] = alphabet[(acc >> bits) & 63];
+    }
+  }
+  if (bits)
+    out[at++] = alphabet[(acc << (6 - bits)) & 63];
+  out[at] = 0;
+  pos_secure_zero(p, sizeof(p));
+  pos_secure_zero(ch, sizeof(ch));
+  return 0;
+}
+/* RouteDiscovery: packed fixed32 routes, preserve unknown/SNR fields. The
+ * endpoint is implicit; relays append their own node to the applicable path. */
+int pos_mesh_trace_route(pos_mesh_data_t *d, uint32_t node, bool endpoint) {
+  if (!d || d->port != POS_MESH_TRACEROUTE)
+    return -1;
+  uint8_t route[2][32] = {{0}}, rest[POS_MESH_PAYLOAD];
+  size_t sizes[2] = {0}, rn = 0;
+  reader_t r = {d->payload, d->payload + d->length};
+  field_t f;
+  int more;
+  while (r.p < r.end) {
+    const uint8_t *start = r.p;
+    more = field(&r, &f);
+    if (more <= 0)
+      return -1;
+    if (f.field == 1 || f.field == 3) {
+      unsigned i = f.field == 3;
+      size_t n = f.type == 5 ? 4 : f.type == 2 ? f.n : 33;
+      if (n % 4 || n > 32 - sizes[i])
+        return -1;
+      memcpy(route[i] + sizes[i], f.p, n);
+      sizes[i] += n;
+    } else {
+      size_t n = (size_t)(r.p - start);
+      if (n > sizeof(rest) - rn)
+        return -1;
+      memcpy(rest + rn, start, n);
+      rn += n;
+    }
+  }
+  unsigned i = d->request_id ? 1 : 0;
+  if (!endpoint) {
+    if (sizes[i] >= 32)
+      return -1;
+    put32(route[i] + sizes[i], node);
+    sizes[i] += 4;
+  }
+  uint8_t out[POS_MESH_PAYLOAD + 8];
+  size_t n = 0;
+  for (unsigned j = 0; j < 2; ++j)
+    if (sizes[j])
+      n += bytes(out + n, j ? 3 : 1, route[j], sizes[j]);
+  if (n + rn > POS_MESH_PAYLOAD)
+    return -1;
+  memcpy(out + n, rest, rn);
+  n += rn;
+  memcpy(d->payload, out, n);
+  d->length = n;
+  return 0;
+}
+int pos_mesh_trace_text(const pos_mesh_data_t *d, char *out, size_t cap) {
+  if (!d || !out || !cap)
+    return -1;
+  reader_t r = {d->payload, d->payload + d->length};
+  field_t f;
+  int more;
+  size_t used = 0;
+  *out = 0;
+  while ((more = field(&r, &f)) > 0)
+    if (f.field == 1 || f.field == 3) {
+      if ((f.type != 2 && f.type != 5) || f.n % 4 || f.n > 32)
+        return -1;
+      for (size_t i = 0; i < f.n; i += 4) {
+        int n = snprintf(out + used, cap - used, "%s!%08x ",
+                         i              ? "> "
+                         : f.field == 1 ? "Out: "
+                                        : "Back: ",
+                         (unsigned)get32(f.p + i));
+        if (n < 0 || (size_t)n >= cap - used)
+          return -1;
+        used += n;
+      }
+    }
+  return more < 0 ? -1 : 0;
+}
+
 int pos_mesh_header(const void *wire, size_t n, pos_mesh_header_t *h) {
   if (!wire || n < 18 || n > 255)
     return -1;
@@ -770,7 +891,7 @@ static uint32_t random_value(pos_mesh_t *s) {
 }
 static int event(pos_mesh_t *s, pos_mesh_event_t e,
                  const pos_mesh_message_t *m) {
-  if (e != POS_MESH_RX) {
+  if (e != POS_MESH_RX && e != POS_MESH_QUEUED) {
     s->stats.last_id = m->header.id;
     s->stats.last_event = e;
   }
@@ -804,8 +925,15 @@ static int send_message(pos_mesh_t *s, pos_mesh_message_t *m, uint64_t now,
   m->header.flags |= s->config.hops | (s->config.hops << 5);
   uint8_t w[255];
   size_t n = pos_mesh_encode(s, m, w);
-  if (!n || !queue(s, w, n, true, priority, now))
+  if (!n)
     return -1;
+  pos_mesh_tx_t *queued = queue(s, w, n, true, priority, now);
+  if (!queued)
+    return -1;
+  if (m->data.port == POS_MESH_TEXT && event(s, POS_MESH_QUEUED, m)) {
+    queued->used = false;
+    return -1;
+  }
   return 0;
 }
 int pos_mesh_send(pos_mesh_t *s, unsigned ch, uint32_t to, unsigned port,
@@ -820,7 +948,8 @@ int pos_mesh_send(pos_mesh_t *s, unsigned ch, uint32_t to, unsigned port,
   if (n)
     memcpy(m.data.payload, p, n);
   m.pki = to != UINT32_MAX && port != POS_MESH_USER &&
-          port != POS_MESH_POSITION && port != POS_MESH_ROUTING;
+          port != POS_MESH_POSITION && port != POS_MESH_ROUTING &&
+          port != POS_MESH_TRACEROUTE;
   return send_message(s, &m, now, 1);
 }
 int pos_mesh_announce(pos_mesh_t *s, uint32_t to, bool discover, uint64_t now) {
@@ -914,6 +1043,7 @@ static int update_node(pos_mesh_t *s, const pos_mesh_message_t *m, uint64_t now,
         copy.longitude > 1800000000)
       return -1;
     copy.has_position = true;
+    copy.position_ms = now;
   }
   *n = copy;
   return 0;
@@ -988,6 +1118,11 @@ int pos_mesh_receive(pos_mesh_t *s, const void *wire, size_t length, int rssi,
   pos_mesh_message_t m;
   bool decoded = !pos_mesh_decode(s, wire, length, &m);
   bool ours = h.to == s->node || h.to == UINT32_MAX;
+  if (decoded && !duplicate && m.data.port == POS_MESH_TRACEROUTE &&
+      pos_mesh_trace_route(&m.data, s->node, h.to == s->node)) {
+    ++s->stats.rejected;
+    return -1;
+  }
   if (decoded && ours) {
     if (!duplicate) {
       if (update_node(s, &m, now, rssi, snr)) {
@@ -1018,6 +1153,15 @@ int pos_mesh_receive(pos_mesh_t *s, const void *wire, size_t length, int rssi,
           }
         }
     }
+    if (!duplicate && m.data.port == POS_MESH_TRACEROUTE &&
+        m.data.want_response && h.to == s->node && !m.data.request_id) {
+      pos_mesh_message_t reply = {.header = {.to = h.from},
+                                  .data = m.data,
+                                  .channel_index = m.channel_index};
+      reply.data.want_response = false;
+      reply.data.request_id = h.id;
+      (void)send_message(s, &reply, now, 1);
+    }
     acknowledge(s, &m, now);
     if (!duplicate && m.data.want_response &&
         (m.data.port == POS_MESH_USER || m.data.port == POS_MESH_REPLY) &&
@@ -1046,6 +1190,12 @@ int pos_mesh_receive(pos_mesh_t *s, const void *wire, size_t length, int rssi,
       (!duplicate || (old && (h.flags & 7) > old->hops))) {
     uint8_t relay[255];
     memcpy(relay, wire, length);
+    if (decoded && m.data.port == POS_MESH_TRACEROUTE) {
+      size_t updated = pos_mesh_encode(s, &m, relay);
+      if (!updated)
+        return -1;
+      length = updated;
+    }
     relay[12] = (h.flags & 0xf8) | ((h.flags & 7) - 1);
     relay[15] = s->node & 255;
     if (relay[14])
@@ -1128,4 +1278,124 @@ void pos_mesh_tx_result(pos_mesh_t *s, bool success, uint64_t now) {
 void pos_mesh_cancel(pos_mesh_t *s) {
   memset(s->queue, 0, sizeof(s->queue));
   s->active_tx = -1;
+}
+
+size_t pos_mesh_envelope(const void *wire, size_t length, const char *channel,
+                         const char *gateway, uint8_t *out, size_t cap) {
+  pos_mesh_header_t h;
+  if (!channel || !gateway || strlen(channel) > 11 || strlen(gateway) > 39 ||
+      pos_mesh_header(wire, length, &h))
+    return 0;
+  uint8_t packet[320], envelope[400];
+  size_t n = 0;
+  n += fixed(packet + n, 1, h.from);
+  n += fixed(packet + n, 2, h.to);
+  n += number(packet + n, 3, h.channel);
+  n += bytes(packet + n, 5, (const uint8_t *)wire + 16, length - 16);
+  n += fixed(packet + n, 6, h.id);
+  n += number(packet + n, 9, h.flags & 7);
+  n += number(packet + n, 10, !!(h.flags & 8));
+  n += number(packet + n, 15, h.flags >> 5);
+  n += number(packet + n, 18, h.next_hop);
+  n += number(packet + n, 19, h.relay);
+  n += number(packet + n, 17, h.channel == 0);
+  size_t k = bytes(envelope, 1, packet, n);
+  k += bytes(envelope + k, 2, channel, strlen(channel));
+  k += bytes(envelope + k, 3, gateway, strlen(gateway));
+  if (k > cap)
+    return 0;
+  memcpy(out, envelope, k);
+  return k;
+}
+int pos_mesh_unenvelope(const void *envelope, size_t length,
+                        const char *channel, const char *own_gateway,
+                        uint8_t wire[255], size_t *size) {
+  if (!envelope || !length || length > 400)
+    return -1;
+  reader_t r = {envelope, (const uint8_t *)envelope + length};
+  field_t f;
+  int more;
+  const uint8_t *packet = NULL;
+  size_t packet_n = 0;
+  bool ch = false, gateway = false;
+  unsigned fields = 0;
+  while ((more = field(&r, &f)) > 0) {
+    if (f.field <= 3) {
+      unsigned bit = 1u << f.field;
+      if (fields & bit)
+        return -1;
+      fields |= bit;
+      if (f.type != 2)
+        return -1;
+    }
+    if (f.field == 1) {
+      packet = f.p;
+      packet_n = f.n;
+    }
+    if (f.field == 2)
+      ch = f.n == strlen(channel) && !memcmp(f.p, channel, f.n);
+    if (f.field == 3)
+      gateway = f.n > 0 && f.n < 40 && !memchr(f.p, 0, f.n) &&
+                !(f.n == strlen(own_gateway) && !memcmp(f.p, own_gateway, f.n));
+  }
+  if (more < 0 || !packet || !ch || !gateway)
+    return -1;
+  memset(wire, 0, 255);
+  r = (reader_t){packet, packet + packet_n};
+  bool encrypted = false;
+  unsigned seen = 0;
+  *size = 0;
+  while ((more = field(&r, &f)) > 0) {
+    if (f.field == 4)
+      return -1;
+    if (f.field <= 19) {
+      unsigned bit = 1u << f.field;
+      if (seen & bit)
+        return -1;
+      seen |= bit;
+    }
+    if (f.field == 1 || f.field == 2 || f.field == 6) {
+      if (f.type != 5)
+        return -1;
+      put32(wire + (f.field == 1 ? 4 : f.field == 2 ? 0 : 8), f.value);
+    } else if (f.field == 5) {
+      if (f.type != 2 || f.n > 239 || !f.n)
+        return -1;
+      memcpy(wire + 16, f.p, f.n);
+      *size = f.n + 16;
+      encrypted = true;
+    } else if (f.field == 3 || f.field == 9 || f.field == 10 || f.field == 15 ||
+               f.field == 18 || f.field == 19) {
+      if (f.type)
+        return -1;
+      if (f.field == 3) {
+        if (f.value > 255)
+          return -1;
+        wire[13] = f.value;
+      }
+      if (f.field == 9) {
+        if (f.value > 7)
+          return -1;
+        wire[12] |= f.value;
+      }
+      if (f.field == 10) {
+        if (f.value > 1)
+          return -1;
+        wire[12] |= f.value ? 8 : 0;
+      }
+      if (f.field == 15) {
+        if (f.value > 7)
+          return -1;
+        wire[12] |= f.value << 5;
+      }
+      if (f.field == 18 || f.field == 19) {
+        if (f.value > 255)
+          return -1;
+        wire[f.field == 18 ? 14 : 15] = f.value;
+      }
+    }
+  }
+  pos_mesh_header_t h;
+  wire[12] |= 16;
+  return more < 0 || !encrypted || pos_mesh_header(wire, *size, &h) ? -1 : 0;
 }

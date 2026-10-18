@@ -16,6 +16,7 @@
 #include "pos_fs.h"
 #include "pos_health.h"
 #include "pos_launcher.h"
+#include "pos_mesh_mqtt.h"
 #include "pos_network.h"
 #include "pos_network_service.h"
 #include "pos_peripherals.h"
@@ -751,6 +752,7 @@ static const pos_app_t modal_apps[] = {{.name = "Settings",
 
 #ifndef POS_INSTALLER
 static void stop_services(void) {
+  pos_mesh_mqtt_stop();
   pos_network_auto_stop();
   pos_audio_feedback_shutdown();
   pos_audio_stop();
@@ -783,6 +785,8 @@ void pos_desktop(const char *root, bool recovery_only) {
 #endif
   pos_settings_defaults(&services->settings);
   int settings = pos_settings_load(root, &services->settings);
+  pos_ui_set_theme(&services->settings.background);
+  pos_device_set_theme(&services->settings.background);
   if (recovery_only) {
     recovery(services);
     free(workspace);

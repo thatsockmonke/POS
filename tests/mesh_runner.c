@@ -222,6 +222,47 @@ int main(int argc, char **argv) {
     return 0;
   }
   uint8_t key[32] = {0}, peer[32] = {0}, data[255] = {0}, out[255] = {0};
+
+  if (!strcmp(argv[1], "export")) {
+    pos_mesh_config_t c;
+    char url[1024];
+    pos_mesh_defaults(&c);
+    if (argc == 3 && pos_mesh_import_url(argv[2], &c))
+      return 1;
+    if (pos_mesh_export_url(&c, url, sizeof(url)))
+      return 1;
+    puts(url);
+    return 0;
+  }
+  if (!strcmp(argv[1], "envelope")) {
+    assert(argc == 3);
+    size_t n = unhex(argv[2], data, sizeof(data));
+    uint8_t envelope[400];
+    n = pos_mesh_envelope(data, n, "LongFast", "!12345678", envelope,
+                          sizeof(envelope));
+    if (!n)
+      return 1;
+    hex(envelope, n);
+    return 0;
+  }
+  if (!strcmp(argv[1], "unenvelope")) {
+    assert(argc == 4);
+    uint8_t envelope[400];
+    size_t n = unhex(argv[2], envelope, sizeof(envelope)), length = 0;
+    if (pos_mesh_unenvelope(envelope, n, "LongFast", argv[3], out, &length))
+      return 1;
+    hex(out, length);
+    return 0;
+  }
+  if (!strcmp(argv[1], "trace")) {
+    assert(argc == 4);
+    pos_mesh_data_t d = {.port = POS_MESH_TRACEROUTE};
+    d.length = unhex(argv[2], d.payload, sizeof(d.payload));
+    if (pos_mesh_trace_route(&d, 0x11223344, atoi(argv[3])))
+      return 1;
+    hex(d.payload, d.length);
+    return 0;
+  }
   if (!strcmp(argv[1], "import")) {
     assert(argc == 3);
     pos_mesh_config_t c;

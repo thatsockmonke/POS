@@ -50,6 +50,30 @@ class MeshServiceTests(unittest.TestCase):
         return subprocess.run([self.runner, action, self.nvs, self.card],
                               capture_output=True, text=True, check=True, timeout=20).stdout
 
+    def test_mqtt_decryption_generation_text_filter_duplicate_and_notifications(self):
+        self.run_service('mqtt')
+        log=self.card/'POS/Users/Owner/Radio/meshtastic.jsonl'
+        self.assertEqual(log.read_text().count('Hello'),1)
+
+    def test_interrupted_last_journal_line_does_not_consume_next_message(self):
+        self.run_service('send')
+        log=self.card/'POS/Users/Owner/Radio/meshtastic.jsonl'
+        with log.open('ab') as out:out.write(b'{"event":')
+        self.run_service('send')
+        import json
+        records=[]
+        for line in log.read_text().splitlines():
+            try:records.append(json.loads(line))
+            except json.JSONDecodeError:pass
+        self.assertEqual(len(records),2)
+        self.assertTrue(all(r['text']=='persist this message' for r in records))
+
+    def test_outgoing_text_is_saved_before_transmission(self):
+        self.run_service('send')
+        log=self.card/'POS/Users/Owner/Radio/meshtastic.jsonl'
+        self.assertIn('"event":"queued"',log.read_text())
+        self.assertIn('persist this message',log.read_text())
+
     def test_encrypted_preferences_failed_write_and_reload_preserve_old_settings(self):
         config = self.nvs / 'config.nvs'
         previous = config.read_bytes()

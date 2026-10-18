@@ -47,8 +47,8 @@ enum {
   POS_BOOT_COLOR_COUNT = 3,
   POS_BOOT_SPLASH_MS = 1000,
   POS_BOOT_FRAME_MS = 40,
-  POS_BOOT_SLIDE_FRAMES = 10,
-  POS_BOOT_STAGGER_FRAMES = 5,
+  POS_BOOT_SLIDE_FRAMES = 6,
+  POS_BOOT_STAGGER_FRAMES = 3,
   POS_BOOT_FADE_FRAMES = 10,
   POS_BOOT_HOLD_FRAME =
       POS_BOOT_SLIDE_FRAMES + 2 * POS_BOOT_STAGGER_FRAMES + POS_BOOT_FADE_FRAMES
@@ -82,6 +82,10 @@ typedef struct {
   uint8_t map_turn;
   uint32_t map_generation;
   bool map_fix, map_waypoint, map_world, map_region;
+  uint8_t map_node_count;
+  int16_t map_node_x[32], map_node_y[32];
+  bool map_node_stale[32];
+  char notification[64];
   int16_t map_left, map_top, map_right, map_bottom;
   int16_t map_gps_x, map_gps_y, map_target_x, map_target_y;
   bool solid_color;

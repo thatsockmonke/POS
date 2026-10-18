@@ -3,6 +3,7 @@
 #include "esp_app_desc.h"
 #include "nvs.h"
 #include "pos_device.h"
+#include "pos_mesh_mqtt.h"
 #include "pos_network_service.h"
 #include "pos_update_service.h"
 #include "ui.h"
@@ -14,7 +15,8 @@
 static pos_update_source_t stored;
 static bool has_source, nvs_failed, connected = true;
 static unsigned installs, downloads, wifi_opened, time_syncs;
-static bool clock_unset;
+static bool clock_unset, mqtt_stopped;
+void pos_mesh_mqtt_stop(void) { mqtt_stopped=true; }
 time_t time(time_t *out) {
   time_t value = clock_unset ? 0 : 1792152000;
   if (out)
@@ -157,6 +159,7 @@ int pos_network_https_limit(const char *url, const char *method,
   (void)body;
   (void)type;
   assert(!strcmp(url, stored.url) && !strcmp(method, "GET") && connected);
+  assert(mqtt_stopped);
   ++downloads;
   FILE *f = fopen(manifest, "rb");
   assert(f);

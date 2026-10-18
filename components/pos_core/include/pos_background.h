@@ -11,7 +11,18 @@ typedef struct {
 void pos_background_defaults(pos_background_t *background);
 typedef enum {
   POS_BACKGROUND_PANSEXUAL,
-  POS_BACKGROUND_NONBINARY
+  POS_BACKGROUND_NONBINARY,
+  POS_BACKGROUND_RAINBOW,
+  POS_BACKGROUND_LESBIAN,
+  POS_BACKGROUND_GAY,
+  POS_BACKGROUND_BISEXUAL,
+  POS_BACKGROUND_TRANSGENDER,
+  POS_BACKGROUND_ASEXUAL,
+  POS_BACKGROUND_AROMANTIC,
+  POS_BACKGROUND_GENDERQUEER,
+  POS_BACKGROUND_GENDERFLUID,
+  POS_BACKGROUND_AGENDER,
+  POS_BACKGROUND_PRESET_COUNT
 } pos_background_preset_t;
 bool pos_background_preset(pos_background_t *, pos_background_preset_t);
 bool pos_background_valid(const pos_background_t *background);
@@ -22,3 +33,6 @@ uint16_t pos_color_rgb565(uint32_t rgb);
 uint32_t pos_color_hsv_rgb(unsigned hue, unsigned saturation, unsigned value);
 void pos_color_rgb_hsv(uint32_t rgb, uint16_t *hue, uint16_t *saturation,
                        uint16_t *value);
+
+extern const char *const
+    pos_background_preset_names[POS_BACKGROUND_PRESET_COUNT];

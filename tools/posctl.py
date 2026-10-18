@@ -126,7 +126,7 @@ def make_bundle(build_root: Path, payload: Path, output: Path) -> Path:
         shutil.copyfile(ROOT / "docs/INSTALL.md", stage / "INSTALL.md")
         for name in ("RECOVERY.md", "HARDWARE.md", "HARDWARE_VALIDATION.md", "FORMAT.md", "VALIDATION.md"):
             shutil.copyfile(ROOT / "docs" / name, stage / name)
-        for name in ("STATUS.md", "RELEASE.md", "DOWNLOADS.md", "APPS.md", "PROTOCOLS.md", "UPDATES.md", "DEVELOPMENT.md", "MIGRATIONS.md", "EASY_INSTALL.md", "FIRMWARE_HISTORY.md", "BUG_REPORT_0.6.2.md", "BUG_REPORT_0.6.5.md", "BUG_REPORT_0.6.7.md", "UPDATER_HEAP.md", "MAPS.md", "TRANSFER.md", "CALCULATOR.md", "BUG_REPORT_0.6.11.md", "MESHTASTIC.md", "BUG_REPORT_0.7.0.md"):
+        for name in ("STATUS.md", "RELEASE.md", "DOWNLOADS.md", "APPS.md", "PROTOCOLS.md", "UPDATES.md", "DEVELOPMENT.md", "MIGRATIONS.md", "EASY_INSTALL.md", "FIRMWARE_HISTORY.md", "BUG_REPORT_0.6.2.md", "BUG_REPORT_0.6.5.md", "BUG_REPORT_0.6.7.md", "UPDATER_HEAP.md", "MAPS.md", "TRANSFER.md", "CALCULATOR.md", "BUG_REPORT_0.6.11.md", "MESHTASTIC.md", "BUG_REPORT_0.7.0.md", "BUG_REPORT_0.8.0.md"):
             shutil.copyfile(ROOT / "docs" / name, stage / name)
         # USB commands work with pip-installed esptool; no SDK/build is required.
         (stage / "tools").mkdir()
