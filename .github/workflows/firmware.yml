@@ -50,6 +50,9 @@ jobs:
         run: |
           . "$GITHUB_WORKSPACE/esp-idf/export.sh"
           python tools/posctl.py build
+          export POS_MESH_MBEDTLS_HOST="$RUNNER_TEMP/pos-mesh-mbedtls"
+          cmake -S "$IDF_PATH/components/mbedtls/mbedtls" -B "$POS_MESH_MBEDTLS_HOST" -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF
+          cmake --build "$POS_MESH_MBEDTLS_HOST" -j 4
           python -m unittest discover -s tests -v
       - name: Check Linux Bluetooth D-Bus integration without a physical radio
         run: |
@@ -90,7 +93,7 @@ jobs:
             POS/dist/pos-transfer.sha256
           compression-level: 0
           if-no-files-found: error
-  prerelease:
+  release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-24.04
@@ -102,12 +105,16 @@ jobs:
         with:
           name: pos-firmware-${{ needs.build.outputs.version }}
           path: firmware-downloads
-      - name: Publish tested tag as an experimental prerelease
+      - name: Publish tested release tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POS_TAG: ${{ github.ref_name }}
           POS_VERSION: ${{ needs.build.outputs.version }}
         run: |
+          release_flags=(--prerelease --latest=false)
+          if [[ "$POS_VERSION" == *-stable ]]; then
+            release_flags=(--prerelease=false --latest)
+          fi
           # Preserve already published binaries when a workflow is rerun or a
           # locally verified package has been published for this tag.
           if release_draft=$(gh release view "$POS_TAG" --json isDraft --jq '.isDraft' 2>/dev/null); then
@@ -116,7 +123,7 @@ jobs:
               exit 0
             fi
             gh release upload "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/*.png firmware-downloads/pos-setup firmware-downloads/pos-transfer --clobber
-            gh release edit "$POS_TAG" --draft=false --prerelease --latest=false --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md
+            gh release edit "$POS_TAG" --draft=false "${release_flags[@]}" --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md
           else
-            gh release create "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/*.png firmware-downloads/pos-setup firmware-downloads/pos-transfer --verify-tag --prerelease --latest=false --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md
+            gh release create "$POS_TAG" firmware-downloads/*.zip firmware-downloads/*.sha256 firmware-downloads/*.png firmware-downloads/pos-setup firmware-downloads/pos-transfer --verify-tag "${release_flags[@]}" --title "POS ${POS_VERSION}" --notes-file docs/RELEASE.md
           fi

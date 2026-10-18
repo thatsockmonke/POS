@@ -97,6 +97,26 @@ int main(int argc, char **argv) {
     return 2;
   const char *mode = argv[1], *root = argv[2];
   pos_error_t error = {0};
+  if (!strcmp(mode, "mesh-wifi-scan")) {
+    pos_network_ap_t aps[3] = {0};
+    unsigned count = 0;
+    pos_network_ap_t records[] = {
+        {.ssid = "Home", .rssi = -80, .secured = true},
+        {.ssid = "Other", .rssi = -60, .secured = true},
+        {.ssid = "Home", .rssi = -30, .secured = true},
+        {.ssid = "Home", .rssi = -55, .secured = true},
+        {.ssid = "Home", .rssi = -20, .secured = false},
+        {.ssid = "Fourth", .rssi = -10, .secured = true},
+        {.ssid = "", .rssi = -5, .secured = false}};
+    for (unsigned i = 0; i < sizeof(records) / sizeof(*records); ++i)
+      count = pos_wifi_scan_merge(aps, count, 3, &records[i]);
+    assert(count == 3 && !strcmp(aps[0].ssid, "Fourth") && aps[0].rssi == -10);
+    assert(!strcmp(aps[1].ssid, "Home") && !aps[1].secured &&
+           aps[1].rssi == -20);
+    assert(!strcmp(aps[2].ssid, "Home") && aps[2].secured &&
+           aps[2].rssi == -30);
+    return 0;
+  }
   if (!strcmp(mode, "vault")) {
     pos_wifi_profiles_t profiles = {0}, decoded = {0};
     profiles.count = 4;

@@ -5,8 +5,8 @@ Firmware goes over USB; the microSD holds the installation files and system driv
 
 ## Download and run
 
-Download **[pos-setup](https://github.com/thatsockmonke/POS/releases/download/v0.6.11-dev/pos-setup)**
-from the [0.6.11-dev release](https://github.com/thatsockmonke/POS/releases/tag/v0.6.11-dev).
+Download **[pos-setup](https://github.com/thatsockmonke/POS/releases/download/v0.7.0-stable/pos-setup)**
+from the [0.7.0-stable release](https://github.com/thatsockmonke/POS/releases/tag/v0.7.0-stable).
 Replace an older copy. You need Python 3.10 or newer; no compiler is required.
 
 For the Chromebook paths used in this project:
@@ -74,13 +74,13 @@ release. Restored bytes are verified. Keep the original backup afterward.
 ## Updates and connection help
 
 Already on 0.6.7-dev or later? Use **Settings → System → Software Update**.
-No card formatting or map redownload is required for 0.6.11-dev.
+No card formatting or map redownload is required for 0.7.0-stable.
 
 - **Ctrl+C** cancels. Completed backups/downloads and partial files are kept.
 - `--doctor`: read-only USB/card connection help; no writes or downloads.
 - `--verbose`: detailed USB diagnostics. Normal output shows concise progress.
-- `--release v0.6.11-dev`: select this version explicitly.
-- `--bundle /path/pos-0.6.11-dev.zip`: use a downloaded ZIP and its checksum offline.
+- `--release v0.7.0-stable`: select this version explicitly.
+- `--bundle /path/pos-0.7.0-stable.zip`: use a downloaded ZIP and its checksum offline.
 
 For the old manifest-heap error, see [UPDATER_HEAP.md](UPDATER_HEAP.md).
 For map controls/deletion, see [MAPS.md](MAPS.md); for apps, see [APPS.md](APPS.md).

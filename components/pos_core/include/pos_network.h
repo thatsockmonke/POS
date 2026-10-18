@@ -5,6 +5,15 @@
 #define POS_WIFI_PROFILES 4
 #define POS_WIFI_VAULT_BYTES 447
 typedef struct {
+  char ssid[33];
+  int rssi;
+  bool secured;
+} pos_network_ap_t;
+/* One menu entry per SSID/security class, retaining the strongest AP.
+ * Names and open/secured networks are never silently conflated. */
+unsigned pos_wifi_scan_merge(pos_network_ap_t *, unsigned count,
+                             unsigned capacity, const pos_network_ap_t *);
+typedef struct {
   char ssid[33], password[65];
 } pos_wifi_profile_t;
 typedef struct {
@@ -30,4 +39,6 @@ int pos_receive_file(const char *root, const char *relative, uint64_t expected,
                      void *reader_ctx, pos_io_progress_t progress,
                      void *progress_ctx, pos_error_t *error);
 
-int pos_receive_file_limit(const char *,const char *,uint64_t expected,uint64_t limit,const char *,pos_stream_read_t,void *,pos_io_progress_t,void *,pos_error_t *);
+int pos_receive_file_limit(const char *, const char *, uint64_t expected,
+                           uint64_t limit, const char *, pos_stream_read_t,
+                           void *, pos_io_progress_t, void *, pos_error_t *);

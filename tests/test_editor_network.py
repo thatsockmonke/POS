@@ -147,6 +147,8 @@ class EditorNetworkTests(unittest.TestCase):
         self.assertEqual(plain[0],4);self.assertEqual(plain[1:10],b"Network 0")
         self.assertEqual(plain[34:57],b"secret-network-password")
     def test_https_and_transfer_path_policy(self):self.run_tool("policy")
+    def test_mesh_wifi_scan_groups_same_ssid_keeps_strongest_and_separates_security(self):
+        self.run_tool('mesh-wifi-scan')
     def receive(self,name,data,expected_size="unknown",sha="-",fail=-1,cancel=-1,expected=0):
         source=self.root/"incoming.bin";source.write_bytes(data)
         return self.run_tool("receive","Downloads/"+name,source,expected_size,sha,fail,cancel,expected=expected)

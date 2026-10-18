@@ -23,7 +23,7 @@ import zlib
 SERVICE = '73f5ae10-5c12-4b83-9d48-bae023504f53'
 RX = '73f5ae11-5c12-4b83-9d48-bae023504f53'
 TX = '73f5ae12-5c12-4b83-9d48-bae023504f53'
-VERSION = "0.6.11-dev"
+VERSION = "0.7.0-stable"
 MAX_SIZE = 0x7fffffff
 
 
@@ -643,8 +643,25 @@ def wifi_transfer(action, source, folder, address, key, save_name=None, progress
     headers = {'Authorization': 'Bearer ' + key.lower(), 'Connection': 'close'}
     try:
         with transfer_phase('Checking Cardputer and session key', progress):
+            try:
+                connection.connect()
+            except (TimeoutError, ConnectionError, OSError) as error:
+                raise ValueError(
+                    f'Cannot connect to Cardputer at {host}:{port}; the session key has not been checked. '
+                    'Leave its transfer screen open and check its current IP. '
+                    f'Open http://{host}:{port}/status in the ChromeOS/PC browser: '
+                    '“Session key required” means the device is reachable. '
+                    'If Chrome works but Crostini does not, check VPN/local-network access for Linux. '
+                    'If neither works, check guest Wi-Fi/client isolation and that both devices are on the same LAN.'
+                ) from error
             connection.request('GET', '/status', headers=headers)
-            status = connection.getresponse()
+            try:
+                status = connection.getresponse()
+            except TimeoutError as error:
+                raise ValueError(
+                    f'Connected to {host}:{port}, but POS did not answer the status request. '
+                    'Close and reopen the Cardputer transfer session and retry with its new key.'
+                ) from error
             if status.status != 200:
                 raise ValueError(f'Cardputer returned HTTP {status.status}. Check the temporary session key and keep its transfer screen open.')
             metadata = json.loads(status.read(4097))

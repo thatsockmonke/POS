@@ -102,7 +102,8 @@ transmit attempts, ACKs, duplicates and timeouts must be distinguished in analys
 Radio settings: SF7, BW125 kHz, CR4/5, 12-symbol preamble, explicit header, hardware
 CRC, private sync register bytes `14 24` and +10 dBm. Frequency is configured
 within the cap's supported 868–923 MHz range and must be permitted locally.
-This is an unencrypted POS protocol, not Meshtastic or LoRaWAN. Received bytes
+These settings describe the legacy unencrypted POS protocol. Meshtastic uses a
+separate mode; see [MESHTASTIC.md](MESHTASTIC.md). Neither mode is LoRaWAN. Received bytes
 are never treated as code, commands or authority to change device settings.
 
 `messages.jsonl` stores readable JSON records with sender, ID, type and text.

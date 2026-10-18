@@ -147,7 +147,9 @@ where you operate, attach the antenna and explicitly enable TX. POS uses +10 dBm
 SF7, 125-kHz bandwidth, coding rate 4/5, private sync word and a conservative 1%
 airtime budget. These settings alone are not a declaration of regulatory
 compliance. The cap's supported frequency range is 868–923 MHz. Peers must use
-the same settings and compatible POS protocol; this is not Meshtastic interop.
+the same settings and compatible POS protocol in legacy mode. The separate
+Meshtastic mode adds compatible encrypted channels/DMs, node discovery, client
+relaying and one-time location sharing. See [MESHTASTIC.md](MESHTASTIC.md).
 
 Radio shows the local eight-digit node ID derived from the device MAC. Enter the
 other device's ID for acknowledged unicast, or leave it blank for an unacknowledged

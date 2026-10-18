@@ -14,6 +14,7 @@
 #include "pos_capabilities.h"
 #include "pos_device.h"
 #include "pos_files.h"
+#include "pos_mesh_service.h"
 #include "pos_peripherals.h"
 #include "vendor/sx126x/sx126x.h"
 #include "vendor/sx126x/sx126x_hal.h"
@@ -35,6 +36,7 @@ static pos_expansion_status_t hw, published;
 static pos_nmea_t gps;
 static char storage[POS_FS_PATH];
 static FILE *range_file;
+static pos_mesh_airtime_t mesh_airtime;
 typedef struct {
   char command;
   bool enable;
@@ -160,8 +162,19 @@ static int radio_receive_mode(void) {
 static int configure_radio(uint32_t hz) {
   sx126x_pa_cfg_params_t pa = {
       .pa_duty_cycle = 4, .hp_max = 7, .device_sel = 0, .pa_lut = 1};
-  uint8_t sync[] = {
-      0x14, 0x24}; /* Private LoRa sync word, deliberately not Meshtastic. */
+  pos_mesh_modem_t modem;
+  uint32_t generation;
+  bool mesh_mode = pos_meshtastic_modem(&modem, &generation);
+  uint8_t sync[] = {mesh_mode ? 0x24 : 0x14, mesh_mode ? 0xb4 : 0x24};
+  modulation.sf = mesh_mode ? modem.sf : SX126X_LORA_SF7;
+  modulation.bw = mesh_mode && modem.bandwidth_hz == 500000 ? SX126X_LORA_BW_500
+                  : mesh_mode && modem.bandwidth_hz == 250000
+                      ? SX126X_LORA_BW_250
+                      : SX126X_LORA_BW_125;
+  modulation.cr =
+      mesh_mode && modem.cr == 8 ? SX126X_LORA_CR_4_8 : SX126X_LORA_CR_4_5;
+  modulation.ldro = mesh_mode ? modem.ldro : 0;
+  parameters.preamble_len_in_symb = mesh_mode ? 16 : 12;
   return sx126x_set_standby(NULL, SX126X_STANDBY_CFG_RC) ||
                  sx126x_set_dio3_as_tcxo_ctrl(NULL, SX126X_TCXO_CTRL_3_0V,
                                               640) ||
@@ -283,9 +296,7 @@ static int write_received(const pos_radio_packet_t *p) {
              "Message log write failed; partial log retained.");
   return bad ? -1 : 0;
 }
-static int send_wire(const pos_radio_packet_t *packet, uint32_t *airtime) {
-  uint8_t wire[POS_RADIO_WIRE_MAX];
-  size_t n = pos_radio_encode(packet, wire);
+static int transmit_wire(const uint8_t *wire, size_t n, uint32_t *airtime) {
   if (!n)
     return -1;
   parameters.pld_len_in_bytes = n;
@@ -293,11 +304,12 @@ static int send_wire(const pos_radio_packet_t *packet, uint32_t *airtime) {
   if (sx126x_set_standby(NULL, SX126X_STANDBY_CFG_RC) ||
       sx126x_clear_irq_status(NULL, SX126X_IRQ_ALL) ||
       sx126x_set_lora_pkt_params(NULL, &parameters) ||
-      sx126x_write_buffer(NULL, 0, wire, n) || sx126x_set_tx(NULL, 2000))
+      sx126x_write_buffer(NULL, 0, wire, n) ||
+      sx126x_set_tx(NULL, *airtime + 2000))
     return -1;
-  uint64_t limit = now_ms() + 2100;
+  uint64_t limit = now_ms() + *airtime + 2100;
   int result = -1;
-  while (now_ms() < limit) {
+  while (now_ms() < limit && !atomic_load(&stopping)) {
     sx126x_irq_mask_t irq;
     if (sx126x_get_irq_status(NULL, &irq))
       break;
@@ -313,6 +325,40 @@ static int send_wire(const pos_radio_packet_t *packet, uint32_t *airtime) {
   radio_receive_mode();
   return result;
 }
+static int send_wire(const pos_radio_packet_t *packet, uint32_t *airtime) {
+  uint8_t wire[POS_RADIO_WIRE_MAX];
+  size_t n = pos_radio_encode(packet, wire);
+  return transmit_wire(wire, n, airtime);
+}
+static bool channel_clear(void) {
+  static const uint8_t peaks[] = {22, 22, 23, 24, 25, 28};
+  sx126x_cad_params_t cad = {.cad_symb_nb = SX126X_CAD_04_SYMB,
+                             .cad_detect_peak =
+                                 peaks[modulation.sf - SX126X_LORA_SF7],
+                             .cad_detect_min = 10,
+                             .cad_exit_mode = SX126X_CAD_ONLY,
+                             .cad_timeout = 0};
+  bool clear = false;
+  if (sx126x_set_standby(NULL, SX126X_STANDBY_CFG_RC) ||
+      sx126x_clear_irq_status(NULL, SX126X_IRQ_ALL) ||
+      sx126x_set_cad_params(NULL, &cad) || sx126x_set_cad(NULL))
+    goto done;
+  uint64_t deadline = now_ms() + 250;
+  while (now_ms() < deadline && !atomic_load(&stopping)) {
+    sx126x_irq_mask_t irq;
+    if (sx126x_get_irq_status(NULL, &irq))
+      break;
+    if (irq & SX126X_IRQ_CAD_DONE) {
+      clear = !(irq & SX126X_IRQ_CAD_DETECTED);
+      break;
+    }
+    vTaskDelay(1);
+  }
+done:
+  sx126x_clear_irq_status(NULL, SX126X_IRQ_ALL);
+  radio_receive_mode();
+  return clear;
+}
 static void publish(void) {
   xSemaphoreTake(snapshots, portMAX_DELAY);
   published = hw;
@@ -321,7 +367,8 @@ static void publish(void) {
 static void run(void *unused) {
   (void)unused;
   uint64_t next_probe = 0, next_tx = 0, next_sample = 0;
-  uint32_t configured = 0;
+  uint32_t configured = 0, configured_generation = 0;
+  uint64_t clear_channel_at = 0;
   pos_radio_packet_t ack_queue[4] = {0};
   unsigned ack_count = 0;
   uint8_t bytes[256];
@@ -357,6 +404,17 @@ static void run(void *unused) {
     hw.lora_enabled = atomic_load(&enabled);
     hw.tx_enabled = atomic_load(&transmit);
     hw.frequency_hz = atomic_load(&frequency);
+    pos_mesh_modem_t mesh_modem;
+    uint32_t mesh_generation = 0;
+    bool mesh_mode = pos_meshtastic_modem(&mesh_modem, &mesh_generation);
+    if (mesh_mode)
+      hw.frequency_hz = mesh_modem.frequency_hz;
+    if (configured_generation != mesh_generation) {
+      /* Configuration changes revoke all pending transmission consent. */
+      configured_generation = mesh_generation;
+      configured = 0;
+      ack_count = 0;
+    }
     if (now >= next_probe) {
       if (!hw.cap_detected) {
         hw.cap_detected = probe_cap() == 0;
@@ -378,6 +436,7 @@ static void run(void *unused) {
       }
       hw.radio_ready = false;
       ack_count = 0;
+      pos_meshtastic_pause();
     } else if (configured != hw.frequency_hz) {
       hw.radio_ready = configure_radio(hw.frequency_hz) == 0;
       configured = hw.radio_ready ? hw.frequency_hz : 0;
@@ -387,7 +446,7 @@ static void run(void *unused) {
     }
     request_t request;
     while (xQueueReceive(commands, &request, 0) == pdTRUE) {
-      if (request.command == 'S') {
+      if (request.command == 'S' && !mesh_mode) {
         if (!hw.lora_enabled || !hw.tx_enabled ||
             pos_radio_enqueue(&hw.radio, &request.packet, now))
           snprintf(hw.error, sizeof(hw.error),
@@ -401,7 +460,7 @@ static void run(void *unused) {
           range_file = NULL;
           hw.logging = false;
         }
-      } else if (request.command == 'C')
+      } else if (request.command == 'C' && !mesh_mode)
         load_outbox();
     }
     if (!hw.lora_enabled && range_file) {
@@ -409,7 +468,64 @@ static void run(void *unused) {
       range_file = NULL;
       hw.logging = false;
     }
-    if (hw.radio_ready) {
+    if (hw.radio_ready && mesh_mode) {
+      sx126x_irq_mask_t irq;
+      if (!sx126x_get_irq_status(NULL, &irq)) {
+        if (irq & SX126X_IRQ_RX_DONE) {
+          sx126x_rx_buffer_status_t buffer;
+          sx126x_pkt_status_lora_t signal;
+          if (!(irq & (SX126X_IRQ_CRC_ERROR | SX126X_IRQ_HEADER_ERROR)) &&
+              !sx126x_get_rx_buffer_status(NULL, &buffer) &&
+              !sx126x_read_buffer(NULL, buffer.buffer_start_pointer, bytes,
+                                  buffer.pld_len_in_bytes) &&
+              !sx126x_get_lora_pkt_status(NULL, &signal)) {
+            hw.rssi = signal.rssi_pkt_in_dbm;
+            hw.snr = signal.snr_pkt_in_db;
+            pos_meshtastic_receive(bytes, buffer.pld_len_in_bytes, hw.rssi,
+                                   (int)hw.snr);
+          }
+          sx126x_clear_irq_status(NULL, SX126X_IRQ_ALL);
+          clear_channel_at = now + 500 + esp_random() % 1000;
+        } else if (irq &
+                   (SX126X_IRQ_PREAMBLE_DETECTED | SX126X_IRQ_HEADER_VALID)) {
+          /* Give an in-flight frame the maximum LoRa airtime, then reassess.
+           * Clear stale preamble flags so noise cannot block TX forever. */
+          sx126x_pkt_params_lora_t longest = parameters;
+          longest.pld_len_in_bytes = 255;
+          clear_channel_at =
+              now + sx126x_get_lora_time_on_air_in_ms(&longest, &modulation) +
+              100;
+          sx126x_clear_irq_status(NULL, SX126X_IRQ_PREAMBLE_DETECTED |
+                                            SX126X_IRQ_HEADER_VALID);
+        }
+      }
+      if (hw.tx_enabled && atomic_load(&transmit) && now >= next_tx &&
+          now >= clear_channel_at) {
+        size_t length = 0;
+        if (pos_meshtastic_due(bytes, &length) == 1) {
+          parameters.pld_len_in_bytes = length;
+          uint32_t estimated =
+              sx126x_get_lora_time_on_air_in_ms(&parameters, &modulation);
+          if (!pos_mesh_airtime_allow(&mesh_airtime, now, estimated)) {
+            snprintf(hw.error, sizeof(hw.error),
+                     "Mesh hourly airtime budget used; queued packets wait.");
+            clear_channel_at = now + 1000;
+          } else if (!channel_clear()) {
+            clear_channel_at = now + 300 + esp_random() % 1700;
+          } else {
+            uint32_t airtime = 0;
+            int result = transmit_wire(bytes, length, &airtime);
+            pos_mesh_airtime_charge(&mesh_airtime, now_ms(),
+                                    airtime ? airtime : estimated);
+            pos_meshtastic_tx_result(result == 0);
+            next_tx = now_ms() + 300 + esp_random() % 700;
+            if (result)
+              snprintf(hw.error, sizeof(hw.error),
+                       "Mesh TX failed; saved message retained.");
+          }
+        }
+      }
+    } else if (hw.radio_ready) {
       sx126x_irq_mask_t irq;
       if (!sx126x_get_irq_status(NULL, &irq) && (irq & SX126X_IRQ_RX_DONE)) {
         sx126x_rx_buffer_status_t buffer;
@@ -453,7 +569,7 @@ static void run(void *unused) {
         }
         sx126x_clear_irq_status(NULL, SX126X_IRQ_ALL);
       }
-      if (hw.tx_enabled && now >= next_tx) {
+      if (hw.tx_enabled && atomic_load(&transmit) && now >= next_tx) {
         pos_radio_packet_t packet;
         int due;
         if (ack_count) {
@@ -497,6 +613,7 @@ static void run(void *unused) {
   }
   if (uart_ok)
     uart_driver_delete(UART_NUM_1);
+  pos_meshtastic_stop();
   worker = NULL;
   atomic_store(&running, false);
   vTaskDelete(NULL);
@@ -541,6 +658,11 @@ int pos_expansion_init(const char *root) {
     }
     nvs_close(h);
   }
+  uint32_t mesh_node = (uint32_t)mac[2] << 24 | (uint32_t)mac[3] << 16 |
+                       (uint32_t)mac[4] << 8 | mac[5];
+  if (mesh_node < 4 || mesh_node == UINT32_MAX)
+    mesh_node = node | 0x100;
+  (void)pos_meshtastic_init(root, mesh_node);
   char path[POS_FS_PATH];
   pos_fs_join(path, root, "POS/Users/Owner/Radio/outbox");
   if (pos_fs_mkdirs(path))
@@ -586,6 +708,9 @@ pos_location_t pos_expansion_location(void) {
   return location;
 }
 int pos_expansion_configure(bool allow, uint32_t hz, bool tx, pos_error_t *e) {
+  /* Region/preset owns mesh tuning; retain the legacy POS frequency. */
+  if (pos_meshtastic_status().enabled)
+    hz = atomic_load(&frequency);
   if (hz < 868000000 || hz > 923000000)
     return fail(
         e, "Use a permitted frequency within the cap's 868-923 MHz range.");
@@ -613,6 +738,8 @@ int pos_expansion_send(uint8_t type, uint32_t destination, const char *text,
   if (!status.lora_enabled || !status.cap_detected || !status.tx_enabled)
     return fail(e, "Enable LoRa features and explicitly confirm antenna/TX in "
                    "Settings first.");
+  if (pos_meshtastic_status().enabled)
+    return fail(e, "Use the Meshtastic menu for this radio mode.");
   if (!text || strlen(text) > 160)
     return fail(e, "Radio messages are limited to 160 ASCII characters.");
   request_t r = {.command = 'S',
@@ -663,3 +790,4 @@ void pos_expansion_stop(void) {
   while (atomic_load(&running) && now_ms() < deadline)
     vTaskDelay(pdMS_TO_TICKS(10));
 }
+void pos_expansion_revoke_transmit(void) { atomic_store(&transmit, false); }

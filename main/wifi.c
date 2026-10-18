@@ -235,7 +235,13 @@ void pos_ui_wifi_export(const char *root, const char *selected) {
   pos_ui_message("File transfer active", message);
   pos_event_t event;
   pos_transfer_status_t previous = {0};
+  bool network_changed = false;
   while (!pos_home_pending()) {
+    pos_network_status_t current = pos_network_status();
+    if (!current.connected || strcmp(current.ip, status.ip)) {
+      network_changed = true;
+      break;
+    }
     pos_transfer_status_t activity = pos_network_share_activity();
     if (activity.phase &&
         (activity.phase != previous.phase || activity.done != previous.done)) {
@@ -271,6 +277,12 @@ void pos_ui_wifi_export(const char *root, const char *selected) {
   pos_network_share_stop();
   pos_audio_feedback_hold(false);
   pos_secure_zero(key, sizeof(key));
+  if (network_changed && !pos_home_pending())
+    pos_ui_notice("Wi-Fi connection changed",
+                  "Transfer session closed. "
+                  "Reconnect Wi-Fi, then reopen sharing for the current IP and "
+                  "a new key. "
+                  "Incomplete files are retained.");
 }
 void pos_ui_wifi(const char *root) {
   pos_network_auto_pause(true);

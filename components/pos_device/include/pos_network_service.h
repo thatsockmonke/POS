@@ -1,11 +1,6 @@
 #pragma once
 #include "pos_network.h"
 typedef struct {
-  char ssid[33];
-  int rssi;
-  bool secured;
-} pos_network_ap_t;
-typedef struct {
   bool connected;
   char ssid[33], ip[16];
   int rssi;

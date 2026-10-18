@@ -14,6 +14,7 @@
 #include "pos_navigation.h"
 #include "pos_network_service.h"
 #include "pos_peripherals.h"
+#include "pos_mesh_service.h"
 #include "pos_recovery.h"
 #include "pos_settings.h"
 #include "pos_timezone.h"
@@ -49,6 +50,30 @@ static unsigned folder_pages_seen, picker_frames;
 static bool background_preview_seen;
 static pos_view_t picker_last;
 static pos_expansion_status_t fake_expansion;
+static pos_meshtastic_status_t fake_mesh;
+static pos_mesh_config_t fake_mesh_config;
+static unsigned mesh_sends, mesh_locations, mesh_changes;
+pos_meshtastic_status_t pos_meshtastic_status(void) { return fake_mesh; }
+int pos_meshtastic_settings(pos_mesh_config_t *c) {
+  if (!fake_mesh_config.region) pos_mesh_defaults(&fake_mesh_config);
+  *c=fake_mesh_config; return 0;
+}
+int pos_meshtastic_configure(const pos_mesh_config_t *c,bool enable,pos_error_t *e) {
+  (void)e;if(pos_mesh_config_valid(c)) return -1;
+  fake_mesh_config=*c;fake_mesh.enabled=fake_mesh.ready=enable;
+  fake_expansion.tx_enabled=false;++mesh_changes;return 0;
+}
+int pos_meshtastic_node(unsigned at,pos_mesh_node_t *n) { (void)at;(void)n;return -1; }
+int pos_meshtastic_forget(uint32_t node,pos_error_t *e) { (void)node;(void)e;return 0; }
+int pos_meshtastic_send(unsigned channel,uint32_t node,unsigned port,const void *text,size_t n,bool response,pos_error_t *e) {
+  (void)channel;(void)node;(void)port;(void)response;(void)e;
+  assert(n==5 && !memcmp(text,"hello",5));++mesh_sends;return 0;
+}
+int pos_meshtastic_announce(bool discover,pos_error_t *e) { (void)discover;(void)e;return 0; }
+int pos_meshtastic_share(unsigned channel,uint32_t to,int32_t lat,int32_t lon,uint32_t utc,pos_error_t *e) {
+  (void)channel;(void)to;(void)lat;(void)lon;(void)utc;(void)e;++mesh_locations;return 0;
+}
+int pos_meshtastic_retry(pos_error_t *e) { (void)e;return 0; }
 static unsigned hardware_changes, audio_writes, audio_stops, ble_accepts,
     ble_pairings, microphone_starts, microphone_stops, microphone_reads;
 static bool audio_active, ble_active, advance_after_audio,
@@ -1809,6 +1834,28 @@ static int apps_ui(const char *root, const char *mode) {
 int main(int argc, char **argv) {
   if (argc < 3)
     return 2;
+  if (!strncmp(argv[2], "mesh-ui-", 8)) {
+    if (!strcmp(argv[2],"mesh-ui-setup")) {
+      choose(0); choose(0); push_key(POS_KEY_ENTER,0); push_key(POS_KEY_HOME,0);
+      pos_ui_mesh_settings(argv[1]);
+      assert(fake_mesh.enabled && mesh_changes==1 && !fake_expansion.tx_enabled);
+    } else {
+      fake_mesh.enabled=fake_mesh.ready=true;
+      fake_expansion.cap_detected=fake_expansion.lora_enabled=true;
+      fake_expansion.radio_ready=fake_expansion.tx_enabled=true;
+      fake_expansion.location.fix=true;
+      if (!strcmp(argv[2],"mesh-ui-send")) {
+        choose(1);choose(0);push_text("hello");push_key(POS_KEY_ENTER,0);
+        push_key(POS_KEY_ENTER,0);push_key(POS_KEY_HOME,0);
+        pos_ui_radio(argv[1]);assert(mesh_sends==1 && !mesh_locations);
+      } else {
+        choose(5);choose(0);push_key(POS_KEY_ENTER,0);choose(0);
+        push_key(POS_KEY_HOME,0);pos_ui_meshtastic(argv[1]);
+        assert(!mesh_sends && !mesh_locations);
+      }
+    }
+    assert(ui_next==ui_count && pos_home_pending());return 0;
+  }
   if (!strncmp(argv[2], "calculator-", 11)) {
     const char *mode=argv[2];
     if (!strcmp(mode,"calculator-corrupt")) push_key(POS_KEY_ENTER,0);

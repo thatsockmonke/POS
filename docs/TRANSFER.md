@@ -138,3 +138,29 @@ If Wi-Fi still fails, preserve the displayed phase and error, direction and file
 size. Wrong session keys fail before file upload. Public/client-isolated Wi-Fi,
 firewalls, SD errors and actual adapter/firmware behavior still need checking on
 the real computer and Cardputer; cloud HTTP/D-Bus fixtures cannot prove those.
+
+## Mesh Wi-Fi and connection timeouts (0.7.0-stable)
+
+Several APs with the same SSID are normal on a mesh. POS groups matching
+SSID/security entries and initially selects by signal; this does not create
+802.11 fast-roaming support or bypass isolation between clients. Use the main
+LAN, allow local-device access/disable guest isolation, and check both devices
+are on that LAN. A different mesh node on a properly bridged LAN should work.
+
+Leave POS's transfer screen open and verify the current IP each session. Test:
+
+```sh
+curl --noproxy '*' --connect-timeout 5 --max-time 10 -i http://CARDPUTER_IP:8080/status
+```
+
+Without a key, **403 / Session key required** proves connectivity. A connection
+timeout happens before key authentication. Try the same URL in the ChromeOS
+browser: Chrome working while Crostini fails points to the Linux/VPN path; both
+failing requires checking the Cardputer session and router/client isolation.
+Try both devices on a second trusted network/hotspot to isolate the cause.
+Do not disable a firewall globally or share a temporary key publicly.
+
+The updated PC tool distinguishes TCP-connect and HTTP-response timeouts. Device
+sessions keep Wi-Fi awake and restore the previous setting at close, and reclaim
+idle browser sockets. These mitigations need verification with the actual mesh
+router and do not establish that a previously unreachable device is now reachable.

@@ -159,6 +159,22 @@ class TransferTests(unittest.TestCase):
 
 
 class WifiTransferTests(unittest.TestCase):
+    def test_connect_timeout_explains_reachability_before_key_check(self):
+        from unittest.mock import patch
+        with patch.object(ble.http.client.HTTPConnection, 'connect', side_effect=TimeoutError()):
+            with self.assertRaisesRegex(ValueError, 'session key has not been checked') as result:
+                self.transfer('receive')
+        self.assertIn('guest Wi-Fi/client isolation', str(result.exception))
+        self.assertNotIn('0123456789abcdef', str(result.exception))
+        self.assertFalse(self.folder.exists())
+
+    def test_status_timeout_is_distinguished_from_connect_timeout(self):
+        from unittest.mock import patch
+        with patch.object(ble.http.client.HTTPConnection, 'getresponse', side_effect=TimeoutError()):
+            with self.assertRaisesRegex(ValueError, 'Connected to.*POS did not answer'):
+                self.transfer('receive')
+        self.assertFalse(self.folder.exists())
+
     def setUp(self):
         import http.server
         import threading

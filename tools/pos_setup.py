@@ -25,7 +25,7 @@ import zipfile
 import pos_setup_storage as storage
 from pos_setup_storage import SetupError
 
-VERSION = "0.6.11-dev"
+VERSION = "0.7.0-stable"
 REPOSITORY = "thatsockmonke/POS"
 MAX_DOWNLOAD = 256 * 1024 * 1024
 MAX_UNPACK = 256 * 1024 * 1024
@@ -643,7 +643,7 @@ def main(argv=None) -> int:
     parser.add_argument("--version", action="version", version="POS Setup " + VERSION)
     parser.add_argument("--doctor", action="store_true", help="Read-only check of Linux/Crostini card/USB access")
     parser.add_argument("--download-only", action="store_true", help="Download and verify the latest published POS, including development releases")
-    parser.add_argument("--release", help="Choose a specific release, e.g. v0.6.11-dev")
+    parser.add_argument("--release", help="Choose a specific release, e.g. v0.7.0-stable")
     parser.add_argument("--verbose", action="store_true", help="Show detailed USB diagnostics")
     parser.add_argument("--resume-action", choices=("flash", "restore"), help=argparse.SUPPRESS)
     parser.add_argument("--bundle", type=Path, help="Use an already downloaded POS ZIP plus matching .sha256 file")

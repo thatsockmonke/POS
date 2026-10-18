@@ -17,6 +17,37 @@ void pos_secure_zero(void *data, size_t size) {
   while (size--)
     *p++ = 0;
 }
+unsigned pos_wifi_scan_merge(pos_network_ap_t *aps, unsigned count,
+                             unsigned capacity, const pos_network_ap_t *ap) {
+  if (!aps || !ap || !capacity || count > capacity ||
+      !memchr(ap->ssid, 0, sizeof(ap->ssid)) || !*ap->ssid)
+    return count;
+  unsigned at = count;
+  for (unsigned i = 0; i < count; ++i)
+    if (!strcmp(aps[i].ssid, ap->ssid) && aps[i].secured == ap->secured) {
+      if (aps[i].rssi >= ap->rssi)
+        return count;
+      at = i;
+      break;
+    }
+  if (at == count) {
+    if (count < capacity)
+      ++count;
+    else {
+      if (aps[count - 1].rssi >= ap->rssi)
+        return count;
+      at = count - 1;
+    }
+  }
+  aps[at] = *ap;
+  while (at && aps[at].rssi > aps[at - 1].rssi) {
+    pos_network_ap_t swap = aps[at - 1];
+    aps[at - 1] = aps[at];
+    aps[at] = swap;
+    --at;
+  }
+  return count;
+}
 bool pos_wifi_profile_valid(const pos_wifi_profile_t *p) {
   if (!p || !memchr(p->ssid, 0, sizeof(p->ssid)) || !*p->ssid ||
       !memchr(p->password, 0, sizeof(p->password)))

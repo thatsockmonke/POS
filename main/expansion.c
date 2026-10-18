@@ -1,6 +1,7 @@
 #include "cJSON.h"
 #include "pos_device.h"
 #include "pos_files.h"
+#include "pos_mesh_service.h"
 #include "pos_peripherals.h"
 #include "ui.h"
 #include <math.h>
@@ -22,20 +23,22 @@ static void capabilities(pos_view_t *view, const pos_expansion_status_t *s) {
   pos_view_line(view, 7, "Maps: %s",
                 s->maps_available ? "GPS requirement ready"
                                   : "disabled (no GPS)");
-  pos_view_line(view, 8, "%.3f MHz / %08x", s->frequency_hz / 1000000.0,
-                s->node);
+  pos_meshtastic_status_t mesh = pos_meshtastic_status();
+  pos_view_line(view, 8, "%s %.3f MHz", mesh.enabled ? "Mesh" : "POS",
+                s->frequency_hz / 1000000.0);
   pos_view_line(view, 9, "%.30s", s->error);
 }
 void pos_ui_expansion(const char *root) {
   (void)root;
   int selected = 0;
   const char *items[] = {"Toggle LoRa features", "Set permitted frequency",
-                         "Antenna / transmit control", "Back"};
+                         "Antenna / transmit control",
+                         "Radio protocol / Meshtastic", "Back"};
   while (!pos_home_pending()) {
     pos_expansion_status_t s = pos_expansion_status();
     pos_view_t view;
     capabilities(&view, &s);
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 5; ++i)
       pos_view_line(&view, i + 10, "%s", items[i]);
     view.selected_row = selected + 10;
     pos_view_line(&view, 15, "Arrows:move Enter:OK Esc:back");
@@ -47,17 +50,21 @@ void pos_ui_expansion(const char *root) {
       break;
     int action = pos_navigation(&event);
     if (action == POS_KEY_UP) {
-      selected = (selected + 3) % 4;
+      selected = (selected + 4) % 5;
       continue;
     }
     if (action == POS_KEY_DOWN) {
-      selected = (selected + 1) % 4;
+      selected = (selected + 1) % 5;
       continue;
     }
     if (action != POS_KEY_ENTER)
       continue;
-    if (selected == 3)
+    if (selected == 4)
       break;
+    if (selected == 3) {
+      pos_ui_mesh_settings(root);
+      continue;
+    }
     pos_error_t e = {0};
     if (selected == 0) {
       int result =
@@ -72,6 +79,10 @@ void pos_ui_expansion(const char *root) {
                           "independently gates Maps.");
     }
     if (selected == 1) {
+      if (pos_meshtastic_status().enabled) {
+        pos_ui_mesh_settings(root);
+        continue;
+      }
       char text[24];
       snprintf(text, sizeof(text), "%.3f", s.frequency_hz / 1000000.0);
       if (pos_ui_text("LoRa frequency", "Permitted frequency in MHz", text,
@@ -93,26 +104,30 @@ void pos_ui_expansion(const char *root) {
         }
       }
     }
-    if (selected == 2) {
-      pos_ui_notice(
-          "Antenna / transmit",
-          "Connect the correct antenna before transmitting. Choose a frequency "
-          "permitted in your location. POS uses +10 dBm and a conservative 1% "
-          "transmit duty budget; this alone is not a claim of regulatory "
-          "compliance. Messages are not encrypted.");
-      const char *options[] = {"Keep transmit OFF",
-                               "Antenna attached: enable TX"};
-      int choice = pos_ui_menu("Transmit permission (session)", options, 2);
-      if (choice >= 0) {
-        int result = pos_expansion_configure(s.lora_enabled, s.frequency_hz,
-                                             choice == 1, &e);
-        pos_ui_notice(result ? "Transmit unavailable" : "Transmit control",
-                      result   ? e.message
-                      : choice ? "TX enabled for this session. Location "
-                                 "sharing still requires separate consent."
-                               : "Transmit disabled.");
-      }
-    }
+    if (selected == 2)
+      pos_ui_radio_transmit();
+  }
+}
+void pos_ui_radio_transmit(void) {
+  pos_expansion_status_t s = pos_expansion_status();
+  pos_error_t e = {0};
+  pos_ui_notice(
+      "Antenna / transmit",
+      "Connect the correct antenna before transmitting. Choose a frequency "
+      "permitted in your location. POS uses +10 dBm and a conservative 1% "
+      "transmit duty budget; this alone is not a claim of regulatory "
+      "compliance. POS radio messages are not encrypted. Meshtastic's "
+      "default channel uses a publicly known key.");
+  const char *options[] = {"Keep transmit OFF", "Antenna attached: enable TX"};
+  int choice = pos_ui_menu("Transmit permission (session)", options, 2);
+  if (choice >= 0) {
+    int result = pos_expansion_configure(s.lora_enabled, s.frequency_hz,
+                                         choice == 1, &e);
+    pos_ui_notice(result ? "Transmit unavailable" : "Transmit control",
+                  result   ? e.message
+                  : choice ? "TX enabled for this session. Location "
+                             "sharing still requires separate consent."
+                           : "Transmit disabled.");
   }
 }
 static bool radio_available(void) {
@@ -178,9 +193,11 @@ static bool destination(uint32_t *node, bool unicast) {
   }
   return true;
 }
-static void recent(const char *root) {
+static void recent(const char *root, bool mesh) {
   char path[POS_FS_PATH];
-  pos_fs_join(path, root, "POS/Users/Owner/Radio/messages.jsonl");
+  pos_fs_join(path, root,
+              mesh ? "POS/Users/Owner/Radio/meshtastic.jsonl"
+                   : "POS/Users/Owner/Radio/messages.jsonl");
   FILE *f = fopen(path, "rb");
   if (!f) {
     pos_ui_notice("Radio inbox", "No saved messages yet.");
@@ -250,9 +267,14 @@ static void recent(const char *root) {
     pos_ui_notice("Radio message", messages[(count - 1 - choice) % 8]);
   }
 }
+void pos_ui_mesh_recent(const char *root) { recent(root, true); }
 void pos_ui_radio(const char *root) {
   if (!radio_available())
     return;
+  if (pos_meshtastic_status().enabled) {
+    pos_ui_meshtastic(root);
+    return;
+  }
   while (!pos_home_pending()) {
     pos_expansion_status_t s = pos_expansion_status();
     char title[40];
@@ -311,7 +333,7 @@ void pos_ui_radio(const char *root) {
                              "use the same POS radio protocol and frequency.");
     }
     if (choice == 4)
-      recent(root);
+      recent(root, false);
     if (choice == 5) {
       int result = pos_expansion_retry(&e);
       pos_ui_notice(result ? "Retry unavailable" : "Outbox retry",
@@ -326,6 +348,15 @@ void pos_ui_radio(const char *root) {
 void pos_ui_range(const char *root) {
   if (!radio_available())
     return;
+  if (pos_meshtastic_status().enabled) {
+    pos_ui_notice(
+        "Range Test / protocol",
+        "The CSV range test uses POS radio. "
+        "Select POS radio in Hardware settings to use it. Meshtastic delivery "
+        "status is shown in Radio; signal strength does not establish "
+        "distance.");
+    return;
+  }
   const char *items[] = {"Receive / log only", "Send ping probes + log",
                          "Browse saved CSV logs", "Back"};
   int choice = pos_ui_menu("Radio Range Test", items, 4);

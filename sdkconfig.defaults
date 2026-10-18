@@ -11,6 +11,9 @@ CONFIG_FATFS_FS_LOCK=32
 CONFIG_FATFS_IMMEDIATE_FSYNC=y
 CONFIG_FATFS_TIMEOUT_MS=10000
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+# Retain all runtime assertion checks and panic/recovery, while omitting the
+# repeated file/expression strings. Crash backtraces remain symbolizable.
+CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT=y
 CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
 CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
 # Reclaim TLS record buffers between reads/writes instead of retaining both

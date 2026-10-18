@@ -54,25 +54,32 @@ int pos_network_scan(pos_network_ap_t *aps, unsigned capacity,
   wifi_scan_config_t scan = {.show_hidden = false};
   if (esp_wifi_scan_start(&scan, true) != ESP_OK)
     return -1;
-  wifi_ap_record_t *records = calloc(capacity, sizeof(*records));
+  /* Read more physical APs than displayed networks: mesh/repeater BSSIDs
+   * should not crowd every other SSID out of the bounded menu. */
+  uint16_t available = 0;
+  if (esp_wifi_scan_get_ap_num(&available) != ESP_OK) {
+    esp_wifi_clear_ap_list();
+    return -1;
+  }
+  uint16_t limit = available < 64 ? available : 64;
+  wifi_ap_record_t *records = calloc(limit ? limit : 1, sizeof(*records));
   if (!records) {
     esp_wifi_clear_ap_list();
     return -1;
   }
-  uint16_t n = capacity;
+  uint16_t n = limit;
   int result = esp_wifi_scan_get_ap_records(&n, records) != ESP_OK;
   if (!result)
     for (unsigned i = 0; i < n; ++i) {
-      memset(&aps[i], 0, sizeof(aps[i]));
-      memcpy(aps[i].ssid, records[i].ssid, 32);
-      aps[i].rssi = records[i].rssi;
-      aps[i].secured = records[i].authmode != WIFI_AUTH_OPEN;
+      pos_network_ap_t ap = {0};
+      memcpy(ap.ssid, records[i].ssid, 32);
+      ap.rssi = records[i].rssi;
+      ap.secured = records[i].authmode != WIFI_AUTH_OPEN;
+      *count = pos_wifi_scan_merge(aps, *count, capacity, &ap);
     }
   free(records);
   if (result)
     esp_wifi_clear_ap_list();
-  if (!result)
-    *count = n;
   return result ? -1 : 0;
 }
 static int vault_handle(nvs_handle_t *handle) {
@@ -398,6 +405,8 @@ int pos_network_https(const char *url, const char *method, const char *body,
 }
 
 static httpd_handle_t server;
+static wifi_ps_type_t share_previous_ps;
+static bool share_ps_held;
 static atomic_bool share_stop_requested;
 static atomic_uint transfer_phase, transfer_done, transfer_total;
 pos_transfer_status_t pos_network_share_activity(void) {
@@ -728,13 +737,24 @@ int pos_network_share_start(const char *root, const char *export_file,
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = 8080;
   config.max_open_sockets = 2;
+  /* A browser may pre-open idle sockets. Reclaim the least-recently-used
+   * session rather than letting those sockets starve a new PC connection. */
+  config.lru_purge_enable = true;
   config.stack_size = 12288;
   config.recv_wait_timeout = 10;
   config.send_wait_timeout = 10;
   atomic_store(&share_stop_requested, false);
   atomic_store(&transfer_phase, 0);
+  /* Stay awake while explicitly hosting a transfer. Some mesh APs buffer
+   * downstream traffic poorly for power-saving stations; restore on exit. */
+  if (esp_wifi_get_ps(&share_previous_ps) != ESP_OK ||
+      esp_wifi_set_ps(WIFI_PS_NONE) != ESP_OK)
+    return -1;
+  share_ps_held = true;
   if (httpd_start(&server, &config) != ESP_OK) {
     server = NULL;
+    esp_wifi_set_ps(share_previous_ps);
+    share_ps_held = false;
     return -1;
   }
   httpd_uri_t routes[] = {
@@ -755,6 +775,10 @@ void pos_network_share_stop(void) {
   if (server)
     httpd_stop(server);
   server = NULL;
+  if (share_ps_held) {
+    esp_wifi_set_ps(share_previous_ps);
+    share_ps_held = false;
+  }
   deployment_enabled = false;
   atomic_store(&deployment_state, 0);
   pos_secure_zero(deployment_url, sizeof(deployment_url));

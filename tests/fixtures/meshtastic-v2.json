@@ -1,0 +1,72 @@
+{
+  "provenance": "Generated independently with PyPI meshtastic 2.7.8 official generated protobufs and cryptography 50.0.2 AES-CTR/X25519/SHA256/AES-CCM; upstream wire format firmware 54e0d8d0ab2ff56b3a9ce967e53f79e49af560fb",
+  "private_a": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "private_b": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+  "public_a": "8f40c5adb68f25624ae5b214ea767a6ec94d829d3d7b5e1ad1ba6f3e2138285f",
+  "public_b": "358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd166254",
+  "key": "d4f1bb3a20290759f0bcffabcf4e6901",
+  "from_node": 305419896,
+  "to_node": 2271560481,
+  "packet_id": 270544960,
+  "extra_nonce": 1432778632,
+  "vectors": [
+    {
+      "name": "text",
+      "port": 1,
+      "payload": "48656c6c6f204d65736874617374696321",
+      "data": "0801121148656c6c6f204d65736874617374696321",
+      "wire": "2143658778563412403020106b080078c0c99ee6632a2d412c3039c34c929e41ad262b0634",
+      "pki": false
+    },
+    {
+      "name": "text-pki",
+      "port": 1,
+      "payload": "48656c6c6f204d65736874617374696321",
+      "data": "0801121148656c6c6f204d65736874617374696321",
+      "wire": "2143658778563412403020106b0000787f372e1f3644bae662800f5320f909b7d73a0b4316ed8cac12be63122888776655",
+      "pki": true
+    },
+    {
+      "name": "utf8",
+      "port": 1,
+      "payload": "48656c6c6f20f09f8c8e",
+      "data": "0801120a48656c6c6f20f09f8c8e",
+      "wire": "2143658778563412403020106b080078c0c99efd632a2d412c308439b374",
+      "pki": false
+    },
+    {
+      "name": "utf8-pki",
+      "port": 1,
+      "payload": "48656c6c6f20f09f8c8e",
+      "data": "0801120a48656c6c6f20f09f8c8e",
+      "wire": "2143658778563412403020106b0000787f372e043644bae66280b2a9df1f14a2115b5904839d88776655",
+      "pki": true
+    },
+    {
+      "name": "user",
+      "port": 4,
+      "payload": "0a092131323334353637381210496e646570656e64656e7420706565721a045445535442208f40c5adb68f25624ae5b214ea767a6ec94d829d3d7b5e1ad1ba6f3e2138285f",
+      "data": "080412450a092131323334353637381210496e646570656e64656e7420706565721a045445535442208f40c5adb68f25624ae5b214ea767a6ec94d829d3d7b5e1ad1ba6f3e2138285f",
+      "wire": "2143658778563412403020106b080078c0cc9eb22146601c7123409309cdd232ce1b2c017022aeff483ff945e2ad67e8143867fe95e19e620110b90f5f03a2fd984c627b329352a44232b4f89eb6560f46bb21dee4bee8bdbe",
+      "pki": false
+    },
+    {
+      "name": "position",
+      "port": 3,
+      "payload": "0da8b14b141508dd84b92500a5186a2802",
+      "data": "080312110da8b14b141508dd84b92500a5186a2802",
+      "wire": "2143658778563412403020106b080078c0cb9ee626e7f06657057c7bbb43cf207b4a284d17",
+      "pki": false
+    },
+    {
+      "name": "ack",
+      "port": 5,
+      "payload": "1800",
+      "data": "0805120218003504030201",
+      "wire": "2143658778563412403020106b080078c0cd9ef5334f7429401275",
+      "pki": false
+    }
+  ],
+  "channel_url": "https://meshtastic.org/e/#Cg0SAQEaCExvbmdGYXN0CisSIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fGgdQcml2YXRlEgYIATgBQAM",
+  "unsupported_url": "https://meshtastic.org/e/#Cg0SAQEaCExvbmdGYXN0CisSIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fGgdQcml2YXRlEgsIATgBQAN1AMBkRA"
+}

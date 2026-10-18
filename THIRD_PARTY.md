@@ -72,3 +72,15 @@ Natural Earth 1:110m land, public domain, with pinned source/checksum in
 `world-source.txt` beside it and `tools/build_world_map.py`. Terms:
 https://www.naturalearthdata.com/about/terms-of-use/ . This coastline dataset is
 on SD, is independent of OSM licensing and is not a global road database.
+
+## Meshtastic protocol interoperability
+
+The POS Meshtastic wire implementation is independent C code using the existing
+SDK Mbed TLS. Official protocol/schema references are pinned to Meshtastic
+firmware `54e0d8d0ab2ff56b3a9ce967e53f79e49af560fb`; no upstream firmware or
+generated protobuf implementation is linked into the shipped binary. See
+docs/MESHTASTIC.md for exact scope. Frozen test bytes are generated independently
+using PyPI meshtastic 2.7.8 protobuf definitions and cryptography 50.0.2; test-only
+private keys are artificial fixtures. Neither Python package is a device or PC
+transfer runtime dependency. The Meshtastic name identifies interoperability,
+not endorsement or certification.

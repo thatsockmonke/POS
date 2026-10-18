@@ -1,4 +1,4 @@
-POS 0.6.11-dev - Pan Operating System
+POS 0.7.0-stable - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -24,7 +24,7 @@ Share: local save, Wi-Fi, or numeric-paired BLE. Accept each incoming file.
 GPS/LoRa: Settings > Expansion hardware shows presence and feature enablement.
 Radio/Range require a detected, enabled cap; GPS presence separately gates Maps.
 Maps downloads small OSM road regions over Wi-Fi, compiles on-device, and works offline. TX consent resets on reboot; location is opt-in.
-Radio uses the POS protocol, not Meshtastic. Match frequency/settings on peers.
+Radio selects legacy POS or Meshtastic mode. Match radio/channel settings with peers.
 Range CSVs: POS/Users/Owner/RangeTests. Outbox/messages: POS/Users/Owner/Radio.
 Games and the POS terminal are removed from scope. Physical hardware is unverified.
 
@@ -47,7 +47,8 @@ migrate without deleting originals. Future schemas are preserved and refused.
 Settings > Developer deployment: temporary trusted-LAN session, signed HTTPS
 updates only, on-device approval and physical recovery/OTA evidence required.
 After firmware reboot reopen the session to verify; no always-on deployment service.
-Meshtastic compatibility remains future work. Maps supports regional offline routing.
+Meshtastic channel/DM/client mesh/location interop is available; see MESHTASTIC.md.
+Maps supports regional offline routing.
 
 Computer installation: download pos-setup and follow EASY_INSTALL.md.
 Crostini shared folders support copy only; raw formatting/USB need OS access.
@@ -100,3 +101,9 @@ Maps: white saved-region outline; all providers accept up to 4 km with SD stream
 Calculator: scientific functions, saved variables, fractions and bounded polynomial CAS.
 Transfer: visible session key and progress; BlueZ absence offers Wi-Fi fallback on PC.
 Map loading: cached node lookup and reusable scratch; UI beeps pause during heavy work.
+
+Meshtastic: select the radio protocol in Expansion hardware. Match region,
+preset, slot and channels; confirm antenna/TX, then announce/discover in Radio.
+Channel default keys are public. DMs require discovered unchanged public keys.
+GPS sharing is explicit once; not all upstream modules/APIs are implemented.
+Read MESHTASTIC.md in the installation bundle for scope and physical checks.

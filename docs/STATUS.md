@@ -1,4 +1,4 @@
-# POS development status — 0.6.11-dev
+# POS development status — 0.7.0-stable
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -52,7 +52,11 @@ save migrations are implemented and removed below. Hardware validation remains s
 installable app/package management and automatic power management are removed from
 scope; existing legacy user folders are never erased.
 
-- Meshtastic compatibility: messaging, encrypted channels, mesh routing and voluntarily shared locations.
+- Physical verification remains required; it is separate from software scope.
+  Meshtastic messaging, encrypted channels/public-key DMs, bounded client relaying,
+  node discovery and opt-in location are now implemented. Upstream phone/USB API,
+  MQTT, remote admin, telemetry modules, store-and-forward, compressed text and
+  adaptive next-hop routing are not implemented; see [MESHTASTIC.md](MESHTASTIC.md).
 
 0.6.2-dev fixes zero-tick audio handoff, adds randomized cues/startup melody,
 optimizes the ribbon and text editor, adds Known Networks and signed SD firmware
@@ -149,3 +153,22 @@ To make room without changing the safe factory/two-OTA layout, unused IPv6 proto
 code is omitted: POS configures IPv4 STA/DHCP and IPv4 LAN sessions, with no IPv6
 interface previously configured. IPv4 HTTPS validation and all signed-update checks
 remain. No experimental link-time optimization is enabled.
+
+## 0.7.0-stable Meshtastic and mesh Wi-Fi
+
+Adds independently implemented Meshtastic v2 radio interoperability: encrypted
+channels, modern public-key DMs, saved TOFU identities/change detection, standard
+node/position/routing protobufs, durable text-before-ACK, bounded randomized
+client flooding/retries, CAD, airtime accounting and a dedicated Radio UI.
+Legacy POS radio remains selectable. The current hardware supports only
+868–923 MHz; US/EU868 presets/slots must fit it. [Full scope](MESHTASTIC.md).
+The requested stable label is not a hardware-interoperability certification.
+
+Wi-Fi scan entries now group equal SSIDs/security and retain the strongest AP.
+Explicit connection scans all channels and selects by signal. Temporary LAN
+sessions disable modem sleep until exit and reclaim idle HTTP sockets; the PC
+tool explains connect versus response timeouts. A blocked guest/client-isolated
+LAN cannot be repaired by changing the scan list.
+
+Compact assertion messages reclaim flash while preserving runtime checks, panics,
+backtraces, both OTA slots and independent recovery. TLS checks/curves remain.

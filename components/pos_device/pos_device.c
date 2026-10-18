@@ -595,6 +595,9 @@ int pos_device_wifi(const char *ssid, const char *password,
   if (pos_device_wifi_prepare())
     return -1;
   wifi_config_t cfg = {0};
+  cfg.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
+  cfg.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+  cfg.sta.bssid_set = false;
   memcpy(cfg.sta.ssid, ssid, strlen(ssid));
   memcpy(cfg.sta.password, password, strlen(password));
   cfg.sta.pmf_cfg.capable = true;

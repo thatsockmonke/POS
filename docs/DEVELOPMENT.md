@@ -148,3 +148,21 @@ show the recursive expression path's frame sizes, so nesting is capped for the
 16 KiB UI task. Watch physical minimum stack/heap as part of device validation.
 Navigation tests wrap `fseek`/`fopen` to guard the sparse-cache and scratch reuse
 optimization, including spill-to-disk and a shorter object following a long one.
+
+## Meshtastic native interoperability checks
+
+With the pinned ESP-IDF environment active:
+
+```sh
+export POS_MESH_MBEDTLS_HOST="/tmp/pos-mesh-mbedtls"
+cmake -S "$IDF_PATH/components/mbedtls/mbedtls" -B "$POS_MESH_MBEDTLS_HOST" -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF
+cmake --build "$POS_MESH_MBEDTLS_HOST" -j 4
+python -m unittest discover -s tests -v
+```
+
+This runs the independent vectors through both OpenSSL and the actual Mbed TLS
+firmware crypto path, plus the real device service with simulated NVS/clock/RTOS
+and a native filesystem. CI requires it. Without that variable those specific
+Mbed TLS/service checks are explicitly skipped; the OpenSSL/mesh tests still run.
+No physical SX1262, FAT32 timing, mesh router or Meshtastic radio is simulated as
+hardware evidence. See MESHTASTIC.md and BUG_REPORT_0.7.0.md.

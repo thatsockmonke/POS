@@ -48,6 +48,8 @@ int pos_expansion_send(uint8_t type, uint32_t destination, const char *text,
 int pos_expansion_retry(pos_error_t *e);
 int pos_expansion_range(bool enable, pos_error_t *e);
 void pos_expansion_stop(void);
+/* Changing radio protocol/keys revokes the session's antenna/TX permission. */
+void pos_expansion_revoke_transmit(void);
 
 #include "pos_instruments.h"
 /* Audio is exclusive: microphone and speaker cannot run together. */
