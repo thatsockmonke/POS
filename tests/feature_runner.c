@@ -1,3 +1,4 @@
+#include "heap_budget.h"
 /* Reuse the simulated flash hooks, while exercising the real portable services.
  */
 #define main pos_installer_runner_main
@@ -1890,6 +1891,50 @@ static int search_match(void *ctx, const char *relative, bool body) {
 int main(int argc, char **argv) {
   if (argc < 3)
     return 2;
+  if (!strcmp(argv[2], "audio-open-memory-error")) {
+    limit = single = 1024;
+    push_key(POS_KEY_ENTER, 0); /* Allocation failure notice. */
+    pos_ui_music_file(argv[1], "Music/tone.wav");
+    assert(!audio_writes && !audio_active && !used && denied && !audio_holds);
+    return 0;
+  }
+  if (!strcmp(argv[2], "files-clipboard-memory-error") ||
+      !strcmp(argv[2], "files-selection-memory-error")) {
+    limit = single = 8192;
+    keys_down(4);
+    push_key(strstr(argv[2], "clipboard") ? 'c' : ' ', POS_MOD_CTRL);
+    push_key(POS_KEY_ENTER, 0); /* Allocation failure notice. */
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_files_from(argv[1], "Music");
+    assert(!used && denied && pos_home_pending());
+    return 0;
+  }
+  if (!strcmp(argv[2], "files-audio-memory")) {
+    limit = single = 8192;
+    choose(4); /* Only file in Music. */
+    choose(0); /* Audio Player. */
+    idle_event();
+    push_key(POS_KEY_ESCAPE, 0);
+    push_key(POS_KEY_HOME, 0);
+    advance_after_audio = true;
+    pos_ui_files_from(argv[1], "Music");
+    assert(audio_writes && !audio_active && !used && !denied);
+    printf("peak=%zu largest=%zu\n", peak, largest);
+    return 0;
+  }
+  if (!strcmp(argv[2], "wave-audio-memory")) {
+    limit = single = 10240;
+    idle_event(); /* Waveform scan, then controls. */
+    choose(4); /* Play original. */
+    idle_event();
+    push_key(POS_KEY_ESCAPE, 0);
+    push_key(POS_KEY_HOME, 0);
+    advance_after_audio = true;
+    pos_ui_recording_edit(argv[1], "Music/tone.wav");
+    assert(audio_writes && !audio_active && !used && !denied);
+    printf("peak=%zu largest=%zu\n", peak, largest);
+    return 0;
+  }
   if (!strcmp(argv[2], "file-search")) {
     pos_error_t e = {0};
     int status = pos_files_search(argv[1], argv[3], argv[4], atoi(argv[5]),
@@ -2062,7 +2107,7 @@ int main(int argc, char **argv) {
     push_key(POS_KEY_ENTER, 0);
     push_key(POS_KEY_HOME, 0);
     pos_ui_files(argv[1]);
-    assert(checkbox_seen && pos_home_pending());
+    assert(checkbox_seen && pos_home_pending() && !used);
     return 0;
   }
   if (!strcmp(argv[2], "mesh-ui-back")) {

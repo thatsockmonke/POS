@@ -1,32 +1,20 @@
-# POS 0.8.1-dev
+# POS 0.8.2-dev
 
-Adds the six requested features and Files keyboard clipboard/multi-selection.
-The other last-turn suggestions are removed from the software roadmap.
+Fixes “Not enough memory for streaming audio” when playing WAV recordings.
 
-- **Files:** Space checkboxes, Ctrl+A (up to 32), Ctrl+C/X/V; batch preflight,
-  no overwrites, streamed verified copies and safe moves. Ctrl+F searches names
-  or streamed document contents, with up to 64 results.
-- **Image viewer:** Files opens baseline JPEG and uncompressed 24/32-bit BMP;
-  arrow pan, +/- zoom and 0 fit. Only a viewport and small I/O/decode buffers
-  occupy RAM. PNG/progressive JPEG and other formats are unsupported.
-- **Recorder:** waveform, numeric start/end trim and optional normalization into
-  a new verified PCM WAV in Recordings. Sources are never replaced.
-- **Calculator graphs:** three curves, interval-based roots/intersections,
-  extrema and numerical integration. Tab opens graph controls.
-- **Meshtastic telemetry:** received device/environment/power metrics, requests,
-  one-time actual voltage/uptime sharing and opt-in rate-limited replies.
-- **Meshtastic store-and-forward:** request/abort missed-message history; an
-  opt-in SD broadcast cache, bounded replay, channel-scope checks and fresh
-  server packet IDs/nonces. Private DMs are excluded from server caching.
+- WAV playback uses a 2 KiB in-place PCM buffer, without MP3 decoding workspaces.
+- MP3 decoder, scratch, input and PCM buffers are separate allocations to tolerate
+  fragmented heap. Partial allocations are released on every failure.
+- Files allocates checkbox/clipboard storage only when used and shares filename
+  storage with its labels, reducing idle memory use by about 18 KiB.
+- Playback waits for interface cues to release their hardware/buffers and keeps
+  cues suspended through pause/dialogs, restoring sound preferences on exit.
 
-Use the [Files](FILES.md), [Image viewer](IMAGE_VIEWER.md),
-[Recorder editing](RECORDER_EDITING.md), [Calculator](CALCULATOR.md) and
-[Meshtastic](MESHTASTIC.md) guides for controls and exact limits.
-[STATUS.md](STATUS.md) reflects the requested scope removals.
+The [memory audit](BUG_REPORT_0.8.2.md) covers the root causes, constrained-heap
+regressions, sanitizer/source analysis and remaining physical checks.
 
-Upgrade through Settings → System → Software Update, or use the same
-[guided pos-setup installer](EASY_INSTALL.md) for a matching fresh USB/SD install.
-The factory recovery/two-OTA partition layout and update trust key are unchanged.
-This is a development prerelease. No physical hardware tests were performed;
-see the [verification report](BUG_REPORT_0.8.1.md) for software results and
-remaining device checks.
+Update through Settings → System → Software Update. Your files, wallpaper and
+settings are preserved; no SD formatting, USB reinstall or partition change is
+required. The independent recovery environment, both OTA slots, signed-update
+trust key and existing features remain. This is a development prerelease; no
+physical hardware tests were performed.

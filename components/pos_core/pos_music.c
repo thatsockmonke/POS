@@ -15,12 +15,13 @@ struct pos_music {
   uint32_t length, offset, remaining, total;
   uint64_t frames;
   bool ended;
-  mp3dec_t decoder;
-  mp3dec_scratch_t scratch;
-  uint8_t input[8192];
+  mp3dec_t *decoder;
+  mp3dec_scratch_t *scratch;
+  uint8_t *input;
   size_t used;
-  int16_t pcm[MINIMP3_MAX_SAMPLES_PER_FRAME];
+  int16_t *pcm;
 };
+enum { MP3_INPUT_BYTES = 8192, WAV_INPUT_BYTES = 1024 };
 static int fail(pos_error_t *e, const char *text) {
   if (e)
     snprintf(e->message, sizeof(e->message), "%s", text);
@@ -57,8 +58,20 @@ pos_music_t *pos_music_open(const char *root, const char *relative,
   }
   m->length = size;
   m->mp3 = !strcasecmp(strrchr(relative, '.'), ".mp3");
+  /* WAV needs only a small in-place mono-to-stereo buffer. MP3 workspaces
+   * are separate allocations, so fragmented heap need not fit them all in
+   * one contiguous block. They remain owned until close, including errors. */
+  m->pcm = malloc(m->mp3 ? MINIMP3_MAX_SAMPLES_PER_FRAME * sizeof(*m->pcm)
+                         : WAV_INPUT_BYTES * 2);
+  if (!m->pcm)
+    goto memory;
   if (m->mp3) {
-    mp3dec_init(&m->decoder);
+    m->decoder = malloc(sizeof(*m->decoder));
+    m->scratch = malloc(sizeof(*m->scratch));
+    m->input = malloc(MP3_INPUT_BYTES);
+    if (!m->decoder || !m->scratch || !m->input)
+      goto memory;
+    mp3dec_init(m->decoder);
     return m;
   }
   uint8_t header[16];
@@ -101,6 +114,10 @@ invalid:
   fail(e, "Unsupported or damaged WAV. Use PCM signed 16-bit mono/stereo, 8-48 "
           "kHz.");
   return NULL;
+memory:
+  pos_music_close(m);
+  fail(e, "Not enough memory for audio buffers. Close other work and retry.");
+  return NULL;
 }
 int pos_music_read(pos_music_t *m, const int16_t **pcm, size_t *frames,
                    unsigned volume, pos_error_t *e) {
@@ -111,30 +128,35 @@ int pos_music_read(pos_music_t *m, const int16_t **pcm, size_t *frames,
   if (volume > 100)
     volume = 100;
   if (!m->mp3) {
-    size_t bytes = m->remaining < 2048 ? m->remaining : 2048;
+    size_t bytes =
+        m->remaining < WAV_INPUT_BYTES ? m->remaining : WAV_INPUT_BYTES;
     if (!bytes) {
       m->ended = true;
       return 0;
     }
-    if (fread(m->input, 1, bytes, m->file) != bytes)
+    uint8_t *input = (uint8_t *)m->pcm;
+    if (fread(input, 1, bytes, m->file) != bytes)
       return fail(e, "Audio read failed; check SD.");
     *frames = bytes / (m->channels * 2);
-    for (size_t i = 0; i < *frames; ++i) {
-      m->pcm[i * 2] = (int16_t)le16(m->input + i * m->channels * 2);
-      m->pcm[i * 2 + 1] = (int16_t)le16(m->input + i * m->channels * 2 +
-                                        (m->channels == 2 ? 2 : 0));
+    /* Expand backwards: forward writes would overwrite unread mono input. */
+    for (size_t i = *frames; i-- > 0;) {
+      int16_t left = (int16_t)le16(input + i * m->channels * 2);
+      int16_t right = (int16_t)le16(input + i * m->channels * 2 +
+                                    (m->channels == 2 ? 2 : 0));
+      m->pcm[i * 2] = left;
+      m->pcm[i * 2 + 1] = right;
     }
     m->remaining -= bytes;
   } else {
     for (unsigned attempts = 0; attempts < 32; ++attempts) {
-      if (m->used < sizeof(m->input) / 2 && !feof(m->file))
+      if (m->used < MP3_INPUT_BYTES / 2 && !feof(m->file))
         m->used +=
-            fread(m->input + m->used, 1, sizeof(m->input) - m->used, m->file);
+            fread(m->input + m->used, 1, MP3_INPUT_BYTES - m->used, m->file);
       if (ferror(m->file))
         return fail(e, "MP3 read failed; check SD.");
       mp3dec_frame_info_t info = {0};
       int samples = mp3dec_decode_frame_with_scratch(
-          &m->decoder, m->input, m->used, m->pcm, &info, &m->scratch);
+          m->decoder, m->input, m->used, m->pcm, &info, m->scratch);
       size_t consumed = info.frame_bytes > 0 ? (size_t)info.frame_bytes : 0;
       if (!consumed) {
         if (feof(m->file)) {
@@ -187,6 +209,10 @@ void pos_music_close(pos_music_t *m) {
   if (m) {
     if (m->file)
       fclose(m->file);
+    free(m->input);
+    free(m->scratch);
+    free(m->decoder);
+    free(m->pcm);
     free(m);
   }
 }
@@ -194,7 +220,8 @@ int pos_music_track(const char *root, const char *folder, unsigned index,
                     char relative[241], unsigned *total) {
   *total = 0;
   char full[POS_FS_PATH];
-  if ((*folder && !pos_fs_archive_path(folder)) || pos_fs_join(full, root, folder))
+  if ((*folder && !pos_fs_archive_path(folder)) ||
+      pos_fs_join(full, root, folder))
     return -1;
   DIR *d = opendir(full);
   if (!d)
@@ -204,8 +231,8 @@ int pos_music_track(const char *root, const char *folder, unsigned index,
   while ((entry = readdir(d)))
     if (pos_music_supported(entry->d_name)) {
       char path[241];
-      if (snprintf(path, sizeof(path), "%s%s%s", folder, *folder ? "/" : "", entry->d_name) >=
-              (int)sizeof(path) ||
+      if (snprintf(path, sizeof(path), "%s%s%s", folder, *folder ? "/" : "",
+                   entry->d_name) >= (int)sizeof(path) ||
           !pos_files_mutable(root, path))
         continue;
       pos_fs_join(full, root, path);

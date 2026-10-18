@@ -23,6 +23,7 @@ class AppsTests(unittest.TestCase):
         sdk=Path(os.environ.get('IDF_PATH','/workspace/pos-cloud/esp-idf-v5.5.5'));cjson=sdk/'components/json/cJSON'
         sources=[ROOT/'tests/apps_runner.c',ROOT/'components/pos_install/pos_hash.c',cjson/'cJSON.c',*sorted((ROOT/'components/pos_core').glob('*.c'))]
         args=['gcc','-std=c11','-D_POSIX_C_SOURCE=200809L','-O1','-Wall','-Wextra','-Werror','-fsanitize=undefined','-fno-sanitize-recover=all']
+        if os.environ.get('POS_TEST_ASAN'):args+=['-fsanitize=address','-fno-omit-frame-pointer','-no-pie']
         for component in ('pos_core','pos_install'):args+=['-I',str(ROOT/'components'/component/'include')]
         subprocess.run(args+['-I',str(cjson),*map(str,sources),'-lcrypto','-lm','-o',str(cls.runner)],check=True)
     @classmethod
@@ -119,6 +120,7 @@ class AppsTests(unittest.TestCase):
                 result=self.run_app('music','Music/tone.wav',25);expected=[]
                 for i in range(0,len(samples),channels):expected.extend([int(samples[i]/4),int(samples[i+channels-1]/4)])
                 self.assertEqual((self.root/'decoded.raw').read_bytes(),struct.pack('<'+'h'*len(expected),*expected));self.assertTrue(result.startswith(b'22050 '));(self.root/'decoded.raw').unlink()
+    @unittest.skipIf(os.environ.get('POS_TEST_ASAN'), 'ASan shadow memory is incompatible with the address-space limit; run in the ordinary suite.')
     def test_large_wav_streams_with_less_address_space_than_the_document(self):
         path=self.root/'Music/large.wav'
         size=64*1024*1024

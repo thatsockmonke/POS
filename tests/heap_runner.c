@@ -1,6 +1,8 @@
 /* POS/cJSON allocation budget, separate from shared OpenSSL and libc internals.
  * This models remaining application heap, not physical ESP32 heap usage. */
+#include "heap_budget.h"
 #include "pos_history.h"
+#include "pos_music.h"
 #include "pos_network.h"
 #include "pos_update.h"
 #include <assert.h>
@@ -9,81 +11,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-void *__real_malloc(size_t);
-void *__real_realloc(void *, size_t);
-void __real_free(void *);
-typedef union {
-  max_align_t align;
-  struct {
-    size_t size;
-    uint32_t magic;
-  } h;
-} allocation_t;
-static size_t used, peak, largest, limit = SIZE_MAX, single = SIZE_MAX,
-                                   attempts, fail_at, denied;
-void *__wrap_malloc(size_t n) {
-  ++attempts;
-  if ((fail_at && attempts == fail_at) || n > single || n > limit - used ||
-      n > SIZE_MAX - sizeof(allocation_t)) {
-    ++denied;
-    return NULL;
-  }
-  allocation_t *a = __real_malloc(sizeof(*a) + n);
-  if (!a)
-    return NULL;
-  a->h.size = n;
-  a->h.magic = 0x504f5348;
-  used += n;
-  if (used > peak)
-    peak = used;
-  if (n > largest)
-    largest = n;
-  return a + 1;
-}
-void __wrap_free(void *p) {
-  if (!p)
-    return;
-  allocation_t *a = (allocation_t *)p - 1;
-  assert(a->h.magic == 0x504f5348);
-  used -= a->h.size;
-  a->h.magic = 0;
-  __real_free(a);
-}
-void *__wrap_calloc(size_t n, size_t size) {
-  if (size && n > SIZE_MAX / size)
-    return NULL;
-  void *p = __wrap_malloc(n * size);
-  if (p)
-    memset(p, 0, n * size);
-  return p;
-}
-void *__wrap_realloc(void *p, size_t n) {
-  if (!p)
-    return __wrap_malloc(n);
-  if (!n) {
-    __wrap_free(p);
-    return NULL;
-  }
-  allocation_t *a = (allocation_t *)p - 1;
-  assert(a->h.magic == 0x504f5348);
-  ++attempts;
-  if ((fail_at && attempts == fail_at) || n > single ||
-      n > limit - used + a->h.size) {
-    ++denied;
-    return NULL;
-  }
-  size_t old = a->h.size;
-  a = __real_realloc(a, sizeof(*a) + n);
-  if (!a)
-    return NULL;
-  a->h.size = n;
-  used = used - old + n;
-  if (used > peak)
-    peak = used;
-  if (n > largest)
-    largest = n;
-  return a + 1;
-}
 static int flash_read(void *ctx, uint32_t offset, void *buffer, size_t n) {
   FILE *f = ctx;
   return fseek(f, offset, SEEK_SET) || fread(buffer, 1, n, f) != n;
@@ -127,7 +54,56 @@ int main(int argc, char **argv) {
   assert(argc >= 3);
   pos_error_t e = {0};
   int r = -1;
-  if (!strcmp(argv[1], "load") || !strcmp(argv[1], "failures")) {
+  if (!strcmp(argv[1], "audio") || !strcmp(argv[1], "audio-failures")) {
+    assert(argc == 6);
+    limit = strtoull(argv[4], NULL, 10);
+    single = strtoull(argv[5], NULL, 10);
+    if (!strcmp(argv[1], "audio-failures")) {
+      pos_music_t *m = pos_music_open(argv[2], argv[3], &e);
+      assert(m);
+      size_t total = attempts;
+      pos_music_close(m);
+      assert(!used);
+      for (size_t i = 1; i <= total; ++i) {
+        attempts = 0;
+        fail_at = i;
+        m = pos_music_open(argv[2], argv[3], &e);
+        assert(!m && !used && *e.message);
+      }
+      r = 0;
+    } else {
+      char path[POS_FS_PATH];
+      assert(!pos_fs_join(path, argv[2], "decoded.raw"));
+      /* Repeat in one process: opening the next track must reclaim everything.
+       */
+      for (unsigned run = 0; run < 3; ++run) {
+        pos_music_t *m = pos_music_open(argv[2], argv[3], &e);
+        if (!m)
+          break;
+        FILE *out = fopen(path, "wb");
+        assert(out);
+        r = 0;
+        for (unsigned i = 0; i < 100000; ++i) {
+          const int16_t *pcm;
+          size_t frames;
+          r = pos_music_read(m, &pcm, &frames, 100, &e);
+          if (r < 0)
+            break;
+          assert(fwrite(pcm, 4, frames, out) == frames);
+          if (pos_music_status(m).ended) {
+            r = 0;
+            break;
+          }
+          r = -1;
+        }
+        fclose(out);
+        pos_music_close(m);
+        assert(!used);
+        if (r)
+          break;
+      }
+    }
+  } else if (!strcmp(argv[1], "load") || !strcmp(argv[1], "failures")) {
     pos_package_t *p = NULL;
     if (!strcmp(argv[1], "failures")) {
       assert(!pos_load_manifest(argv[2], &p, &e));

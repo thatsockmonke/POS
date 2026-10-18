@@ -1,4 +1,4 @@
-# POS development status — 0.8.1-dev
+# POS development status — 0.8.2-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -205,3 +205,11 @@ See [Files](FILES.md), [Image viewer](IMAGE_VIEWER.md),
 [Recorder editing](RECORDER_EDITING.md), [Calculator](CALCULATOR.md),
 [Meshtastic](MESHTASTIC.md) and the [verification report](BUG_REPORT_0.8.1.md).
 The resident firmware keeps independent recovery and both existing OTA slots.
+
+## 0.8.2-dev audio and memory reliability
+
+WAV uses a small in-place stereo buffer rather than allocating an MP3 decoder.
+MP3 workspaces are allocated separately; Files selection/clipboard storage is
+created on demand and freed on close. Playback holds interface cues through
+pause and dialogs. See [the memory audit](BUG_REPORT_0.8.2.md). Physical heap,
+SD latency and radio/audio coexistence measurements remain device checks.

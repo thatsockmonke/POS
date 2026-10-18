@@ -1,5 +1,6 @@
 """Exercise the actual device capture task with bounded, timed host primitives."""
 from pathlib import Path
+import os
 import subprocess
 import tempfile
 import unittest
@@ -13,6 +14,7 @@ class AudioCaptureTests(unittest.TestCase):
             command = ['gcc', '-std=c11', '-D_POSIX_C_SOURCE=200809L', '-Wall',
                        '-Wextra', '-Werror', '-fsanitize=undefined',
                        '-fno-sanitize-recover=all', '-pthread']
+            if os.environ.get('POS_TEST_ASAN'):command+=['-fsanitize=address','-fno-omit-frame-pointer','-no-pie']
             for path in ('tests/audio_stubs', 'components/pos_device/include',
                          'components/pos_core/include', 'components/pos_install/include'):
                 command += ['-I', str(ROOT / path)]

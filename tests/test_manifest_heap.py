@@ -1,5 +1,5 @@
 """Constrained POS/cJSON heap; crypto/stdio internals are outside this budget."""
-import hashlib,json,os,subprocess,tempfile,unittest
+import hashlib,json,os,shutil,struct,subprocess,tempfile,unittest,wave
 from pathlib import Path
 import sys
 ROOT=Path(__file__).resolve().parents[1]
@@ -13,6 +13,7 @@ class ManifestHeapTests(unittest.TestCase):
   src=[ROOT/'tests/heap_runner.c',cjson/'cJSON.c']
   for c in ('pos_install','pos_core','pos_update'):src+=sorted((ROOT/'components'/c).glob('*.c'))
   cmd=['gcc','-std=c11','-D_POSIX_C_SOURCE=200809L','-O1','-Wall','-Wextra','-Werror','-fsanitize=undefined','-fno-sanitize-recover=all']
+  if os.environ.get('POS_TEST_ASAN'):cmd+=['-fsanitize=address','-fno-omit-frame-pointer','-no-pie']
   for c in ('pos_install','pos_core','pos_update'):cmd+=['-I',str(ROOT/'components'/c/'include')]
   subprocess.run(cmd+['-I',str(cjson),*map(str,src),'-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free','-lcrypto','-lm','-o',str(cls.runner)],check=True)
  @classmethod
@@ -35,6 +36,35 @@ class ManifestHeapTests(unittest.TestCase):
  def test_every_parse_allocation_failure_frees_owned_text_and_records(self):
   f=self.root/'manifest.pos';f.write_text(json.dumps(self.package()))
   self.run_heap('failures',f)
+ def audio_fixture(self,channels=1):
+  (self.root/'Recordings').mkdir(exist_ok=True)
+  samples=[-32768,-10000,0,12345,32767]*401
+  if channels==2:samples=[s for x in samples for s in (x,-x if x!=-32768 else 32767)]
+  with wave.open(str(self.root/'Recordings/test.wav'),'wb') as w:
+   w.setnchannels(channels);w.setsampwidth(2);w.setframerate(16000)
+   w.writeframes(struct.pack('<'+'h'*len(samples),*samples))
+  stereo=[s for i in range(0,len(samples),channels) for s in (samples[i],samples[i+channels-1])]
+  return struct.pack('<'+'h'*len(stereo),*stereo)
+ def test_wav_playback_fits_3k_heap_and_2k_largest_block_mono_and_stereo(self):
+  for channels in (1,2):
+   with self.subTest(channels=channels):
+    expected=self.audio_fixture(channels)
+    out=self.run_heap('audio',self.root,'Recordings/test.wav',3072,2048)
+    self.assertIn('denied=0',out)
+    self.assertEqual((self.root/'decoded.raw').read_bytes(),expected)
+ def test_mp3_playback_works_without_a_large_contiguous_decoder_allocation(self):
+  shutil.copyfile(ROOT/'tests/fixtures/tone.mp3',self.root/'tone.mp3')
+  out=self.run_heap('audio',self.root,'tone.mp3',40000,20000)
+  self.assertIn('denied=0',out)
+  self.assertEqual((self.root/'decoded.raw').read_bytes(),(ROOT/'tests/fixtures/tone-reference.raw').read_bytes())
+ def test_every_audio_allocation_failure_releases_partial_decoder(self):
+  self.audio_fixture()
+  shutil.copyfile(ROOT/'tests/fixtures/tone.mp3',self.root/'tone.mp3')
+  for path in ('Recordings/test.wav','tone.mp3'):
+   with self.subTest(path=path):self.run_heap('audio-failures',self.root,path,40000,20000)
+ def test_low_heap_audio_failure_is_clean(self):
+  self.audio_fixture()
+  self.run_heap('audio',self.root,'Recordings/test.wav',1024,1024,ok=False)
  def test_held_target_history_capture_and_install_fit_32k_pos_heap(self):
   private=self.root/'private.pem';public=self.root/'public.pem';pos_updates.keygen(private,public)
   card=self.root/'card';system=card/'POS/System';system.mkdir(parents=True)

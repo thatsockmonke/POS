@@ -39,10 +39,11 @@ class FeatureTests(unittest.TestCase):
         for component in ("pos_core","pos_recovery","pos_update"):
             sources.extend((ROOT/"components"/component).glob("*.c"))
         command=["gcc","-std=c11","-D_POSIX_C_SOURCE=200809L","-Wall","-Wextra","-Werror","-g","-fsanitize=undefined","-fno-sanitize-recover=all"]
+        if os.environ.get('POS_TEST_ASAN'):command+=['-fsanitize=address','-fno-omit-frame-pointer','-no-pie']
         for component in ("pos_install","pos_core","pos_recovery","pos_update"):
             command.extend(["-I",str(ROOT/"components"/component/"include")])
         command.extend(["-I",str(ROOT/"tests/stubs"),"-I",str(ROOT/"main"),"-I",str(ROOT/"components/pos_device/include")])
-        subprocess.run(command+["-I",str(cjson),*map(str,sources),"-lcrypto","-lm","-o",str(cls.runner)],check=True)
+        subprocess.run(command+["-I",str(cjson),*map(str,sources),"-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free","-lcrypto","-lm","-o",str(cls.runner)],check=True)
 
     @classmethod
     def tearDownClass(cls):cls.compilation.cleanup()
@@ -878,6 +879,15 @@ class FeatureTests(unittest.TestCase):
         with wave.open(str(file),'wb') as wav:
             wav.setparams((1,2,22050,0,'NONE','not compressed'));wav.writeframes(struct.pack('<2048h',*[i%1000 for i in range(2048)]))
         self.run_feature('audio-ui-file-eof')
+    def test_files_and_recording_editor_can_play_wav_under_small_heap_budgets(self):
+        import wave
+        file=self.card/'Music/tone.wav';file.parent.mkdir()
+        with wave.open(str(file),'wb') as wav:
+            wav.setparams((1,2,22050,0,'NONE','not compressed'));wav.writeframes(struct.pack('<2048h',*[i%1000 for i in range(2048)]))
+        before=file.read_bytes()
+        for mode in ('files-audio-memory','wave-audio-memory','audio-open-memory-error','files-clipboard-memory-error','files-selection-memory-error'):
+            with self.subTest(mode=mode):self.run_feature(mode)
+        self.assertEqual(file.read_bytes(),before)
 
     def test_recorder_saves_buffered_tail_on_home_and_creates_header_before_capture(self):
         self.run_feature('recorder-ui-tail')

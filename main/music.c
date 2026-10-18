@@ -38,6 +38,9 @@ static unsigned current_index(const char *root, const char *folder,
 }
 static void player(const char *root, const char *initial, const char *playlist,
                    bool single) {
+  /* Drain any cue's DMA allocations before reserving decoder memory. Keep
+   * cues suspended through pause/dialogs so they cannot race playback setup. */
+  pos_audio_feedback_hold(true);
   char track[241], folder[241];
   strcpy(track, initial);
   strcpy(folder, track);
@@ -207,6 +210,7 @@ static void player(const char *root, const char *initial, const char *playlist,
     }
   }
   pos_audio_stop();
+  pos_audio_feedback_hold(false);
 }
 void pos_ui_music_file(const char *root, const char *relative) {
   player(root, relative, NULL, true);
