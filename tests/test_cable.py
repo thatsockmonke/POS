@@ -225,6 +225,16 @@ class CableTests(unittest.TestCase):
         finally:
             cable.close();os.close(master);os.close(slave)
 
+    def test_maximum_frame_accepts_usb_serial_jtag_crlf_line_ending(self):
+        master,slave=pty.openpty();tty.setraw(slave)
+        cable=pc.Cable(os.ttyname(slave))
+        try:
+            payload=b'D'+bytes(4)+bytes(range(256))*2
+            os.write(master,pc.usb_frame(17,payload).replace(b'\n',b'\r\n'))
+            self.assertEqual(cable.read(time.monotonic()+.5),(17,payload))
+        finally:
+            cable.close();os.close(master);os.close(slave)
+
     def test_interrupted_pc_download_resumes_from_verified_metadata(self):
         target=self.card/'Documents/sample.bin';target.parent.mkdir()
         target.write_bytes(self.source.read_bytes())

@@ -822,6 +822,10 @@ class Cable:
                     self.reading = True
                 elif self.reading and c == 10:
                     self.reading = False
+                    # ESP-IDF's USB serial/JTAG VFS defaults to CRLF output.
+                    # Strip its terminator before applying the payload bound.
+                    if self.line.endswith(b'\r'):
+                        self.line.pop()
                     try:
                         if not self.line.startswith(b'POS1') or len(self.line) > 20 + USB_PAYLOAD*2:
                             continue

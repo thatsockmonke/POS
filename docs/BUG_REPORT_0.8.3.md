@@ -35,6 +35,18 @@ Both sides retain progress and cancellation. USB needs only standard Python.
 Source offers also now use the existing nonblocking/no-follow regular-file
 check before hashing, so symlinks are refused and a FIFO cannot hang the tool.
 
+## USB serial/JTAG line-ending regression
+
+The pinned ESP-IDF console uses CRLF for stdout and CR for stdin. Its USB VFS
+adds a carriage return to each outgoing frame terminator. The initial PC client
+counted that extra CR against the payload bound, rejecting a maximum-sized
+512-byte download block even though the CRC was correct. Smaller replies still
+worked, hiding the edge case in plain-LF pseudo-terminal tests. The PC decoder
+now removes the optional terminator CR before checking frame size and CRC.
+A maximum-frame CRLF regression failed before the correction and passes after
+it; firmware console configuration remains unchanged. The unpublished release
+candidate's workflow was stopped and rebuilt with this correction.
+
 ## Flash and SD resources
 
 The previous release had little runtime-slot headroom. Existing explanatory
@@ -47,11 +59,11 @@ same. The new catalog adds one manifest record, avoiding dozens of extra records
 
 ## Verification
 
-- **527 full regression tests passed**, including native firmware crypto/service
+- **528 full regression tests passed**, including native firmware crypto/service
   tests with the pinned Mbed TLS host libraries; no ordinary-suite skips.
-- **197 sanitizer tests passed** (198 discovered, one documented ASan/virtual
+- **198 sanitizer tests passed** (199 discovered, one documented ASan/virtual
   address-space skip); no address, leak or undefined-behavior findings. The final
-  17 cable tests were also rerun under sanitizers after the offer-screen changes.
+  18 cable tests were also rerun under sanitizers after the offer-screen changes.
 - USB tests exercise the actual C service/UI and actual Linux tty client over
   pseudo-terminals: both directions, empty files, same-file completion retry,
   upload/download resume, declined offers, collisions, bad hashes/CRC, noise,

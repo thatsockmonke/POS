@@ -127,7 +127,7 @@ server and discards its temporary key. The Linux client is `pos-transfer`.
 
 An explicitly opened on-device USB session owns the USB serial console input.
 Frames are `0x1e`, ASCII `POS1`, lowercase hex of the little-endian uint32
-request ID plus payload plus little-endian CRC32, then LF. CRC covers the ID
+request ID plus payload plus little-endian CRC32, then LF. The PC decoder also accepts the console driver's CRLF terminator. CRC covers the ID
 and payload. Payloads are 1–517 bytes; decoders discard oversized, malformed
 or bad-CRC frames and resynchronize on 0x1e. ID 0 is a periodic greeting:
 `H`, protocol byte 1, `R` (device receives) or `S` (device sends),
