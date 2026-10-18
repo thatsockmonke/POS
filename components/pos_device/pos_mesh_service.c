@@ -348,7 +348,10 @@ static int history_seen(const pos_mesh_message_t *m, bool save) {
       long size = ftell(f);
       if (size > 65536) {
         fseek(f, size - 65536, SEEK_SET);
-        (void)fgets(line, sizeof(line), f);
+        if (!fgets(line, sizeof(line), f)) {
+          fclose(f);
+          return -1;
+        }
       } else
         rewind(f);
     }

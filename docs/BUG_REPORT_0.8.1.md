@@ -36,6 +36,19 @@
   Replay has queue backpressure, age windows, duplicate tracking, abort and
   explicit server consent. Tests cover disk retention/expiry/corruption scope,
   official protobuf fixtures, a simulated service, reply consent and attribution.
+- Confirmed raster cleanup issue: the ordinary message helper skips rendering
+  after global Home. Using it before freeing borrowed image/graph/waveform
+  pixels could leave the LCD's cached view with a dangling pointer. These exits
+  now unconditionally submit a view without borrowed pixels before freeing
+  storage, matching Maps' existing cleanup. UI regressions press Home from a
+  displayed image and waveform and assert the display no longer borrows pixels.
+- The tiny-image regression also caught a fit/zoom mismatch: a 2x2 image's
+  automatic fit exceeded the renderer's 32x zoom ceiling. Fit now uses that same
+  ceiling, so tiny images display normally instead of reporting an invalid view.
+- GitHub's fortified native build rejected an ignored `fgets` result in the
+  history duplicate-log tail reader. The result is now checked and a failed
+  tail read stops processing; the native service test build explicitly enables
+  `_FORTIFY_SOURCE=3` to reproduce that check locally.
 - Files shortcut handling bounds ASCII keys before calling character functions;
   special Ctrl+key events cannot be mistaken for the end of a shortcut string.
   Image/raster callers submit a view without the borrowed pixels before freeing
@@ -75,7 +88,7 @@ flash/device APIs. Firmware builds, packaging/checksums, backup/reinstall/restor
 BLE D-Bus integration and the existing signed-release workflow are checked.
 Local verification: 503 tests passed, with no skipped tests; the private D-Bus
 BLE transfer smoke test passed, along with workflow lint and Python syntax
-checks. Runtime is 1,506,192 bytes (1,136 bytes free in each 1,507,328-byte OTA
+checks. Runtime is 1,506,272 bytes (1,056 bytes free in each 1,507,328-byte OTA
 slot); installer is 822,336 bytes. Post-LTO static frames for the new image UI,
 WAV editor and mesh-module receive handler are 416, 1440 and 976 bytes. These
 compiler figures are not measured task high-water marks or available heap.

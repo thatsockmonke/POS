@@ -99,7 +99,9 @@ void pos_ui_recording_edit(const char *root, const char *relative) {
     }
   }
 done:
-  pos_ui_message("Recorder", "");
+  pos_view_clear(&w->view, "Recorder");
+  pos_ui_style(&w->view);
+  pos_device_show(&w->view);
   pos_audio_feedback_hold(false);
   free(w);
 }

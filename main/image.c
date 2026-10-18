@@ -35,7 +35,7 @@ void pos_ui_image(const char *root, const char *relative) {
   }
   unsigned width, height;
   pos_image_size(i, &width, &height);
-  double fit = fmin(240.0 / width, 88.0 / height), scale = fit,
+  double fit = fmin(32.0, fmin(240.0 / width, 88.0 / height)), scale = fit,
          cx = width / 2.0, cy = height / 2.0;
   uint32_t generation = 0;
   pos_audio_feedback_hold(true);
@@ -84,7 +84,9 @@ void pos_ui_image(const char *root, const char *relative) {
     }
   }
 done:
-  pos_ui_message("Files", "");
+  pos_view_clear(&w->view, "Files");
+  pos_ui_style(&w->view);
+  pos_device_show(&w->view);
   pos_audio_feedback_hold(false);
   pos_image_close(i);
   free(w);

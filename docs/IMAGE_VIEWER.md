@@ -1,7 +1,7 @@
 # Image viewer
 
 In **Files**, choose an image → Open file. The viewer starts fitted to its
-240×88 image area, leaving the title, battery indicator and controls visible.
+240×88 image area, leaving the title, battery indicator and controls visible. Upscaling is capped at 32x.
 
 - Arrow keys pan; `+`/`=` zooms in and `-` zooms out.
 - `0` fits and recentres the image. Escape returns to Files; global Home exits.

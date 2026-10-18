@@ -325,7 +325,9 @@ static void graph(calculator_t *s) {
     redraw = true;
   }
   s->view.map_pixels = NULL;
-  pos_ui_message("Calculator", "");
+  pos_view_clear(&s->view, "Calculator");
+  pos_ui_style(&s->view);
+  pos_device_show(&s->view);
   free(pixels);
   free(curves);
 }

@@ -251,7 +251,7 @@ static unsigned fake_gain = 8;
 static bool microphone_ended, microphone_tail_enabled, microphone_silent;
 static bool mic_quiet_meter_seen, mic_silence_seen;
 static unsigned folder_hint_seen, microphone_backlog;
-static bool checkbox_seen;
+static bool checkbox_seen, raster_borrowed, raster_was_seen;
 static unsigned microphone_tail_frames;
 static const char *microphone_test_root;
 static unsigned brightness_applied;
@@ -318,6 +318,8 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout) {
   return true;
 }
 void pos_device_show(const pos_view_t *view) {
+  raster_borrowed=view->image_pixels||view->map_pixels;
+  if(raster_borrowed)raster_was_seen=true;
   if (wifi_activity_test && !strcmp(view->lines[0], "PC file transfer")) {
     if (!strcmp(view->lines[6], "Transferring")) wifi_activity_seen |= 1;
     if (!strcmp(view->lines[6], "Verifying on microSD")) wifi_activity_seen |= 2;
@@ -1908,6 +1910,14 @@ int main(int argc, char **argv) {
     printf("%u\n%s", c->count, e.message);
     free(c);
     return status ? 1 : 0;
+  }
+  if(!strcmp(argv[2],"image-ui-home")) {
+    idle_event();push_key(POS_KEY_HOME,0);pos_ui_image(argv[1],argv[3]);
+    assert(raster_was_seen&&!raster_borrowed&&pos_home_pending());return 0;
+  }
+  if(!strcmp(argv[2],"wave-ui-home")) {
+    idle_event();choose(0);push_key(POS_KEY_HOME,0);pos_ui_recording_edit(argv[1],argv[3]);
+    assert(raster_was_seen&&!raster_borrowed&&pos_home_pending());return 0;
   }
   if (!strcmp(argv[2], "image-render")) {
     pos_error_t e = {0};

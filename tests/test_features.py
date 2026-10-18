@@ -1036,6 +1036,7 @@ class FeatureTests(unittest.TestCase):
         self.run_feature('image-render','Pictures/test.bmp',1)
         pixels=struct.unpack('<21120H',(self.card/'viewport.raw').read_bytes())
         self.assertEqual([pixels[y*240+x] for y in (43,44) for x in (119,120)],[0xf800,0x07e0,0x001f,0xffff])
+        self.run_feature('image-ui-home','Pictures/test.bmp')
         self.run_feature('image-render','Pictures/test.bmp',2)
         self.write('Pictures/bad.bmp',header+body[:-1]);self.run_feature('image-render','Pictures/bad.bmp',1,expected=1)
         bad=bytearray(header);bad[18:22]=struct.pack('<I',0x7fffffff);self.write('Pictures/huge.bmp',bad+body)
@@ -1049,6 +1050,7 @@ class FeatureTests(unittest.TestCase):
         original=self.write('Recordings/source.wav',out.getvalue())
         scan=self.run_feature('wave-scan','Recordings/source.wav').stdout.split()
         self.assertEqual(list(map(int,scan[:3])),[16000,16000,1]);self.assertEqual(max(map(int,scan[3:])),32768)
+        self.run_feature('wave-ui-home','Recordings/source.wav')
         saved=self.run_feature('wave-edit','Recordings/source.wav',1,7,1).stdout
         with wave.open(str(self.card/saved),'rb') as w:
             self.assertEqual(w.getnframes(),6);got=struct.unpack('<6h',w.readframes(6))

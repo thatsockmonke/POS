@@ -16,7 +16,7 @@ class MeshServiceTests(unittest.TestCase):
         cls.runner = Path(cls.temp.name) / 'service'
         sdk = Path(os.environ.get('IDF_PATH', '/workspace/pos-cloud/esp-idf-v5.5.5'))
         build = Path(os.environ['POS_MESH_MBEDTLS_HOST'])
-        command = ['gcc', '-std=c11', '-D_POSIX_C_SOURCE=200809L', '-DESP_PLATFORM', '-O1',
+        command = ['gcc', '-std=c11', '-D_POSIX_C_SOURCE=200809L', '-DESP_PLATFORM', '-O1', '-D_FORTIFY_SOURCE=3',
                    '-Wall', '-Wextra', '-Werror', '-fsanitize=undefined', '-fno-sanitize-recover=all']
         for path in ('tests/mesh_stubs', 'tests/stubs', 'components/pos_core/include',
                      'components/pos_device/include', 'components/pos_install/include'):
