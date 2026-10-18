@@ -659,6 +659,9 @@ static void modal_render(void *state, pos_view_t *view) {
   (void)state;
   pos_view_clear(view, "Launcher");
 }
+static void calculator_foreground(void *state) {
+  pos_ui_calculator((*(services_t **)state)->root);
+}
 static bool radio_app_available(void *services) {
   (void)services;
 #ifndef POS_INSTALLER
@@ -739,6 +742,11 @@ static const pos_app_t modal_apps[] = {{.name = "Settings",
                                         .state_size = sizeof(services_t *),
                                         .initialize = service_init,
                                         .foreground = maps_foreground,
+                                        .render = modal_render},
+                                       {.name = "Calculator",
+                                        .state_size = sizeof(services_t *),
+                                        .initialize = service_init,
+                                        .foreground = calculator_foreground,
                                         .render = modal_render}};
 
 #ifndef POS_INSTALLER

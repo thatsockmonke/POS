@@ -260,3 +260,26 @@ The border is never clamped to the display when the actual edge lies elsewhere.
 OSM ways crossing the selection can include geometry beyond the square; it marks
 the requested coverage, not a guarantee that every outside road is unavailable.
 The world coastline overview has no regional boundary.
+
+## Faster import and loading sounds (0.6.11-dev)
+
+Direct OSM import first decides whether a way is a road, so discarded buildings
+and other non-road objects never resolve their node references. A sparse RAM
+directory and one 4 KiB SD index page replace per-comparison random file seeks.
+A fixed 2 KiB object buffer handles small ways/relations in RAM; larger objects
+spill into one reusable, owned scratch file. Every retained node is still resolved
+and validated, output stays on SD, and only the successfully synced completed
+map is published. Old maps/sources remain untouched on cancellation/failure.
+
+A deterministic desktop fixture reduced seeks from **40,718 to 3** and file opens
+from **2,020 to 19**, producing byte-identical normalized XML. The prior real
+3,148,444-byte U.S. 4 km sample also produces byte-identical normalized roads and
+compiles its road/navigation files. This is software evidence, not an ESP32/FAT32
+throughput claim. Existing external sorting and graph construction can still take
+time on a real card. No full region or graph is loaded into RAM.
+
+UI sound cues pause during map download/preparation and regional raster reads.
+Queued beeps are dropped, not replayed afterward, and the saved sound preferences
+are restored automatically on completion/error/cancel. Music/microphone ownership
+is not forcibly taken by the loading UI. No map format change or redownload is
+required for this processing improvement.

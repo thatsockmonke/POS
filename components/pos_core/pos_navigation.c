@@ -529,32 +529,113 @@ typedef struct {
   char dir[POS_FS_PATH], raw[POS_FS_PATH], sorted[POS_FS_PATH];
   char staged[POS_FS_PATH], object[POS_FS_PATH], tag[768];
   FILE *input, *nodes, *output, *spool;
+  /* Sparse directory + one 4-KiB page: one SD seek at most per lookup,
+   * rather than a seek for each binary-search comparison. */
+  uint64_t fences[(LIMIT + RUN - 1) / RUN];
+  uint8_t page[RUN * 16];
+  unsigned page_number, page_count;
+  bool page_valid, spilled;
+  char object_text[2048];
+  unsigned object_size;
 } import_t;
-/* Binary searches hit the SD index, not an unbounded RAM node dictionary. */
-static int import_node(FILE *f, unsigned count, uint64_t id, uint8_t out[16]) {
-  unsigned low = 0, high = count;
+static int import_node(import_t *s, unsigned count, uint64_t id,
+                       uint8_t out[16]) {
+  unsigned pages = (count + RUN - 1) / RUN, low = 0, high = pages;
   while (low < high) {
-    unsigned middle = low + (high - low) / 2;
-    if (at(f, middle * 16, out, 16))
-      return -1;
-    uint64_t found = u64(out);
-    if (found == id)
-      return 0;
-    if (found < id)
-      low = middle + 1;
+    unsigned mid = low + (high - low) / 2;
+    if (s->fences[mid] <= id)
+      low = mid + 1;
     else
-      high = middle;
+      high = mid;
+  }
+  if (!low)
+    return -1;
+  unsigned page = low - 1;
+  if (!s->page_valid || s->page_number != page) {
+    unsigned n = count - page * RUN;
+    if (n > RUN)
+      n = RUN;
+    if (at(s->nodes, page * RUN * 16, s->page, n * 16))
+      return -1;
+    s->page_number = page;
+    s->page_count = n;
+    s->page_valid = true;
+  }
+  low = 0;
+  high = s->page_count;
+  while (low < high) {
+    unsigned mid = low + (high - low) / 2;
+    uint64_t found = u64(s->page + mid * 16);
+    if (found == id) {
+      memcpy(out, s->page + mid * 16, 16);
+      return 0;
+    }
+    if (found < id)
+      low = mid + 1;
+    else
+      high = mid;
   }
   return -1;
 }
-static int import_copy(FILE *in, FILE *out) {
-  uint8_t buffer[512];
-  rewind(in);
-  size_t n;
-  while ((n = fread(buffer, 1, sizeof(buffer), in)))
-    if (fwrite(buffer, 1, n, out) != n)
+static int import_write(import_t *s, const char *tag) {
+  size_t n = strlen(tag);
+  if (!s->spilled && s->object_size + n + 3 <= sizeof(s->object_text)) {
+    char *out = s->object_text + s->object_size;
+    *out++ = '<';
+    memcpy(out, tag, n);
+    out += n;
+    *out++ = '>';
+    *out = '\n';
+    s->object_size += n + 3;
+    return 0;
+  }
+  if (!s->spilled) {
+    rewind(s->spool);
+    if (fwrite(s->object_text, 1, s->object_size, s->spool) != s->object_size)
       return -1;
-  return ferror(in) ? -1 : 0;
+    s->spilled = true;
+  }
+  return fprintf(s->spool, "<%s>\n", tag) < 0 ? -1 : 0;
+}
+/* Resolve only retained road ways. Buildings and other discarded ways never
+ * perform node lookups. Reuse one scratch file, reading only its current
+ * extent. */
+static int import_copy(import_t *s, FILE *input, unsigned count,
+                       uint32_t length, bool road, unsigned *points,
+                       pos_io_progress_t progress, void *ctx) {
+  rewind(input);
+  uint32_t bytes = 0;
+  char tag[768];
+  while (bytes < length) {
+    int status = token(input, tag, &bytes);
+    if (status != 1 || bytes > length)
+      return -1;
+    if (road && !strncmp(tag, "nd ", 3)) {
+      uint64_t id;
+      int32_t lat, lon;
+      uint8_t b[16];
+      if (++*points > LIMIT || ident(tag, "ref", &id) ||
+          (!(*points % 256) &&
+           tick(progress, ctx, "Resolving road nodes", *points, 0)))
+        return -1;
+      if (coord(tag, "lat", &lat) || coord(tag, "lon", &lon)) {
+        if (import_node(s, count, id, b))
+          return -1;
+        lat = (int32_t)u32(b + 8);
+        lon = (int32_t)u32(b + 12);
+      }
+      if (fprintf(s->output, "<nd ref=\"%llu\" lat=\"%.6f\" lon=\"%.6f\"/>\n",
+                  (unsigned long long)id, lat / 1e6, lon / 1e6) < 0)
+        return -1;
+    } else if (fprintf(s->output, "<%s>\n", tag) < 0)
+      return -1;
+    /* The newline is written by us, not untrusted XML. Avoid consuming the
+     * retained tail of a longer previous object when this object ends. */
+    if (bytes < length && fgetc(input) != '\n')
+      return -1;
+    ++bytes;
+  }
+  return bytes == length ? 0 : -1;
 }
 int pos_nav_import_osm(const char *source, const char *destination,
                        pos_io_progress_t progress, void *ctx, pos_error_t *e) {
@@ -614,11 +695,15 @@ int pos_nav_import_osm(const char *source, const char *destination,
     if (fread(b, 1, 16, s->nodes) != 16 || u64(b) <= previous)
       goto done;
     previous = u64(b);
+    if (!(i % RUN))
+      s->fences[i / RUN] = previous;
   }
   rewind(s->input);
   bytes = last = 0;
   s->output = file(s->staged, "wbx");
-  if (!s->output || fputs("<osm version=\"0.6\">\n", s->output) == EOF)
+  s->spool = file(s->object, "w+bx");
+  if (!s->spool || !s->output ||
+      fputs("<osm version=\"0.6\">\n", s->output) == EOF)
     goto done;
   bool osm = false, closed = false, keep = false;
   unsigned object = 0, roads = 0; /* 1=node, 2=way, 3=relation */
@@ -682,26 +767,13 @@ int pos_nav_import_osm(const char *source, const char *destination,
         continue;
       }
       if (object != 1) {
-        s->spool = file(s->object, "w+bx");
-        if (!s->spool)
-          goto done;
+        s->object_size = 0;
+        s->spilled = false;
       }
     }
-    if (!strncmp(t, "nd ", 3)) {
-      uint64_t id;
-      int32_t lat, lon;
-      if (object != 2 || ++points > LIMIT || ident(t, "ref", &id))
-        goto done;
-      if (coord(t, "lat", &lat) || coord(t, "lon", &lon)) {
-        if (import_node(s->nodes, count, id, b))
-          goto done;
-        lat = (int32_t)u32(b + 8);
-        lon = (int32_t)u32(b + 12);
-      }
-      if (fprintf(s->spool, "<nd ref=\"%llu\" lat=\"%.6f\" lon=\"%.6f\"/>\n",
-                  (unsigned long long)id, lat / 1e6, lon / 1e6) < 0)
-        goto done;
-    } else if (object) {
+    if (!strncmp(t, "nd ", 3) && object != 2)
+      goto done;
+    if (object) {
       if (!strncmp(t, "tag ", 4) && !attr(t, "k", key, sizeof(key))) {
         if ((object == 2 && !strcmp(key, "highway")) ||
             (object == 3 && !strcmp(key, "type") &&
@@ -709,7 +781,8 @@ int pos_nav_import_osm(const char *source, const char *destination,
              !strcmp(value, "restriction")))
           keep = true;
       }
-      if (fprintf(object == 1 ? s->output : s->spool, "<%s>\n", t) < 0)
+      if (object == 1 ? fprintf(s->output, "<%s>\n", t) < 0
+                      : import_write(s, t))
         goto done;
     }
     bool end =
@@ -719,19 +792,21 @@ int pos_nav_import_osm(const char *source, const char *destination,
                 (!strcmp(t, "/relation") && object != 3)))
       goto done;
     if (end || (opening && t[strlen(t) - 1] == '/')) {
-      if (object != 1 && keep && import_copy(s->spool, s->output))
-        goto done;
-      if (keep && object == 2)
-        ++roads;
-      if (s->spool) {
-        if (fclose(s->spool)) {
-          s->spool = NULL;
-          goto done;
-        }
-        s->spool = NULL;
-        if (unlink(s->object))
+      if (object != 1 && keep) {
+        long extent = s->spilled ? ftell(s->spool) : (long)s->object_size;
+        FILE *input = s->spilled
+                          ? s->spool
+                          : fmemopen(s->object_text, s->object_size, "rb");
+        int copied = !input || extent < 0 || extent > POS_MAP_DOWNLOAD_LIMIT ||
+                     import_copy(s, input, count, (uint32_t)extent, object == 2,
+                                 &points, progress, ctx);
+        if (input && !s->spilled)
+          fclose(input);
+        if (copied)
           goto done;
       }
+      if (keep && object == 2)
+        ++roads;
       object = 0;
     }
   }

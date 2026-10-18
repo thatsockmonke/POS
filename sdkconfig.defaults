@@ -46,3 +46,7 @@ CONFIG_MBEDTLS_KEY_EXCHANGE_ECDH_RSA=n
 
 # POS joins existing Wi-Fi networks; no hotspot/AP interface is exposed.
 CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
+
+# POS configures IPv4 STA/DHCP and IPv4-only LAN sessions. No IPv6 netif is
+# configured; omit its unused protocol machinery, keeping both OTA slots.
+CONFIG_LWIP_IPV6=n

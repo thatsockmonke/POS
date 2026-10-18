@@ -165,7 +165,9 @@ static void download(const char *root) {
     pos_ui_notice("Maps", "Not enough memory to prepare a download.");
     return;
   }
+  pos_audio_feedback_hold(true);
   download_run(root, paths[0], paths[1], paths[2]);
+  pos_audio_feedback_hold(false);
   free(paths);
 }
 
@@ -456,8 +458,11 @@ static __attribute__((noinline)) void open_map(const char *root,
     }
     if (redraw) {
       pos_ui_message("Opening offline map", "Reading roads from microSD...");
-      if (pos_map_raster(path, lat, lon, width, s->pixels, progress, NULL,
-                         &e)) {
+      pos_audio_feedback_hold(true);
+      int raster_result =
+          pos_map_raster(path, lat, lon, width, s->pixels, progress, NULL, &e);
+      pos_audio_feedback_hold(false);
+      if (raster_result) {
         pos_ui_notice("Map unavailable", e.message);
         break;
       }

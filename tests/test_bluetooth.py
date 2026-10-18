@@ -170,6 +170,8 @@ class WifiTransferTests(unittest.TestCase):
         self.sha = hashlib.sha256(self.data).hexdigest()
         self.upload = None
         self.mode = 'normal'
+        self.first_block = threading.Event()
+        self.first_progress_before_eof = False
         test = self
         class Server(http.server.BaseHTTPRequestHandler):
             def log_message(self, *args): pass
@@ -187,6 +189,11 @@ class WifiTransferTests(unittest.TestCase):
                 if handler.headers.get('Authorization') != 'Bearer 0123456789abcdef':
                     handler.send_error(403)
                     return
+                if handler.path == '/status':
+                    handler.send_response(200)
+                    handler.end_headers()
+                    handler.wfile.write(b'{"format":1,"model":"m5stack-cardputer-adv","version":"test"}')
+                    return
                 test.assertEqual(handler.path, '/download')
                 handler.send_response(302 if test.mode == 'redirect' else 200)
                 handler.send_header('Location', 'http://example.com/')
@@ -194,7 +201,12 @@ class WifiTransferTests(unittest.TestCase):
                 handler.send_header('X-POS-SHA256', '0'*64 if test.mode == 'hash' else test.sha)
                 handler.send_header('Content-Length', str(len(test.data)+(100 if test.mode == 'short' else 0)))
                 handler.end_headers()
-                handler.wfile.write(test.data)
+                if test.mode == 'stream':
+                    handler.wfile.write(test.data[:1024]);handler.wfile.flush()
+                    test.first_progress_before_eof = test.first_block.wait(2)
+                    handler.wfile.write(test.data[1024:])
+                else:
+                    handler.wfile.write(test.data)
         self.server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Server)
         thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         thread.start()
@@ -214,6 +226,18 @@ class WifiTransferTests(unittest.TestCase):
         self.transfer('receive')
         self.assertEqual((self.folder/'music.wav').read_bytes(), self.data)
         self.assertFalse(list(self.folder.glob('*.part')))
+
+    def test_wifi_reports_first_data_before_large_or_complete_response(self):
+        self.mode='stream'
+        messages=[]
+        def progress(message):
+            messages.append(message)
+            if message.startswith('Received:'):self.first_block.set()
+        ble.wifi_transfer('receive',None,self.folder,self.address,'0123456789abcdef',progress=progress)
+        self.assertTrue(self.first_progress_before_eof)
+        self.assertTrue(any('Checking Cardputer' in m for m in messages))
+        self.assertTrue(any('preparing' in m for m in messages))
+        self.assertEqual((self.folder/'music.wav').read_bytes(),self.data)
 
     def test_wifi_never_follows_redirect_or_sends_key_to_redirect_destination(self):
         self.mode = 'redirect'
@@ -258,11 +282,26 @@ class SimpleMenuTests(unittest.TestCase):
         from unittest.mock import patch
         import sys
         with patch.object(sys,'argv',['pos-transfer']), \
-             patch('builtins.input',side_effect=['1','/tmp/note.txt','1','192.168.1.2']), \
-             patch.object(ble.getpass,'getpass',return_value='0123456789abcdef'), \
+             patch('builtins.input',side_effect=['1','/tmp/note.txt','1','192.168.1.2','0123456789abcdef']), \
              patch.object(ble,'wifi_transfer') as transfer, \
              patch.object(ble.subprocess,'run') as helper:
             ble.main()
         self.assertEqual(transfer.call_args.args[:2],('send',Path('/tmp/note.txt')))
         self.assertEqual(transfer.call_args.args[3:5],('192.168.1.2','0123456789abcdef'))
         helper.assert_not_called()
+
+    def test_missing_bluez_explains_crostini_and_offers_wifi_without_retrying_bt(self):
+        from unittest.mock import patch,AsyncMock
+        import sys
+        import types
+        with patch.object(sys,'argv',['pos-transfer','receive','--bluetooth']), \
+             patch.dict(sys.modules,{'bleak':types.ModuleType('bleak'),'dbus_fast':types.ModuleType('dbus_fast')}), \
+             patch.object(ble,'linux_session',new=AsyncMock(side_effect=RuntimeError('The name org.bluez was not provided by any .service files'))), \
+             patch('builtins.input',side_effect=['y','192.168.1.2','0123456789abcdef']), \
+             patch.object(ble,'wifi_transfer') as transfer:
+            ble.main()
+        self.assertEqual(transfer.call_args.args[0],'receive')
+        self.assertIn('Crostini',ble.bluetooth_error(RuntimeError('org.bluez missing')))
+
+    def test_missing_source_file_is_not_misdiagnosed_as_missing_bluez(self):
+        self.assertIsNone(ble.bluetooth_error(FileNotFoundError(2,'No such file or directory','/tmp/missing-note.txt')))

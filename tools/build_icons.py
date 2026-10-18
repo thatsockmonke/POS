@@ -5,7 +5,7 @@ import math, struct
 
 def artwork():
     icons=[]
-    for kind in range(16):
+    for kind in range(17):
         p=[[0]*32 for _ in range(32)]
         def disk(cx,cy,r,v=1):
             for y in range(32):
@@ -72,12 +72,16 @@ def artwork():
             for n in range(25):
                 a=n*math.pi/24;disk(16+8*math.cos(a),19+6*math.sin(a),1)
             line(16,25,16,29,2);line(11,29,21,29,2)
-        else: # folded map, with a route and location marker
+        elif kind==15: # folded map, with a route and location marker
             line(4,8,11,5,2);line(11,5,21,9,2);line(21,9,28,6,2)
             line(4,8,4,26,2);line(28,6,28,24,2)
             line(4,26,11,23,2);line(11,23,21,27,2);line(21,27,28,24,2)
             line(11,5,11,23,1);line(21,9,21,27,1)
             line(7,20,16,14,2);line(16,14,24,18,2);disk(24,18,2.3)
+        else: # calculator display and six clear keys
+            rect(7,3,25,29);rect(9,5,23,11,0)
+            for y in (15,20,25):
+                for x in (11,17,22):rect(x-1,y-1,x+1,y+1,0)
         icons.append(b''.join(struct.pack('<I',sum(v<<x for x,v in enumerate(row))) for row in p))
     return b'POI1'+b''.join(icons)
 if __name__=='__main__':

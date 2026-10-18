@@ -4,13 +4,13 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**Current release: [0.6.10-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.6.10-dev) — experimental.**
+**Current release: [0.6.11-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.6.11-dev) — experimental.**
 
-New: **[POS Transfer](docs/TRANSFER.md)** sends files both ways between Linux and
-Cardputer over **Wi-Fi or Bluetooth**, with a simple two-choice menu. Share screens
-now explain PC use. Saved maps have a white coverage outline, and direct
-OpenStreetMap downloads accept **500 m through 4 km**, with streamed SD processing.
-The three-choice installer and recoverable map-region deletion remain available.
+New: an offline **[Calculator](docs/CALCULATOR.md)** with scientific-function
+buttons, saved variables, fractions and polynomial CAS. **[POS Transfer](docs/TRANSFER.md)**
+now shows the session key, checks the connection and displays hashing/verification
+waits. It explains missing BlueZ and offers Wi-Fi for Crostini. Map import greatly
+reduces random SD work; interface sounds pause during heavy loading.
 
 Both map views use **arrows** to pan, **+/-** to zoom and **C** to follow GPS.
 **P** cycles Normal / Large / Fine pan distances, shows the
@@ -32,7 +32,7 @@ its route, next maneuver/road name and remaining distance.
 **Download your regions again after updating from 0.6.3** to include access and
 restriction data. Existing road maps remain viewable. Routes cover the selected
 cached graph; unsupported conditional/via-way rules are blocked conservatively.
-[World map preview](downloads/0.6.10-dev/world.png) · See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.6.10-dev/maps.png).
+[World map preview](downloads/0.6.11-dev/world.png) · See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.6.11-dev/maps.png).
 
 Earlier Recorder playback, launcher, editor and Wi-Fi improvements remain:
 The launcher keeps its selection box fixed while crisp 32×32 icons slide on an
@@ -66,7 +66,7 @@ Upgrade through **0.6.0-dev** first if using an older installation. Active updat
 metadata stays at exactly seven fields; the old bridge feed remains frozen.
 Black-start flag/logo boot, microphone gain and themed app visuals remain.
 
-[Animated UI preview](downloads/0.6.10-dev/ui-animation.png) · [Recorder](downloads/0.6.10-dev/recorder.png) · [Files](downloads/0.6.10-dev/files.png) · [Background](downloads/0.6.10-dev/background.png) · [Counter](downloads/0.6.10-dev/counter.png)
+[Animated UI preview](downloads/0.6.11-dev/ui-animation.png) · [Recorder](downloads/0.6.11-dev/recorder.png) · [Files](downloads/0.6.11-dev/files.png) · [Background](downloads/0.6.11-dev/background.png) · [Counter](downloads/0.6.11-dev/counter.png)
 
 Previews use the actual portable renderer with example state; they are not
 hardware recordings or device frame-rate measurements.
@@ -111,7 +111,7 @@ Implemented:
   and blue starts when yellow is halfway. Once all stripes are complete, large centered
   **POS** lettering fades in, holds for one second, then normal boot continues.
 - Native ST7789 display output and TCA8418 ADV keyboard input, with USB fallback.
-- A sixteen-app horizontal launcher with black icons outlined in white, streamed from SD.
+- A seventeen-app horizontal launcher with black icons outlined in white, streamed from SD.
   Left/Right moves the ribbon; Up or Enter opens the centered app. Only one foreground app runs.
 - Background app: 1-12 horizontal stripes, visual arrow-key color picker, Q/E hue,
   Shift fine adjustments, a live striped canvas and S to save.
@@ -181,14 +181,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.6.10-dev/launcher.png)
-![Color picker](downloads/0.6.10-dev/color-picker.png)
+![Launcher](downloads/0.6.11-dev/launcher.png)
+![Color picker](downloads/0.6.11-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.6.10-dev/boot-animation.png)
+![POS boot animation](downloads/0.6.11-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.6.10-dev/boot-splash.png)
+[Final splash frame](downloads/0.6.11-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -205,7 +205,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.10-dev --zip-output dist/pos-0.6.10-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.6.11-dev --zip-output dist/pos-0.6.11-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -327,6 +327,6 @@ See [Developer tooling](docs/DEVELOPMENT.md) for `posctl flash`, `files` and gat
 existing OTA layout; validation remains enabled and unsupported roots are rejected.
 
 Transfer files between POS and Linux with the simple **[POS Transfer tool](docs/TRANSFER.md)**:
-[download pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.6.10-dev/pos-transfer),
+[download pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.6.11-dev/pos-transfer),
 then run `python3 ~/Downloads/pos-transfer`. Choose Send/Receive and Wi-Fi/Bluetooth.
 Wi-Fi works without Bluetooth helpers and is the preferred Crostini route.

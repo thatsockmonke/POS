@@ -78,3 +78,11 @@ int main(int argc, char **argv) {
     fprintf(stderr, "%s\n", e.message);
   return rc ? 1 : 0;
 }
+#ifdef POS_NAV_IO_COUNTS
+static unsigned seeks, opens;
+int __real_fseek(FILE *,long,int);
+FILE *__real_fopen(const char *,const char *);
+int __wrap_fseek(FILE *f,long offset,int origin){++seeks;return __real_fseek(f,offset,origin);}
+FILE *__wrap_fopen(const char *path,const char *mode){++opens;return __real_fopen(path,mode);}
+__attribute__((destructor)) static void report_io(void){fprintf(stderr,"NAV_IO seeks=%u opens=%u\n",seeks,opens);}
+#endif

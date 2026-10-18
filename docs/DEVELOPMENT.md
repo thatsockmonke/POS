@@ -141,3 +141,10 @@ simulated BlueZ to check actual D-Bus serialization/export, secure flags, numeri
 comparison callbacks, file transfer, disconnect/resume and unregister cleanup.
 It does not operate a Bluetooth radio or validate physical pairing/encryption.
 Use native Linux and Cardputer for that final interoperability check.
+
+The Calculator core has dependency-free native math tests and actual UI/SD-save
+fixtures. Its eight-level parser bound is intentional: the Xtensa `.su` reports
+show the recursive expression path's frame sizes, so nesting is capped for the
+16 KiB UI task. Watch physical minimum stack/heap as part of device validation.
+Navigation tests wrap `fseek`/`fopen` to guard the sparse-cache and scratch reuse
+optimization, including spill-to-disk and a shorter object following a long one.

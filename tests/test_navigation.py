@@ -13,7 +13,7 @@ class NavigationTests(unittest.TestCase):
     def setUpClass(cls):
         cls.build=tempfile.TemporaryDirectory();cls.runner=Path(cls.build.name)/'navigation'
         sources=['tests/navigation_runner.c']+['components/pos_core/'+n for n in ['pos_navigation.c','pos_maps.c','pos_location.c','pos_fs.c']]
-        subprocess.run(['gcc','-std=c11','-D_POSIX_C_SOURCE=200809L','-Wall','-Wextra','-Werror','-Wno-misleading-indentation','-g','-fsanitize=undefined','-fno-sanitize-recover=all','-I',str(ROOT/'components/pos_core/include'),'-I',str(ROOT/'components/pos_install/include'),*map(lambda s:str(ROOT/s),sources),'-lm','-o',str(cls.runner)],check=True)
+        subprocess.run(['gcc','-std=c11','-D_POSIX_C_SOURCE=200809L','-Wall','-Wextra','-Werror','-DPOS_NAV_IO_COUNTS','-Wl,--wrap=fseek','-Wl,--wrap=fopen','-Wno-misleading-indentation','-g','-fsanitize=undefined','-fno-sanitize-recover=all','-I',str(ROOT/'components/pos_core/include'),'-I',str(ROOT/'components/pos_install/include'),*map(lambda s:str(ROOT/s),sources),'-lm','-o',str(cls.runner)],check=True)
     @classmethod
     def tearDownClass(cls):cls.build.cleanup()
     def setUp(self):
@@ -191,3 +191,22 @@ class NavigationTests(unittest.TestCase):
     def test_offroute_and_resume_validates_cache_without_network(self):
         self.build_map(way(10,[1,2,3]));self.route(1,3)
         values=list(map(int,self.run_nav('guide',self.routefile,self.map,34.055,-118.249).split('\t')[0].split()));self.assertEqual(values[4],1)
+
+    def test_direct_import_skips_nonroad_lookups_and_reuses_bounded_scratch(self):
+        import re
+        nodes=''.join(f'<node id="{2**40+i}" lat="34.05" lon="{-118.248+i/1000000:.6f}"/>' for i in range(1,1001))
+        buildings=''.join(f'<way id="{i}"><nd ref="{2**40+1}"/><nd ref="{2**40+2}"/><tag k="building" v="yes"/></way>' for i in range(1,2001))
+        road='<way id="9999">'+''.join(f'<nd ref="{2**40+i}"/>' for i in range(1,301))+'<tag k="highway" v="residential"/></way>'
+        # A shorter road after a spilled object must never consume its old tail.
+        short=f'<way id="10000"><nd ref="{2**40+2}"/><nd ref="{2**40+3}"/><tag k="highway" v="path"/></way>'
+        self.raw.write_bytes(xml(nodes,buildings,road,short))
+        prepared=self.root/'prepared.osm'
+        result=subprocess.run([str(self.runner),'import',str(self.raw),str(prepared)],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        seeks,opens=map(int,re.search(r'NAV_IO seeks=(\d+) opens=(\d+)',result.stderr).groups())
+        self.assertLess(seeks,10)
+        self.assertLess(opens,30)
+        data=prepared.read_bytes();self.assertNotIn(b'building',data)
+        self.assertEqual(data.count(b'<way '),2)
+        self.assertEqual(data.count(b'<nd '),302)
+        self.run_nav('build',prepared,self.map)

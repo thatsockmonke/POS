@@ -56,3 +56,5 @@ void pos_ui_instruments(void);
 void pos_ui_deploy(const char *root);
 
 void pos_ui_maps(const char *root);
+
+void pos_ui_calculator(const char *root);

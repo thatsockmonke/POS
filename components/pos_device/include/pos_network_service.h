@@ -30,10 +30,13 @@ int pos_network_share_start(const char *root, const char *export_file,
                             char key[17]);
 void pos_network_share_stop(void);
 
-int pos_network_https_limit(const char *,const char *,const char *,const char *,const char *,const char *,const char *,pos_io_progress_t,void *,pos_error_t *,uint32_t limit);
+int pos_network_https_limit(const char *, const char *, const char *,
+                            const char *, const char *, const char *,
+                            const char *, pos_io_progress_t, void *,
+                            pos_error_t *, uint32_t limit);
 
 /* Deployment routes only exist in an explicit foreground developer session. */
-int pos_network_deploy_start(const char *root,char key[17]);
+int pos_network_deploy_start(const char *root, char key[17]);
 bool pos_network_deploy_take(char url[512]);
 void pos_network_deploy_result(bool success);
 
@@ -45,3 +48,11 @@ int pos_network_auto_set(bool);
 void pos_network_auto_pause(bool);
 void pos_network_auto_start(void);
 void pos_network_auto_stop(void);
+
+/* Temporary LAN transfer activity; phase 0 idle, 1 copying, 2 verifying,
+ * 3 complete, 4 failed. Atomic progress fields; no credentials are exposed. */
+typedef struct {
+  unsigned phase;
+  uint32_t done, total;
+} pos_transfer_status_t;
+pos_transfer_status_t pos_network_share_activity(void);

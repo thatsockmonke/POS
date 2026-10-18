@@ -2,8 +2,8 @@
 
 Download **pos-transfer** from the [latest POS release](https://github.com/thatsockmonke/POS/releases).
 It is also inside the installation ZIP and its source is `tools/pos_transfer.py`.
-The same existing POS BLE protocol works with 0.6.9-dev; the map improvements need
-0.6.10-dev. The program needs Python 3.10+. Bluetooth additionally needs Linux, BlueZ and
+The existing POS BLE protocol remains compatible with 0.6.9-dev and later.
+0.6.11-dev adds Calculator, faster OSM processing and on-device transfer progress. The program needs Python 3.10+. Bluetooth additionally needs Linux, BlueZ and
 Bluetooth enabled; Wi-Fi needs no extra Python packages.
 
 Run it from your Downloads folder:
@@ -36,9 +36,9 @@ After Send/Receive, choose **Wi-Fi** or **Bluetooth**.
    **Share → Wi-Fi file transfer**. Start the trusted-LAN session.
 3. In POS Transfer choose Send or Receive, then **Wi-Fi**. Type the Cardputer
    IP and temporary 16-character session key shown on screen. The key is entered
-   privately and is never saved or put in a URL.
+   visibly, as requested. It is never saved or put in a URL.
 4. Sent files arrive in Cardputer **Downloads**. Received files go into
-   **~/Downloads/POS**, with their original names on 0.6.10-dev. Older POS versions
+   **~/Downloads/POS**, with their original names on 0.6.10-dev and later. Older POS versions
    ask you for a filename instead. Both directions stream and verify SHA-256.
 5. Close the session on POS when finished.
 
@@ -114,3 +114,27 @@ resume, duplicates, malformed input, hashes, symlinks and conflicting files, plu
 GATT/agent/advertisement registration over a private real D-Bus with simulated
 BlueZ. **Physical Linux/Cardputer pairing, throughput, adapter compatibility and
 Crostini USB access are not validated by these cloud tests.**
+
+## If transfers appear stuck
+
+Replace your old executable with the new release's **pos-transfer**. `--version`
+shows its version. The new tool first checks the device/session key, then labels
+source hashing, Cardputer file preparation and upload verification, with elapsed
+wait messages every two seconds. Receive progress uses available socket data
+rather than waiting for a 64 KiB read. POS 0.6.11 also shows transfer, SD verification
+and completion progress on the device; leave that screen open until finished.
+
+The message **“The name org.bluez was not provided by any .service files”** means
+Linux cannot find its BlueZ Bluetooth service. It does not indicate a POS file
+protocol or pairing-code failure. The tool explains this and offers to use Wi-Fi
+for the same transfer. Crostini normally cannot use ChromeOS's built-in Bluetooth.
+Installing the Python helpers or pairing through ChromeOS does not expose it.
+Use Wi-Fi in Crostini, or native Linux with a supported adapter. On a native
+Debian/Ubuntu system where an adapter exists but BlueZ is absent, install the
+`bluez` package and enable the `bluetooth` service through your normal system tools.
+The transfer tool does not install/start system services or bypass adapter access.
+
+If Wi-Fi still fails, preserve the displayed phase and error, direction and file
+size. Wrong session keys fail before file upload. Public/client-isolated Wi-Fi,
+firewalls, SD errors and actual adapter/firmware behavior still need checking on
+the real computer and Cardputer; cloud HTTP/D-Bus fixtures cannot prove those.

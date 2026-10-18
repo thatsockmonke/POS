@@ -399,6 +399,13 @@ int pos_network_https(const char *url, const char *method, const char *body,
 
 static httpd_handle_t server;
 static atomic_bool share_stop_requested;
+static atomic_uint transfer_phase, transfer_done, transfer_total;
+pos_transfer_status_t pos_network_share_activity(void) {
+  return (pos_transfer_status_t){atomic_load(&transfer_phase),
+                                 atomic_load(&transfer_done),
+                                 atomic_load(&transfer_total)};
+}
+static int share_progress(void *, const char *, uint64_t, uint64_t);
 static atomic_int
     deployment_state; /* 0 idle, 1 queued, 2 executing, 3 done, 4 failed */
 static char deployment_url[512];
@@ -453,6 +460,12 @@ static esp_err_t page(httpd_req_t *request) {
       "s.textContent=await r.text()}catch(e){s.textContent='Transfer "
       "interrupted. Reconnect and use a new filename.'}}</script>");
 }
+static int share_hash_progress(void *ctx, uint64_t done, uint64_t total) {
+  (void)ctx;
+  atomic_store(&transfer_done, done);
+  atomic_store(&transfer_total, total);
+  return atomic_load(&share_stop_requested) ? -1 : 0;
+}
 static esp_err_t send_file(httpd_req_t *request) {
   if (!authorized(request))
     return httpd_resp_send_err(request, HTTPD_403_FORBIDDEN,
@@ -465,10 +478,15 @@ static esp_err_t send_file(httpd_req_t *request) {
     return httpd_resp_send_err(request, HTTPD_404_NOT_FOUND,
                                "File unavailable.");
   char sha[65];
+  atomic_store(&transfer_done, 0);
+  atomic_store(&transfer_phase, 2);
   uint32_t export_size;
   if (pos_fs_file_size(share.export_file, &export_size) ||
-      pos_hash_file(share.export_file, export_size, sha)) {
+      (atomic_store(&transfer_phase, 2),
+       pos_hash_file_progress(share.export_file, export_size, sha,
+                              share_hash_progress, NULL))) {
     fclose(f);
+    atomic_store(&transfer_phase, 4);
     return ESP_FAIL;
   }
   httpd_resp_set_hdr(request, "X-POS-SHA256", sha);
@@ -492,15 +510,23 @@ static esp_err_t send_file(httpd_req_t *request) {
   char buffer[4096];
   size_t n;
   esp_err_t result = ESP_OK;
+  uint32_t copied = 0;
+  atomic_store(&transfer_phase, 1);
+  atomic_store(&transfer_total, export_size);
+  atomic_store(&transfer_done, 0);
   while (!atomic_load(&share_stop_requested) &&
-         (n = fread(buffer, 1, sizeof(buffer), f)))
+         (n = fread(buffer, 1, sizeof(buffer), f))) {
     if ((result = httpd_resp_send_chunk(request, buffer, n)) != ESP_OK)
       break;
+    copied += n;
+    atomic_store(&transfer_done, copied);
+  }
   if (ferror(f) || atomic_load(&share_stop_requested))
     result = ESP_FAIL;
   fclose(f);
   if (result == ESP_OK)
     result = httpd_resp_send_chunk(request, NULL, 0);
+  atomic_store(&transfer_phase, result == ESP_OK ? 3 : 4);
   return result;
 }
 typedef struct {
@@ -524,9 +550,9 @@ static int upload_read(void *opaque, void *buffer, size_t length) {
 static int share_progress(void *ctx, const char *phase, uint64_t done,
                           uint64_t total) {
   (void)ctx;
-  (void)phase;
-  (void)done;
-  (void)total;
+  atomic_store(&transfer_phase, !strcmp(phase, "Transferring file") ? 1 : 2);
+  atomic_store(&transfer_done, done);
+  atomic_store(&transfer_total, total);
   return atomic_load(&share_stop_requested) ? -1 : 0;
 }
 static bool decode_name(const char *encoded, char decoded[121]) {
@@ -572,11 +598,15 @@ static esp_err_t receive_file(httpd_req_t *request) {
                                  "Invalid SHA-256 header.");
     expected = sha;
   }
+  atomic_store(&transfer_phase, 1);
+  atomic_store(&transfer_done, 0);
+  atomic_store(&transfer_total, request->content_len);
   upload_t upload = {request, request->content_len};
   pos_error_t e = {0};
   int result =
       pos_receive_file(share.root, relative, request->content_len, expected,
                        upload_read, &upload, share_progress, NULL, &e);
+  atomic_store(&transfer_phase, result ? 4 : 3);
   if (result)
     return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, e.message);
   return httpd_resp_sendstr(request, "Uploaded and verified in Downloads.");
@@ -702,6 +732,7 @@ int pos_network_share_start(const char *root, const char *export_file,
   config.recv_wait_timeout = 10;
   config.send_wait_timeout = 10;
   atomic_store(&share_stop_requested, false);
+  atomic_store(&transfer_phase, 0);
   if (httpd_start(&server, &config) != ESP_OK) {
     server = NULL;
     return -1;

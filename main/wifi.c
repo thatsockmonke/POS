@@ -1,5 +1,6 @@
 #include "pos_device.h"
 #include "pos_network_service.h"
+#include "pos_peripherals.h"
 #include "ui.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -222,6 +223,7 @@ void pos_ui_wifi_export(const char *root, const char *selected) {
                   "Connect Wi-Fi and check SD storage first.");
     return;
   }
+  pos_audio_feedback_hold(true);
   pos_network_status_t status = pos_network_status();
   char message[350];
   snprintf(message, sizeof(message),
@@ -232,12 +234,42 @@ void pos_ui_wifi_export(const char *root, const char *selected) {
            *selected ? "One selected file shared" : "Uploads only");
   pos_ui_message("File transfer active", message);
   pos_event_t event;
-  while (!pos_home_pending())
+  pos_transfer_status_t previous = {0};
+  while (!pos_home_pending()) {
+    pos_transfer_status_t activity = pos_network_share_activity();
+    if (activity.phase &&
+        (activity.phase != previous.phase || activity.done != previous.done)) {
+      pos_view_t view;
+      pos_view_clear(&view, "PC file transfer");
+      static const char *const labels[] = {
+          "Waiting for PC", "Transferring", "Verifying on microSD",
+          "Transfer complete", "Transfer failed"};
+      pos_ui_style(&view);
+      pos_view_line(&view, 2, "IP: %s:8080", status.ip);
+      pos_view_line(&view, 3, "Key: %s", key);
+      pos_view_line(&view, 6, "%s",
+                    labels[activity.phase <= 4 ? activity.phase : 0]);
+      pos_view_line(&view, 8, "%u / %u bytes", activity.done, activity.total);
+      unsigned filled =
+          activity.total
+              ? (unsigned)((uint64_t)activity.done * 28 / activity.total)
+              : 0;
+      if (filled > 28)
+        filled = 28;
+      memset(view.lines[10], '=', filled);
+      view.lines[10][filled] = 0;
+      pos_view_line(&view, 12, "Keep this screen open");
+      pos_view_line(&view, 15, "Enter / Esc:stop session");
+      pos_device_show(&view);
+      previous = activity;
+    }
     if (pos_device_event(&event, 100) && event.pressed &&
         (event.key == POS_KEY_ENTER || event.key == POS_KEY_ESCAPE ||
          event.key == POS_KEY_HOME))
       break;
+  }
   pos_network_share_stop();
+  pos_audio_feedback_hold(false);
   pos_secure_zero(key, sizeof(key));
 }
 void pos_ui_wifi(const char *root) {

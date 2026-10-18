@@ -5,14 +5,24 @@ int pos_audio_write(const int16_t *stereo, size_t frames, unsigned sample_rate,
                     pos_error_t *e);
 void pos_audio_stop(void);
 typedef enum {
-  POS_SOUND_KEY, POS_SOUND_NAV, POS_SOUND_SELECT, POS_SOUND_BACK,
-  POS_SOUND_OPEN, POS_SOUND_CLOSE, POS_SOUND_NOTICE, POS_SOUND_PREVIEW, POS_SOUND_STARTUP,
+  POS_SOUND_KEY,
+  POS_SOUND_NAV,
+  POS_SOUND_SELECT,
+  POS_SOUND_BACK,
+  POS_SOUND_OPEN,
+  POS_SOUND_CLOSE,
+  POS_SOUND_NOTICE,
+  POS_SOUND_PREVIEW,
+  POS_SOUND_STARTUP,
   POS_SOUND_COUNT
 } pos_sound_t;
 /* One coalesced asynchronous cue; never mixes with playback or microphone. */
-int pos_audio_feedback_configure(bool enabled, unsigned volume, bool keys, bool alerts);
+int pos_audio_feedback_configure(bool enabled, unsigned volume, bool keys,
+                                 bool alerts);
 void pos_audio_feedback(pos_sound_t sound);
 void pos_audio_feedback_shutdown(void);
+/* Nestable temporary UI-cue pause, without changing saved sound settings. */
+void pos_audio_feedback_hold(bool hold);
 bool pos_microphone_active(void);
 size_t pos_microphone_pending(void);
 typedef struct {
@@ -44,7 +54,8 @@ void pos_expansion_stop(void);
 int pos_microphone_start(pos_error_t *);
 /* Live integer digital PCM gain, 1-4096; does not write flash. */
 int pos_microphone_set_gain(unsigned gain);
-int pos_microphone_read(int16_t *mono,size_t capacity,size_t *frames,pos_error_t *);
+int pos_microphone_read(int16_t *mono, size_t capacity, size_t *frames,
+                        pos_error_t *);
 /* Stop acquisition, retaining queued PCM. Read until frames == 0, then stop
  * to free the channel/buffer. This preserves the tail on pause and save. */
 void pos_microphone_end(void);
@@ -52,6 +63,6 @@ void pos_microphone_end(void);
 void pos_microphone_levels(unsigned *left, unsigned *right);
 void pos_microphone_stop(void);
 int pos_motion_start(pos_error_t *);
-int pos_motion_read(pos_imu_sample_t *,pos_error_t *);
+int pos_motion_read(pos_imu_sample_t *, pos_error_t *);
 void pos_motion_stop(void);
-int pos_infrared_send(uint8_t address,uint8_t command,pos_error_t *);
+int pos_infrared_send(uint8_t address, uint8_t command, pos_error_t *);

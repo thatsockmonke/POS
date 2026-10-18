@@ -1,4 +1,4 @@
-POS 0.6.10-dev - Pan Operating System
+POS 0.6.11-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
@@ -96,3 +96,7 @@ Restore them there, or delete them from Trash to free SD space.
 
 PC transfers: POS Transfer on Linux supports Send/Receive via Wi-Fi or Bluetooth.
 Maps: white saved-region outline; all providers accept up to 4 km with SD streaming.
+
+Calculator: scientific functions, saved variables, fractions and bounded polynomial CAS.
+Transfer: visible session key and progress; BlueZ absence offers Wi-Fi fallback on PC.
+Map loading: cached node lookup and reusable scratch; UI beeps pause during heavy work.

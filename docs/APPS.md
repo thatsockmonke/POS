@@ -410,3 +410,11 @@ provides Send/Receive over Bluetooth and Wi-Fi. The Bluetooth sender help explai
 Linux Receive mode; Wi-Fi sessions mention the terminal tool as well as the browser.
 Wi-Fi exports provide a percent-encoded original filename header for PC clients.
 See [TRANSFER.md](TRANSFER.md) for download, simple steps and Crostini limitations.
+
+## Calculator (seventeenth launcher app)
+
+[Calculator](CALCULATOR.md) provides a scientific keypad/function picker, saved
+numeric variables, DEG/RAD, fraction/decimal output and polynomial CAS. Typing
+keeps punctuation literal; Ctrl+K or the Tools menu switches to keypad arrows.
+Tab opens tools, Enter evaluates/types a selected button, Esc/global Home closes.
+See the dedicated guide for every function, examples and exact software limits.

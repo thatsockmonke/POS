@@ -35,7 +35,7 @@ class FeatureTests(unittest.TestCase):
         cls.runner=Path(cls.compilation.name)/"features"
         sdk=Path(os.environ.get("IDF_PATH","/workspace/pos-cloud/esp-idf-v5.5.5"));cjson=sdk/"components/json/cJSON"
         sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/settings.c",ROOT/"main/browser.c",ROOT/"main/background.c",ROOT/"main/editor.c",ROOT/"main/wifi.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
-        sources += [ROOT/"main/files.c",ROOT/"main/music.c",ROOT/"main/recorder.c",ROOT/"main/instruments.c",ROOT/"main/sharing.c",ROOT/"main/expansion.c",ROOT/"main/maps.c"]
+        sources += [ROOT/"main/files.c",ROOT/"main/music.c",ROOT/"main/recorder.c",ROOT/"main/instruments.c",ROOT/"main/sharing.c",ROOT/"main/expansion.c",ROOT/"main/maps.c",ROOT/"main/calculator.c"]
         for component in ("pos_core","pos_recovery","pos_update"):
             sources.extend((ROOT/"components"/component).glob("*.c"))
         command=["gcc","-std=c11","-D_POSIX_C_SOURCE=200809L","-Wall","-Wextra","-Werror","-g","-fsanitize=undefined","-fno-sanitize-recover=all"]
@@ -57,6 +57,19 @@ class FeatureTests(unittest.TestCase):
     def run_feature(self,command,*args,expected=0,card=None):
         result=subprocess.run([str(self.runner),str(card or self.card),command,*map(str,args)],capture_output=True,text=True)
         self.assertEqual(result.returncode,expected,result.stdout+result.stderr);return result
+
+    def test_wifi_card_screen_shows_transfer_verification_completion_and_releases_audio_hold(self):
+        self.run_feature('wifi-ui-progress')
+
+    def test_calculator_typed_input_keypad_and_polynomial_solver(self):
+        for mode in ['calculator-save','calculator-buttons','calculator-cas','calculator-punctuation']:
+            self.run_feature(mode)
+        self.run_feature('calculator-read')
+
+    def test_calculator_corrupt_save_is_preserved_without_overwrite(self):
+        path=self.write('POS/Users/Owner/Saves/calculator/slot-0.json',b'not valid JSON')
+        self.run_feature('calculator-corrupt')
+        self.assertEqual(path.read_bytes(),b'not valid JSON')
 
     def test_world_map_ui_follows_current_fix_and_releases_bitmap(self):
         self.write('POS/System/Assets/world.map',(ROOT/'sd-payload/System/Assets/world.map').read_bytes())

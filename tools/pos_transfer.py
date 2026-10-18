@@ -3,7 +3,10 @@
 import argparse
 import asyncio
 import hashlib
-import getpass
+import contextlib
+import json
+import threading
+import time
 import http.client
 import ipaddress
 import secrets
@@ -20,6 +23,7 @@ import zlib
 SERVICE = '73f5ae10-5c12-4b83-9d48-bae023504f53'
 RX = '73f5ae11-5c12-4b83-9d48-bae023504f53'
 TX = '73f5ae12-5c12-4b83-9d48-bae023504f53'
+VERSION = "0.6.11-dev"
 MAX_SIZE = 0x7fffffff
 
 
@@ -348,11 +352,17 @@ async def linux_session(args):
         intro = await bus.introspect('org.bluez', path)
         return bus.get_proxy_object('org.bluez', path, intro).get_interface(interface)
 
-    agent_manager = await proxy('/org/bluez', 'org.bluez.AgentManager1')
+    try:
+        agent_manager = await proxy('/org/bluez', 'org.bluez.AgentManager1')
+    except BaseException:
+        bus.disconnect()
+        raise
     agent_path = '/org/pos/agent'
     bus.export(agent_path, Agent())
+    agent_registered = False
     try:
         await agent_manager.call_register_agent(agent_path, 'DisplayYesNo')
+        agent_registered = True
         await agent_manager.call_request_default_agent(agent_path)
         if args.action == 'send':
             print('On Cardputer: Share → Receive BLE file. Scanning...')
@@ -576,7 +586,10 @@ async def linux_session(args):
         if receiver:
             receiver.close()
         try:
-            await agent_manager.call_unregister_agent(agent_path)
+            if agent_registered:
+                await agent_manager.call_unregister_agent(agent_path)
+        except Exception:
+            pass  # Disconnect also withdraws registrations if BlueZ disappeared.
         finally:
             bus.disconnect()
 
@@ -593,13 +606,53 @@ def wifi_address(value):
     return str(address), parsed.port or 8080
 
 
+@contextlib.contextmanager
+def transfer_phase(label, progress):
+    """Keep long pre-transfer/hash waits visible without buffering file data."""
+    progress(label + '...')
+    stop = threading.Event()
+    started = time.monotonic()
+    def heartbeat():
+        while not stop.wait(2):
+            progress(f'{label}... {int(time.monotonic()-started)}s (Ctrl+C cancels)')
+    thread = threading.Thread(target=heartbeat, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join()
+
+
+def bluetooth_error(error):
+    text = str(error)
+    if (any(value in text for value in ('org.bluez', 'ServiceUnknown', 'system_bus_socket',
+                                       'Connection refused', 'No BLE adapters', 'No Bluetooth adapter'))
+            or (isinstance(error, FileNotFoundError) and error.filename is None)):
+        return ('Linux Bluetooth is unavailable: BlueZ is missing or no Bluetooth adapter is exposed. '
+                'ChromeOS Bluetooth pairing does not give Crostini access. Use Wi-Fi here, '
+                'or native Linux with a Bluetooth adapter and the BlueZ service running.')
+    return None
+
+
 def wifi_transfer(action, source, folder, address, key, save_name=None, progress=print):
     host, port = wifi_address(address)
     if not re.fullmatch('[0-9a-fA-F]{16}', key):
         raise ValueError('The session key must have exactly 16 hexadecimal characters.')
-    connection = http.client.HTTPConnection(host, port, timeout=120)
-    headers = {'Authorization': 'Bearer ' + key.lower()}
+    connection = http.client.HTTPConnection(host, port, timeout=15)
+    headers = {'Authorization': 'Bearer ' + key.lower(), 'Connection': 'close'}
     try:
+        with transfer_phase('Checking Cardputer and session key', progress):
+            connection.request('GET', '/status', headers=headers)
+            status = connection.getresponse()
+            if status.status != 200:
+                raise ValueError(f'Cardputer returned HTTP {status.status}. Check the temporary session key and keep its transfer screen open.')
+            metadata = json.loads(status.read(4097))
+            if metadata.get('format') != 1 or metadata.get('model') != 'm5stack-cardputer-adv':
+                raise ValueError('That address is not a POS Cardputer transfer session.')
+        progress('Connected to POS ' + str(metadata.get('version', '')))
+        connection.close()
+        connection = http.client.HTTPConnection(host, port, timeout=120)
         if action == 'send':
             # Hash and send the same open file; never load it all into RAM.
             filename(source.name)
@@ -607,7 +660,8 @@ def wifi_transfer(action, source, folder, address, key, save_name=None, progress
                 size = os.fstat(file.fileno()).st_size
                 if size > MAX_SIZE:
                     raise ValueError('Files must be smaller than 2 GiB.')
-                sha = digest(file)
+                with transfer_phase('Calculating source SHA-256', progress):
+                    sha = digest(file)
                 file.seek(0)
                 connection.putrequest('POST', '/upload?name=' + quote(source.name, safe=''))
                 for name, value in {**headers, 'Content-Length': str(size), 'X-POS-SHA256': sha}.items():
@@ -621,7 +675,8 @@ def wifi_transfer(action, source, folder, address, key, save_name=None, progress
                     connection.send(chunk)
                     remaining -= len(chunk)
                     progress(f'Sending: {(size-remaining)*100//size}%')
-            response = connection.getresponse()
+            with transfer_phase('Cardputer is verifying and saving the upload', progress):
+                response = connection.getresponse()
             if response.status != 200:
                 raise ValueError(f'Cardputer returned HTTP {response.status}: ' + response.read(1024).decode(errors='replace'))
             message = response.read(1024).decode(errors='replace')
@@ -630,7 +685,8 @@ def wifi_transfer(action, source, folder, address, key, save_name=None, progress
             progress('Sent and verified in Cardputer Downloads.')
             return
         connection.request('GET', '/download', headers=headers)
-        response = connection.getresponse()
+        with transfer_phase('Cardputer is preparing the selected file', progress):
+            response = connection.getresponse()
         if response.status != 200:
             raise ValueError(f'Cardputer returned HTTP {response.status}. Select a file on POS and check the session key.')
         sha = response.getheader('X-POS-SHA256', '')
@@ -648,15 +704,19 @@ def wifi_transfer(action, source, folder, address, key, save_name=None, progress
         part = folder / ('.pos-wifi-' + secrets.token_hex(8) + '.part')
         h = hashlib.sha256()
         received = 0
+        reported = 0
         try:
             with os.fdopen(secure_open(part, os.O_CREAT | os.O_EXCL | os.O_WRONLY), 'wb') as file:
-                while chunk := response.read(65536):
+                while chunk := response.read1(8192):
                     received += len(chunk)
                     if received > MAX_SIZE:
                         raise ValueError('File exceeds the 2 GiB limit.')
                     file.write(chunk)
                     h.update(chunk)
-                    progress(f'Received: {received:,} bytes')
+                    now = time.monotonic()
+                    if not reported or now-reported >= .25:
+                        progress(f'Received: {received:,} bytes')
+                        reported = now
                 file.flush()
                 os.fsync(file.fileno())
             if response.length not in (None, 0):
@@ -680,6 +740,7 @@ def wifi_transfer(action, source, folder, address, key, save_name=None, progress
 
 def main():
     parser = argparse.ArgumentParser(description='POS Transfer — Bluetooth and Wi-Fi files. Ctrl+C cancels.')
+    parser.add_argument('--version', action='version', version='POS Transfer ' + VERSION)
     parser.add_argument('action', nargs='?', choices=['send', 'receive'])
     parser.add_argument('file', nargs='?', type=Path)
     transport = parser.add_mutually_exclusive_group()
@@ -708,7 +769,7 @@ def main():
         print('On POS: Share → Receive Wi-Fi files / PC.' if args.action == 'send' else
               'On POS: Files → choose file → Share → Wi-Fi file transfer.')
         address = args.address or input('Cardputer IP shown on screen: ').strip()
-        key = getpass.getpass('Session key shown on Cardputer: ').strip()
+        key = input('Session key shown on Cardputer (visible): ').strip()
         wifi_transfer(args.action, args.file, args.folder, address, key, args.name)
         return
     if sys.platform != 'linux':
@@ -735,7 +796,19 @@ def main():
             command.append(str(args.file))
         command.extend(['--bluetooth', '--folder', str(args.folder)])
         os.execv(str(python), command)
-    asyncio.run(linux_session(args))
+    try:
+        asyncio.run(linux_session(args))
+    except Exception as error:
+        explanation = bluetooth_error(error)
+        if not explanation:
+            raise
+        print(explanation)
+        if input('Use Wi-Fi instead for this transfer? [Y/n] ').strip().lower() not in ('', 'y'):
+            return
+        print('Open the Wi-Fi file-transfer session on POS and leave it open.')
+        address = args.address or input('Cardputer IP shown on screen: ').strip()
+        key = input('Session key shown on Cardputer (visible): ').strip()
+        wifi_transfer(args.action, args.file, args.folder, address, key, args.name)
 
 
 if __name__ == '__main__':

@@ -23,6 +23,12 @@ spec.loader.exec_module(ble)
 async def run(address, folder):
     os.environ['DBUS_SYSTEM_BUS_ADDRESS'] = address
     bluez = await MessageBus(bus_address=address).connect()
+    try:
+        await asyncio.wait_for(ble.linux_session(SimpleNamespace(action='receive', folder=folder)),5)
+    except Exception as error:
+        assert 'Crostini' in (ble.bluetooth_error(error) or ''), repr(error)
+    else:
+        raise AssertionError('Missing BlueZ must fail clearly before transferring')
     await bluez.request_name('org.bluez')
     registered = asyncio.Event()
     owner = None
@@ -128,7 +134,7 @@ async def run(address, folder):
         await asyncio.gather(task, return_exceptions=True)
         bluez.disconnect()
     assert set(unregistered) == {'app', 'adv', 'agent'}, unregistered
-    print('PASS: private D-Bus GATT registration, authenticated flags, numeric-comparison agent, file offer/accept/chunks/disconnect/resume/hash/publication and cleanup (no physical BLE).')
+    print('PASS: missing BlueZ explained; private D-Bus GATT registration, authenticated flags, numeric-comparison agent, file offer/accept/chunks/disconnect/resume/hash/publication and cleanup (no physical BLE).')
 
 
 if __name__ == '__main__':

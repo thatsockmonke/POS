@@ -1,59 +1,62 @@
-# POS 0.6.10-dev
+# POS 0.6.11-dev
 
-Adds a simple Linux PC file-transfer tool with Bluetooth and Wi-Fi, explicit
-PC guidance in Share, white saved-map boundaries, and OpenStreetMap downloads
-up to 4 km. Existing settings, maps and partition layout remain compatible.
+Adds Calculator, addresses silent PC transfer waits and missing-BlueZ errors,
+reduces OSM SD work and suppresses delayed UI beeps during loading.
 
-## POS Transfer
+## Calculator
 
-Download **pos-transfer** from this release and run:
+Open **Calculator** from the launcher. Type `1/3+1/6`, `sqrt(2)`, `2^3`, `a=12`,
+then `a/4`, and press Enter. It has a visible keypad, grouped scientific-function
+buttons, saved a–z variables/Ans, DEG/RAD, statistics/combinations and fraction/
+decimal answers. Tab opens tools; Ctrl+K or Tools switches typing/keypad modes so
+punctuation stays usable while typing and bare arrow legends navigate the keypad.
+
+CAS supports polynomial simplification/expansion, derivatives/integrals through
+degree 8 and linear/quadratic equation solving, including complex roots. It uses
+double precision and bounded rational display, not unrestricted exact algebra.
+Unsupported expressions and excessive nesting/output fail explicitly. Esc/global
+Home closes normally. See [CALCULATOR.md](CALCULATOR.md).
+
+## PC transfers
+
+Replace the old **pos-transfer** executable with this release's download. Run:
 
 ```sh
-python3 ~/Downloads/pos-transfer
+python3 /path/to/pos-transfer
 ```
 
-Choose **Send to Cardputer** or **Receive from Cardputer**, then **Wi-Fi** or
-**Bluetooth**. Wi-Fi needs no Python helpers; use the temporary IP/session key
-shown on POS. Bluetooth offers a one-time private helper installation and uses
-numeric-comparison pairing. Transfers stream and verify SHA-256 before completion;
-existing files are protected. Bluetooth supports same-file resume; Wi-Fi retries
-start fresh. Received Linux files go into `~/Downloads/POS` by default.
+The temporary Wi-Fi key is now visible. The tool checks the device/key first,
+shows hashing/preparation/verification waits and progress as soon as download data
+arrives. POS itself shows copying/SD verification/completion progress. Keep the
+transfer session open until the tool confirms completion.
 
-The same tool is inside the USB/SD bundle. Share labels and help now acknowledge
-POS/PC transfers; Bluetooth sender help explains Linux Receive mode, and Wi-Fi
-screens mention POS Transfer alongside browser use. Wi-Fi exports preserve the
-original filename for the new PC client. See [TRANSFER.md](TRANSFER.md).
+`org.bluez` missing means Linux has no BlueZ service, commonly because Crostini
+cannot access ChromeOS Bluetooth. The tool explains this and offers Wi-Fi; it
+cannot provide an unavailable Bluetooth adapter. Wi-Fi needs no Bluetooth helpers.
+Use a trusted LAN: this existing session is keyed local HTTP. See [TRANSFER.md](TRANSFER.md).
 
-Wi-Fi is local HTTP with a temporary key, for trusted LANs. Crostini usually can
-use Wi-Fi but often has no Bluetooth access. Bluetooth receiving requires a BLE
-peripheral-capable Linux adapter. No phone OBEX or Bluetooth Classic support is
-claimed.
+## Maps and sounds
 
-## Maps
+OSM import avoids discarded-way node lookups, uses a sparse RAM index/4 KiB page
+cache, buffers small objects and reuses one scratch file for larger ones. One
+identical-output fixture drops from 40,718 to 3 file seeks and 2,020 to 19 file
+opens. Actual Cardputer timing remains to measure. Regions and graphs still
+stream from SD; existing map files need no redownload.
 
-All providers accept explicit **500 m, 1 km, 2 km and 4 km squares**. Direct OSM
-uses one bounded API request; dense areas can still exceed the service's node
-limit or POS geometry limits. XML downloads remain on SD, capped at 64 MiB;
-node references use on-SD indexing/external sorting, and viewports use 2,640-byte
-raster buffers. No whole map is loaded into RAM. No automatic bulk subdivision
-or background location request is added. Provider labels clarify worldwide coverage.
+Map loading/raster work and LAN transfers temporarily pause UI cues, drop delayed
+beeps and restore the saved sound settings afterward. Playback/microphone resource
+ownership remains independent. See [BUG_REPORT_0.6.11.md](BUG_REPORT_0.6.11.md).
 
-A white square outlines each saved region in its geographic location. It pans
-and zooms with the map; zoom out to see all four edges on the short screen.
-Off-screen edges are not incorrectly pinned to the display border.
+## Update and validation
 
-## Updates and testing
+Use **Settings → System → Software Update**. No SD format or partition migration
+is needed. The PC tool must be downloaded separately; device OTA cannot update
+files on your computer. Factory recovery and both safe OTA slots remain.
 
-Use **Settings → System → Software Update**. No SD format or map redownload is
-required. The PC tool is downloaded separately; device OTA cannot replace your
-computer's files. Signed-update verification, factory recovery and two safe OTA
-slots remain unchanged.
-
-Host tests cover both transfer directions, partial resume/duplicate chunks,
-hashes, cancellation, malformed offers, symlinks, existing-file/publication races,
-Wi-Fi upload/download/authentication/hash/truncation/redirect protection,
-map query sizes and boundary rendering. A real private D-Bus exercises the Linux
-GATT/agent/advertisement interfaces against simulated BlueZ, including cleanup.
-Both firmware roles and release bundles are checked before publication.
-**Physical Linux/Cardputer BLE pairing, adapter/Crostini access, Wi-Fi/SD throughput,
-GPS map placement and interrupted hardware transfers remain unverified in cloud.**
+All **431 host tests pass**. Native regressions cover scientific math/CAS, actual keypad/text input and saved
+variables, HTTP streaming/progress/integrity and BlueZ fallback, D-Bus GATT
+transfer/resume/cleanup, map output/I/O bounds and nested sound holds. Both firmware
+roles and matching packages are verified before release. Physical Cardputer,
+Crostini/network/BLE, SD throughput, audio timing and power-loss checks remain
+unverified in cloud; the exact reported physical Wi-Fi stall is not claimed to
+have been reproduced here.

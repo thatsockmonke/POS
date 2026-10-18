@@ -28,6 +28,9 @@
 #include <time.h>
 
 uint32_t esp_random(void) { return 0x13572468u; }
+static char calculator_answer[100];
+static unsigned audio_holds, wifi_activity_steps, wifi_activity_seen;
+static bool wifi_activity_test;
 static bool maps_download_test, maps_guidance_seen, maps_turn_seen;
 static bool map_controls_record;
 static struct {
@@ -243,6 +246,14 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout) {
   return true;
 }
 void pos_device_show(const pos_view_t *view) {
+  if (wifi_activity_test && !strcmp(view->lines[0], "PC file transfer")) {
+    if (!strcmp(view->lines[6], "Transferring")) wifi_activity_seen |= 1;
+    if (!strcmp(view->lines[6], "Verifying on microSD")) wifi_activity_seen |= 2;
+    if (!strcmp(view->lines[6], "Transfer complete")) wifi_activity_seen |= 4;
+  }
+  if (!strncmp(view->lines[0], "Calculator /", 12)) {
+    snprintf(calculator_answer,sizeof(calculator_answer),"%s%s%s",view->lines[4],view->lines[5],view->lines[6]);
+  }
   assert(!display_hidden);
   for (unsigned row = 0; row < POS_ROWS; ++row) {
     assert(!strstr(view->lines[row], "Old vault passphrase"));
@@ -588,6 +599,16 @@ static int wifi_ui_tests(const char *root, const char *mode) {
     pos_ui_wifi(root);
     assert(fake_auto && fake_network.connected);
     assert(!pos_network_known(&profiles) && !profiles.count);
+  } else if (!strcmp(mode, "wifi-ui-progress")) {
+    fake_network.connected = true;
+    strcpy(fake_network.ip, "192.0.2.1");
+    wifi_activity_test = true;
+    push_key(POS_KEY_ENTER, 0); /* LAN notice */
+    push_key(POS_KEY_ENTER, 0); /* Start */
+    for(unsigned i=0;i<3;++i)ui_events[ui_count++]=(pos_event_t){INT_MIN,0,false};
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_wifi_export(root, "");
+    assert(wifi_activity_seen == 7 && !audio_holds && !share_active);
   } else {
     fake_network.connected = true;
     strcpy(fake_network.ip, "192.0.2.1");
@@ -1141,7 +1162,7 @@ static int picker_tests(void) {
   return 0;
 }
 static int launcher_tests(const char *root) {
-  assert(POS_LAUNCHER_APP_COUNT == 16);
+  assert(POS_LAUNCHER_APP_COUNT == 17);
   pos_event_t event = {POS_KEY_UP, 0, true};
   assert(pos_launcher_action(&event) == POS_KEY_ENTER);
   event.key = POS_KEY_ENTER;
@@ -1788,6 +1809,29 @@ static int apps_ui(const char *root, const char *mode) {
 int main(int argc, char **argv) {
   if (argc < 3)
     return 2;
+  if (!strncmp(argv[2], "calculator-", 11)) {
+    const char *mode=argv[2];
+    if (!strcmp(mode,"calculator-corrupt")) push_key(POS_KEY_ENTER,0);
+    if (!strcmp(mode,"calculator-buttons")) {
+      push_key(POS_KEY_UP,0);push_key(POS_KEY_ENTER,0);
+      push_key('+',0);push_key(POS_KEY_UP,0);push_key(POS_KEY_ENTER,0);push_key(POS_KEY_DOWN,0);push_key(POS_KEY_ENTER,0);
+    } else {
+      const char *text=!strcmp(mode,"calculator-punctuation")?"mean(.5,1.5)/2":!strcmp(mode,"calculator-read")?"a/4":!strcmp(mode,"calculator-cas")?"x^2-5*x+6=0":"a=12";
+      for(;*text;++text)push_key(*text,0);
+      if (!strcmp(mode,"calculator-cas")) {
+        push_key('\t',0);keys_down(3);push_key(POS_KEY_ENTER,0);push_key(POS_KEY_ENTER,0);
+      }else push_key(POS_KEY_ENTER,0);
+    }
+    push_key(POS_KEY_ESCAPE,0);
+    pos_ui_calculator(argv[1]);
+    if(!strcmp(mode,"calculator-cas"))assert(!strcmp(calculator_answer,"x = 3 or 2"));
+    else if(!strcmp(mode,"calculator-punctuation"))assert(!strcmp(calculator_answer,"1/2 = 0.5"));
+    else if(!strcmp(mode,"calculator-read"))assert(!strcmp(calculator_answer,"3"));
+    else if(!strcmp(mode,"calculator-buttons"))assert(!strcmp(calculator_answer,"6"));
+    else assert(!strcmp(calculator_answer,"12"));
+    assert(ui_next==ui_count);
+    return 0;
+  }
   if (strstr(argv[2], "-ui-") && strncmp(argv[2], "editor-ui-", 10) &&
       strncmp(argv[2], "wifi-ui-", 8) && strncmp(argv[2], "settings-ui-", 12))
     return apps_ui(argv[1], argv[2]);
@@ -2088,3 +2132,12 @@ bool pos_microphone_active(void) {
   return microphone_starts > microphone_stops;
 }
 size_t pos_microphone_pending(void) { return microphone_backlog * 256; }
+
+pos_transfer_status_t pos_network_share_activity(void) {
+  if (!wifi_activity_test) return (pos_transfer_status_t){0};
+  unsigned phase=++wifi_activity_steps;if(phase>3)phase=3;
+  return (pos_transfer_status_t){phase,phase==3?100:50,100};
+}
+
+void pos_audio_feedback_hold(bool hold) {if(hold)++audio_holds;else {assert(audio_holds);--audio_holds;}}
+__attribute__((destructor)) static void verify_audio_released(void){assert(!audio_holds);}

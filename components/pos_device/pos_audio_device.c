@@ -12,6 +12,7 @@
 enum { AUDIO_IDLE, AUDIO_CUE, AUDIO_PLAYBACK, AUDIO_CAPTURE };
 static atomic_uint audio_owner, feedback_config, feedback_pending;
 static atomic_bool feedback_stopping;
+static atomic_uint feedback_holds;
 static SemaphoreHandle_t feedback_exited;
 static bool feedback_running;
 static bool claim(unsigned owner) {
@@ -153,7 +154,7 @@ static void cue(pos_sound_t kind, unsigned volume) {
   static const unsigned variations[] = {0, 2, 4, 7, 9};
   unsigned variation = startup ? 0 : variations[esp_random() % 5];
   uint32_t phase = 0, harmony = 0;
-  for (unsigned at = 0; at < frames;) {
+  for (unsigned at = 0; at < frames && !atomic_load(&feedback_holds);) {
     int16_t pcm[160 * 2];
     unsigned n = frames - at < 160 ? frames - at : 160;
     for (unsigned i = 0; i < n; ++i) {
@@ -186,17 +187,18 @@ static void cue(pos_sound_t kind, unsigned volume) {
   /* Send silence through all four DMA descriptors before muting the codec.
    * This drains the cue and avoids truncation/clicks without blocking input. */
   int16_t silence[256 * 2] = {0};
-  for (unsigned i = 0; i < 4; ++i)
+  for (unsigned i = 0; i < 4 && !atomic_load(&feedback_holds); ++i)
     if (audio_write(silence, 256, 16000, NULL))
       break;
-  vTaskDelay(pdMS_TO_TICKS(70));
+  if (!atomic_load(&feedback_holds))
+    vTaskDelay(pdMS_TO_TICKS(70));
 }
 static void feedback_task(void *unused) {
   (void)unused;
   while (!atomic_load(&feedback_stopping)) {
     unsigned pending = atomic_exchange(&feedback_pending, 0);
     unsigned config = atomic_load(&feedback_config);
-    if (pending && (config & 256)) {
+    if (pending && (config & 256) && !atomic_load(&feedback_holds)) {
       unsigned kind = pending - 1;
       bool allowed =
           kind == POS_SOUND_PREVIEW ||
@@ -238,7 +240,7 @@ int pos_audio_feedback_configure(bool enabled, unsigned volume, bool keys,
 }
 void pos_audio_feedback(pos_sound_t sound) {
   if (sound < 0 || sound >= POS_SOUND_COUNT || !feedback_running ||
-      atomic_load(&audio_owner) != AUDIO_IDLE)
+      atomic_load(&audio_owner) != AUDIO_IDLE || atomic_load(&feedback_holds))
     return;
   unsigned config = atomic_load(&feedback_config);
   if (!(config & 256) || !(config & 127))
@@ -247,6 +249,21 @@ void pos_audio_feedback(pos_sound_t sound) {
       !(config & (sound <= POS_SOUND_BACK ? 512 : 1024)))
     return;
   atomic_store(&feedback_pending, (unsigned)sound + 1);
+}
+void pos_audio_feedback_hold(bool hold) {
+  if (hold) {
+    atomic_fetch_add(&feedback_holds, 1);
+    atomic_store(&feedback_pending, 0);
+    /* Let the audio worker release its own hardware; never seize a microphone
+     * or music player's resources from a UI loading screen. */
+    while (atomic_load(&audio_owner) == AUDIO_CUE)
+      vTaskDelay(1);
+  } else {
+    unsigned depth = atomic_load(&feedback_holds);
+    while (depth &&
+           !atomic_compare_exchange_weak(&feedback_holds, &depth, depth - 1)) {
+    }
+  }
 }
 void pos_audio_feedback_shutdown(void) {
   atomic_store(&feedback_config, 0);

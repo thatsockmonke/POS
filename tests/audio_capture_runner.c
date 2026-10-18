@@ -537,6 +537,20 @@ int main(void) {
   pos_audio_feedback(POS_SOUND_NAV);
   wait_cue();
   assert(first_note != atomic_load(&waveform));
+  pos_audio_feedback_hold(true);
+  pos_audio_feedback_hold(true);
+  writes = atomic_load(&output_writes);
+  pos_audio_feedback(POS_SOUND_NAV);
+  vTaskDelay(30);
+  assert(atomic_load(&output_writes) == writes);
+  pos_audio_feedback_hold(false);
+  pos_audio_feedback(POS_SOUND_NAV);
+  vTaskDelay(30);
+  assert(atomic_load(&output_writes) == writes);
+  pos_audio_feedback_hold(false);
+  pos_audio_feedback(POS_SOUND_NAV);
+  wait_cue();
+  assert(atomic_load(&output_writes) > writes);
   pos_audio_feedback_shutdown();
   for (unsigned i = 0; i < 100 && atomic_load(&active_tasks); ++i)
     delay();
