@@ -112,8 +112,8 @@ static esp_err_t mount_sd(void) {
     else
       ESP_LOGE(TAG,
                "Unreadable/corrupt card, unsupported filesystem, or SD I/O "
-               "error: %s. Nothing formatted",
-               esp_err_to_name(err));
+               "error: 0x%x. Nothing formatted",
+               (unsigned)err);
     return err;
   }
   sdmmc_card_print_info(stdout, card);

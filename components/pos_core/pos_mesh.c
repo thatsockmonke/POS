@@ -949,7 +949,8 @@ int pos_mesh_send(pos_mesh_t *s, unsigned ch, uint32_t to, unsigned port,
     memcpy(m.data.payload, p, n);
   m.pki = to != UINT32_MAX && port != POS_MESH_USER &&
           port != POS_MESH_POSITION && port != POS_MESH_ROUTING &&
-          port != POS_MESH_TRACEROUTE;
+          port != POS_MESH_TRACEROUTE && port != POS_MESH_TELEMETRY &&
+          port != POS_MESH_STORE_FORWARD;
   return send_message(s, &m, now, 1);
 }
 int pos_mesh_announce(pos_mesh_t *s, uint32_t to, bool discover, uint64_t now) {
@@ -1398,4 +1399,169 @@ int pos_mesh_unenvelope(const void *envelope, size_t length,
   pos_mesh_header_t h;
   wire[12] |= 16;
   return more < 0 || !encrypted || pos_mesh_header(wire, *size, &h) ? -1 : 0;
+}
+
+#include "pos_mesh_modules.h"
+#include <math.h>
+int pos_mesh_telemetry_decode(const void *p, size_t n,
+                              pos_mesh_telemetry_t *t) {
+  if (!p || n > 233)
+    return -1;
+  memset(t, 0, sizeof(*t));
+  reader_t r = {p, (const uint8_t *)p + n};
+  field_t f;
+  int status;
+  bool seen = false;
+  while ((status = field(&r, &f)) > 0) {
+    if (f.field == 1) {
+      if (f.type != 5)
+        return -1;
+      t->time = (uint32_t)f.value;
+    } else if (f.field >= 2 && f.field <= 9) {
+      if (f.type != 2 || seen)
+        return -1;
+      seen = true;
+      t->kind = f.field;
+      if (f.field != 2 && f.field != 3 && f.field != 5)
+        continue;
+      reader_t sub = {f.p, f.p + f.n};
+      field_t v;
+      int k;
+      unsigned max = f.field == 2 ? 5 : f.field == 3 ? 22 : 16;
+      while ((k = field(&sub, &v)) > 0) {
+        if (v.field > max)
+          continue;
+        bool integer =
+            (f.field == 2 && (v.field == 1 || v.field == 5)) ||
+            (f.field == 3 && (v.field == 7 || v.field == 13 || v.field == 21));
+        if (v.type != (integer ? 0 : 5) || v.value > UINT32_MAX)
+          return -1;
+        double value;
+        if (integer)
+          value = (uint32_t)v.value;
+        else {
+          uint32_t bits = v.value;
+          float fl;
+          memcpy(&fl, &bits, 4);
+          value = fl;
+          if (!isfinite(value))
+            return -1;
+        }
+        if (t->present & (1u << (v.field - 1)))
+          return -1;
+        t->values[v.field - 1] = value;
+        t->present |= 1u << (v.field - 1);
+      }
+      if (k < 0)
+        return -1;
+    }
+  }
+  return status < 0 || !seen ? -1 : 0;
+}
+size_t pos_mesh_telemetry_device(uint8_t out[64], uint32_t utc, int mv,
+                                 uint32_t uptime) {
+  uint8_t sub[32];
+  size_t n = 0;
+  n += number(sub + n, 5, uptime);
+  if (mv > 0) {
+    float v = mv / 1000.0f;
+    uint32_t bits;
+    memcpy(&bits, &v, 4);
+    n += fixed(sub + n, 2, bits);
+  }
+  size_t k = 0;
+  if (utc)
+    k += fixed(out + k, 1, utc);
+  k += bytes(out + k, 2, sub, n);
+  return k;
+}
+int pos_mesh_store_decode(const void *p, size_t n, pos_mesh_store_t *s) {
+  if (!p || n > 233)
+    return -1;
+  memset(s, 0, sizeof(*s));
+  reader_t r = {p, (const uint8_t *)p + n};
+  field_t f;
+  int status;
+  bool rr = false;
+  while ((status = field(&r, &f)) > 0) {
+    if (f.field == 1) {
+      if (rr || f.type || f.value > 106)
+        return -1;
+      s->rr = f.value;
+      rr = true;
+    } else if (f.field >= 2 && f.field <= 5) {
+      if (f.type != 2 || s->variant)
+        return -1;
+      s->variant = f.field;
+      if (f.field == 5) {
+        if (f.n > 220 || memchr(f.p, 0, f.n))
+          return -1;
+        memcpy(s->text, f.p, f.n);
+        s->length = f.n;
+      } else {
+        reader_t sub = {f.p, f.p + f.n};
+        field_t v;
+        int k;
+        while ((k = field(&sub, &v)) > 0) {
+          if (v.type || v.value > UINT32_MAX)
+            return -1;
+          if (s->variant == 2 && v.field >= 1 && v.field <= 9)
+            s->stats[v.field - 1] = (uint32_t)v.value;
+          if (v.field == 1)
+            s->count = v.value;
+          if (v.field == 2)
+            s->window = v.value;
+          if (v.field == 3)
+            s->last_request = v.value;
+        }
+        if (k < 0)
+          return -1;
+      }
+    }
+  }
+  return status < 0 || !rr ? -1 : 0;
+}
+size_t pos_mesh_store_encode(const pos_mesh_store_t *s, uint8_t out[233]) {
+  if (s->length > 220 || s->rr > 106)
+    return 0;
+  size_t n = number(out, 1, s->rr);
+  if (s->variant == 5)
+    n += bytes(out + n, 5, s->text, s->length);
+  if (s->variant == 2) {
+    uint8_t sub[64];
+    size_t k = 0;
+    for (unsigned i = 0; i < 9; ++i)
+      k += number(sub + k, i + 1, s->stats[i]);
+    n += bytes(out + n, 2, sub, k);
+  }
+  if (s->variant == 3 || s->variant == 4) {
+    uint8_t sub[24];
+    size_t k = number(sub, 1, s->count);
+    k += number(sub + k, 2, s->window);
+    if (s->variant == 3)
+      k += number(sub + k, 3, s->last_request);
+    n += bytes(out + n, s->variant, sub, k);
+  }
+  return n;
+}
+int pos_mesh_channel_token(const pos_mesh_config_t *c, unsigned ch,
+                           uint8_t out[32]) {
+  uint8_t key[32], input[48] = {0};
+  int n = pos_mesh_key(c, ch, key);
+  if (n < 0)
+    return -1;
+  memcpy(input, key, 32);
+  memcpy(input + 32, c->channels[ch].name, 12);
+  input[44] = (uint8_t)n;
+  input[45] = (uint8_t)ch;
+#ifdef ESP_PLATFORM
+  int result = mbedtls_sha256(input, sizeof(input), out, 0);
+#else
+  unsigned size = 0;
+  int result =
+      !EVP_Digest(input, sizeof(input), out, &size, EVP_sha256(), NULL);
+#endif
+  pos_secure_zero(key, sizeof(key));
+  pos_secure_zero(input, sizeof(input));
+  return result;
 }

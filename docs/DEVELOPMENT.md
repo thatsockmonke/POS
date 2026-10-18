@@ -166,3 +166,14 @@ and a native filesystem. CI requires it. Without that variable those specific
 Mbed TLS/service checks are explicitly skipped; the OpenSSL/mesh tests still run.
 No physical SX1262, FAT32 timing, mesh router or Meshtastic radio is simulated as
 hardware evidence. See MESHTASTIC.md and BUG_REPORT_0.7.0.md.
+
+
+## 0.8.1 release-size build
+
+The pinned GCC 14.2 toolchain uses `-Oz` and POS-component-only LTO, with one
+partition for cross-file size optimization. SDK/prebuilt hardware libraries stay
+outside LTO. CMake removes ESP-IDF's default `-fno-lto` only from the final POS
+link and locates the matching GCC plugin. `POS_OPTIMIZE_LINK=OFF` is available for
+diagnostics, but an unoptimized runtime can exceed the unchanged OTA slot.
+Both runtime and installer must pass ordinary IDF size checks before packaging.
+Assertions, panic/backtraces, certificate validation and signed updates remain.

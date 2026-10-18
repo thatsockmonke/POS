@@ -106,7 +106,7 @@ returning to POS radio. Large logs and resources remain on SD.
 
 This is **POS interoperability**, not the complete upstream Meshtastic firmware.
 It does not provide the Meshtastic mobile/USB client API, remote admin,
-telemetry modules, store-and-forward, compressed-text decoding,
+compressed-text decoding,
 key-verification handshake or every upstream routing role/module. POS handles
 standard text, node info, position and routing acknowledgements; unsupported
 application payloads are not presented as decoded text. POS/PC BLE file sharing
@@ -206,3 +206,53 @@ protobuf fixtures; they do not establish an on-device TLS/radio test result.
 
 Checking software updates closes the MQTT session to free its TLS heap. Start
 the bridge again afterwards if the check does not install/reboot.
+
+## 0.8.1 telemetry
+
+**Radio → Telemetry → Received telemetry** shows the latest eight node/type
+reports, their age and available device, environment or power readings with
+units. Missing values stay absent. Unknown telemetry variants are identified
+without fabricating sensors. **Request device telemetry** targets a node;
+**Share device telemetry once** broadcasts actual battery voltage and uptime.
+POS does not claim a fuel-gauge reading or environmental sensors it lacks.
+
+Automatic replies to direct device-metric requests are off by default; enable
+explicitly in Telemetry. Responses are limited to one per minute and obey the
+existing TX consent, queue, CAD and airtime gates. Telemetry never includes GPS,
+never enters the text-only MQTT bridge and uses standard port 67 protobufs.
+Reports are a bounded session cache; the app does not promise archival telemetry.
+
+## 0.8.1 store-and-forward
+
+**Radio → Store and forward → Request missed messages** selects a matching
+channel and server node, then a 1–1440 minute window. Abort stops a POS server's
+pending replay. Responses appear in Status and Conversations. A server must be
+reachable and enabled; a quiet/lossy mesh does not guarantee retrieval.
+
+The optional **SD history server** caches up to 128 received broadcast texts on
+one explicitly selected channel. It excludes private/direct messages and texts
+over 198 bytes, and returns at most 20 per request with at least five seconds
+between queued replies, within the existing airtime budget. One client is served
+at a time; another receives Busy. Disable stops pending history replies. Channel
+identity changes disable serving until the user enables it for the new channel.
+
+Cache slots are fixed-size, versioned, CRC checked, staged and read back before
+replacement. They are derived data in `Radio/store-forward`; original messages
+remain in ordinary `Radio/meshtastic.jsonl`. No known-good original is removed to
+make cache space. Valid UTC enforces the requested age window (at most 24 hours);
+without valid UTC only the current boot's records can be replayed. Cache files
+remain when disabled, so users can deliberately remove them through Files.
+
+Port 65 uses the official History, heartbeat and text protobuf envelope. POS
+accepts upstream history text with original sender/packet headers. Its server
+uses fresh server-owned packet IDs and a `!sender [original-id]: ` text prefix,
+avoiding nonce reuse when turning old text into a new encrypted envelope.
+POS restores attribution in its local conversation log; it never changes peer
+key identities from that prefix. Other clients can see the prefix. Bounded
+persistent duplicate tracking prevents repeated POS history requests from
+re-adding recent messages. It is not an unlimited historical archive or adaptive
+next-hop routing. Remote phone/admin APIs remain outside this release's scope.
+
+These modules use the official meshtastic 2.7.8 protobuf schemas independently
+from upstream implementation code. Tests cover wire fixtures and a simulated
+service; actual over-the-air interoperability and SD timing require hardware.

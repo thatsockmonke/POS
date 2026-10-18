@@ -186,7 +186,7 @@ void pos_ui_mesh_settings(const char *root) {
                            "Antenna / transmit settings",
                            "Back"};
     int a = pos_ui_menu("Radio protocol", items, 10);
-    if (a < 0 || a == 15)
+    if (a < 0 || a == 9)
       break;
     if (a == 8) {
       pos_ui_radio_transmit();
@@ -268,7 +268,7 @@ static bool peer(uint32_t *id, bool allow_broadcast) {
   }
   return true;
 }
-static int channel(void) {
+static int choose_channel(void) {
   pos_mesh_config_t *c = malloc(sizeof(*c));
   if (!c)
     return -1;
@@ -615,7 +615,7 @@ static void pos_ui_mesh_mqtt(const char *root) {
     return;
   strcpy(c->uri, "mqtts://mqtt.meshtastic.org:8883");
   strcpy(c->root, "msh/US");
-  int ch = channel();
+  int ch = choose_channel();
   if (ch < 0) {
     free(c);
     return;
@@ -647,6 +647,167 @@ static void pos_ui_mesh_mqtt(const char *root) {
   free(c);
 }
 
+static void telemetry_menu(void) {
+  while (!pos_home_pending()) {
+    bool tele, server;
+    unsigned channel;
+    pos_meshtastic_modules_status(&tele, &server, &channel);
+    char toggle[64];
+    snprintf(toggle, sizeof(toggle), "Auto reply with device stats: %s",
+             tele ? "on" : "off");
+    const char *items[] = {"Received telemetry", "Request device telemetry",
+                           "Share device telemetry once", toggle, "Back"};
+    int n = pos_ui_menu("Meshtastic telemetry", items, 5);
+    if (n < 0 || n == 4)
+      return;
+    pos_error_t e = {0};
+    if (n == 3) {
+      if (!tele) {
+        const char *yes[] = {"Cancel", "Allow battery voltage + uptime"};
+        if (pos_ui_menu("Reply to direct telemetry requests?", yes, 2) != 1)
+          continue;
+      }
+      if (pos_meshtastic_modules(!tele, server, channel, &e))
+        pos_ui_notice("Not saved", e.message);
+    }
+    if (n == 1 || n == 2) {
+      if (!tx_ready())
+        continue;
+      uint32_t id = UINT32_MAX;
+      int ch = choose_channel();
+      if (ch < 0 || (n == 1 && !peer(&id, false)))
+        continue;
+      int r = pos_meshtastic_telemetry_send(ch, id, n == 1, &e);
+      pos_ui_notice(
+          r ? "Not queued" : "Telemetry queued",
+          r ? e.message
+            : "Responses appear under Received telemetry. Only actual voltage "
+              "and uptime are shared; no GPS or invented sensor readings.");
+    }
+    if (n == 0) {
+      pos_mesh_telemetry_t *t = malloc(sizeof(*t));
+      char labels[8][64];
+      const char *rows[8];
+      unsigned indices[8], count = 0;
+      uint32_t id;
+      uint64_t at;
+      if (!t)
+        return;
+      for (unsigned i = 0; i < 8; ++i)
+        if (!pos_meshtastic_telemetry(i, &id, t, &at)) {
+          snprintf(
+              labels[count], 64, "!%08x type %u (%llu s ago)", (unsigned)id,
+              t->kind,
+              (unsigned long long)((esp_timer_get_time() / 1000 - at) / 1000));
+          indices[count] = i;
+          rows[count] = labels[count];
+          ++count;
+        }
+      int selected =
+          count ? pos_ui_menu("Recent telemetry (8 reports)", rows, count) : -1;
+      if (selected >= 0 &&
+          !pos_meshtastic_telemetry(indices[selected], &id, t, &at)) {
+        static const char *const device[] = {"Battery %", "Voltage V",
+                                             "Channel use %", "TX airtime %",
+                                             "Uptime s"};
+        static const char *const env[] = {
+            "Temperature C", "Humidity %",     "Pressure hPa", "Gas ohm",
+            "Voltage V",     "Current mA",     "IAQ",          "Distance mm",
+            "Lux",           "White lux",      "IR lux",       "UV lux",
+            "Wind degrees",  "Wind m/s",       "Weight kg",    "Gust m/s",
+            "Lull m/s",      "Radiation uR/h", "Rain 1h mm",   "Rain 24h mm",
+            "Soil %",        "Soil temp C"};
+        char body[1200];
+        size_t used = 0;
+        unsigned max = t->kind == 2   ? 5
+                       : t->kind == 3 ? 22
+                       : t->kind == 5 ? 16
+                                      : 0;
+        for (unsigned i = 0; i < max; ++i)
+          if (t->present & (1u << i)) {
+            char power[32];
+            snprintf(power, sizeof(power), "Power ch%u %s", i / 2 + 1,
+                     i % 2 ? "mA" : "V");
+            int k = snprintf(body + used, sizeof(body) - used, "%s: %.6g\n",
+                             t->kind == 2   ? device[i]
+                             : t->kind == 3 ? env[i]
+                                            : power,
+                             t->values[i]);
+            if (k < 0 || (size_t)k >= sizeof(body) - used)
+              break;
+            used += k;
+          }
+        if (!used)
+          snprintf(body, sizeof(body),
+                   "This telemetry variant has no supported readings. Device, "
+                   "environment and power metrics are supported.");
+        pos_ui_notice("Telemetry readings", body);
+      } else if (!count)
+        pos_ui_notice("No telemetry yet",
+                      "Request a known node or wait for "
+                      "device/environment/power broadcasts.");
+      free(t);
+    }
+  }
+}
+static void history_menu(void) {
+  while (!pos_home_pending()) {
+    bool tele, server;
+    unsigned channel;
+    pos_meshtastic_modules_status(&tele, &server, &channel);
+    char state[64];
+    snprintf(state, sizeof(state), "SD history server: %s (channel %u)",
+             server ? "on" : "off", channel + 1);
+    const char *items[] = {"Request missed messages", "Abort history request",
+                           state, "Controls / privacy", "Back"};
+    int n = pos_ui_menu("Store and forward", items, 5);
+    if (n < 0 || n == 4)
+      return;
+    pos_error_t e = {0};
+    if (n == 2) {
+      int ch = server ? (int)channel : choose_channel();
+      if (ch < 0)
+        continue;
+      if (!server) {
+        const char *yes[] = {"Cancel", "Enable broadcast cache"};
+        if (pos_ui_menu("Save this channel's public text on SD?", yes, 2) != 1)
+          continue;
+      }
+      if (pos_meshtastic_modules(tele, !server, ch, &e))
+        pos_ui_notice("Not saved", e.message);
+    }
+    if (n == 0 || n == 1) {
+      if (!tx_ready())
+        continue;
+      uint32_t id;
+      int ch = choose_channel();
+      unsigned window = 240;
+      if (ch < 0 || !peer(&id, false) ||
+          (n == 0 &&
+           (!integer("History window: 1-1440 minutes", &window, 1440) ||
+            !window)))
+        continue;
+      int r = pos_meshtastic_history(ch, id, window, n == 1, &e);
+      pos_ui_notice(
+          r ? "Not queued" : "History request queued",
+          r ? e.message
+            : "Keep matching radio/channel settings. Received history appears "
+              "in Conversations and Status. Airtime limits still apply; server "
+              "may be busy or unavailable.");
+    }
+    if (n == 3)
+      pos_ui_notice(
+          "History controls",
+          "Opt-in server stores up to 128 broadcasts, 198 bytes each, on the "
+          "chosen channel. It never caches private DMs. Requests return up to "
+          "20 messages, at least 5 seconds apart and within normal airtime "
+          "limits. Valid UTC expires records after the requested window (max "
+          "24h); without a clock, only this boot is replayed. POS prefixes "
+          "original sender/ID inside freshly encrypted server-owned history "
+          "replies. Cached files remain readable in Radio/store-forward when "
+          "disabled.");
+  }
+}
 void pos_ui_meshtastic(const char *root) {
   while (!pos_home_pending()) {
     pos_meshtastic_status_t s = pos_meshtastic_status();
@@ -669,11 +830,17 @@ void pos_ui_meshtastic(const char *root) {
                            "Export channel URL",
                            "MQTT bridge",
                            "Notifications",
+                           "Telemetry",
+                           "Store and forward",
                            "Back"};
-    int a = pos_ui_menu(title, items, 16);
-    if (a < 0 || a == 15)
+    int a = pos_ui_menu(title, items, 18);
+    if (a < 0 || a == 17)
       break;
     pos_error_t e = {0};
+    if (a == 15)
+      telemetry_menu();
+    if (a == 16)
+      history_menu();
     if (a == 9)
       conversations(root, false);
     if (a == 10)
@@ -702,9 +869,10 @@ void pos_ui_meshtastic(const char *root) {
     if (a == 0) {
       char body[900];
       static const char *const states[] = {
-          "received",        "sent (not delivery)", "relay heard",
-          "destination ACK", "destination NAK",     "timed out",
-          "forwarded"};
+          "received",        "sent (not delivery)",
+          "relay heard",     "destination ACK",
+          "destination NAK", "timed out",
+          "forwarded",       "queued"};
       snprintf(body, sizeof(body),
                "!%08x / %.3f MHz\nNodes: %u Queue: %u\nTX: %u RX: %u Relayed: "
                "%u\nACK: %u Failed: %u\nLast %08x: %s\n%s\n%s\n%s",
@@ -719,7 +887,7 @@ void pos_ui_meshtastic(const char *root) {
     } else if (a == 1 || a == 2) {
       if (!tx_ready())
         continue;
-      int ch = a == 1 ? channel() : 0;
+      int ch = a == 1 ? choose_channel() : 0;
       if (ch < 0)
         continue;
       uint32_t id = UINT32_MAX;
@@ -748,7 +916,7 @@ void pos_ui_meshtastic(const char *root) {
                         "peers to reply. GPS is not included. Give the mesh "
                         "time; no users may be in range.");
     } else if (a == 5 && tx_ready()) {
-      int ch = channel();
+      int ch = choose_channel();
       if (ch < 0)
         continue;
       uint32_t id;

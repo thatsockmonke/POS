@@ -77,6 +77,8 @@ typedef struct {
   int selected_tile;
   uint32_t icons[7][32]; /* Visible three plus two neighbors on each side. */
   /* Borrowed map raster; submit a non-map view before releasing it. */
+  const uint16_t
+      *image_pixels; /* Borrowed 240x88 RGB565; same lifetime rule. */
   const uint8_t *map_pixels;
   const uint8_t *map_route_pixels;
   uint8_t map_turn;

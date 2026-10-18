@@ -142,3 +142,19 @@ The existing polynomial CAS additionally isolates **numeric real roots of degree
 Degree 1/2 retains its previous real/complex solver. Higher-degree complex roots,
 general symbolic trig/rational functions and arbitrary precision remain outside
 this bounded implementation; range and conditioning limits are reported.
+
+## 0.8.1 graph tools
+
+In Graph, **Tab** opens three editable curves and numerical analysis. Curve 1
+is solid, 2 dashed and 3 dotted. An empty expression disables a curve. Existing
+arrow pan, +/- zoom and 0 reset remain; graphing never changes variables or Ans.
+
+Tools analyze curve 1 (intersections compare 1 and 2). Enter explicit lower/upper
+x bounds. Roots/intersections require opposite-sign endpoints (or an endpoint
+root); narrow the bounds around the desired crossing. A sign-changing pole is
+refused. Minimum/maximum requires an interior turning point and a continuous,
+unimodal interval. Integration refines Simpson samples through 4096 panels and
+requires convergence; singular/invalid evaluations fail. These are bounded
+numerical approximations, not universal symbolic proofs or a finder of every
+root/extremum. Curves are session-only; named worksheets still store one main
+expression. DEG/RAD follows the current calculator setting.

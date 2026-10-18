@@ -4,7 +4,7 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**Current release: [0.8.0-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.8.0-dev) — Meshtastic radio mode and mesh Wi-Fi improvements.**
+**Current release: [0.8.1-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.8.1-dev) — Files search/clipboard, image viewing, Recorder editing, graph tools and mesh telemetry/history.**
 
 New: an offline **[Calculator](docs/CALCULATOR.md)** with scientific-function
 buttons, saved variables, fractions and polynomial CAS. **[POS Transfer](docs/TRANSFER.md)**
@@ -32,7 +32,7 @@ its route, next maneuver/road name and remaining distance.
 **Download your regions again after updating from 0.6.3** to include access and
 restriction data. Existing road maps remain viewable. Routes cover the selected
 cached graph; unsupported conditional/via-way rules are blocked conservatively.
-[World map preview](downloads/0.8.0-dev/world.png) · See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.8.0-dev/maps.png).
+[World map preview](downloads/0.8.1-dev/world.png) · See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.8.1-dev/maps.png).
 
 Earlier Recorder playback, launcher, editor and Wi-Fi improvements remain:
 The launcher keeps its selection box fixed while crisp 32×32 icons slide on an
@@ -66,7 +66,7 @@ Upgrade through **0.6.0-dev** first if using an older installation. Active updat
 metadata stays at exactly seven fields; the old bridge feed remains frozen.
 Black-start flag/logo boot, microphone gain and themed app visuals remain.
 
-[Animated UI preview](downloads/0.8.0-dev/ui-animation.png) · [Recorder](downloads/0.8.0-dev/recorder.png) · [Files](downloads/0.8.0-dev/files.png) · [Background](downloads/0.8.0-dev/background.png) · [Counter](downloads/0.8.0-dev/counter.png)
+[Animated UI preview](downloads/0.8.1-dev/ui-animation.png) · [Recorder](downloads/0.8.1-dev/recorder.png) · [Files](downloads/0.8.1-dev/files.png) · [Background](downloads/0.8.1-dev/background.png) · [Counter](downloads/0.8.1-dev/counter.png)
 
 Previews use the actual portable renderer with example state; they are not
 hardware recordings or device frame-rate measurements.
@@ -182,14 +182,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.8.0-dev/launcher.png)
-![Color picker](downloads/0.8.0-dev/color-picker.png)
+![Launcher](downloads/0.8.1-dev/launcher.png)
+![Color picker](downloads/0.8.1-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.8.0-dev/boot-animation.png)
+![POS boot animation](downloads/0.8.1-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.8.0-dev/boot-splash.png)
+[Final splash frame](downloads/0.8.1-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -206,7 +206,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.8.0-dev --zip-output dist/pos-0.8.0-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.8.1-dev --zip-output dist/pos-0.8.1-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -328,11 +328,11 @@ See [Developer tooling](docs/DEVELOPMENT.md) for `posctl flash`, `files` and gat
 existing OTA layout; validation remains enabled and unsupported roots are rejected.
 
 Transfer files between POS and Linux with the simple **[POS Transfer tool](docs/TRANSFER.md)**:
-[download pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.8.0-dev/pos-transfer),
+[download pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.8.1-dev/pos-transfer),
 then run `python3 ~/Downloads/pos-transfer`. Choose Send/Receive and Wi-Fi/Bluetooth.
 Wi-Fi works without Bluetooth helpers and is the preferred Crostini route.
 
-## Meshtastic radio mode (0.8.0-dev)
+## Meshtastic radio mode (0.8.1-dev)
 
 Settings → Expansion hardware → Radio protocol / Meshtastic selects compatible
 channels, modern encrypted DMs, node discovery, bounded client relaying and
@@ -346,7 +346,7 @@ connection and holds Wi-Fi awake during an explicit LAN transfer. Router guest
 or client isolation still needs to permit local-device traffic.
 
 
-## 0.8.0-dev additions
+## Calculator, conversations and wallpaper
 
 Radio now has threaded conversations, contacts/favourites, notification banners,
 peer locations on Maps, traceroute, channel export and an optional TLS MQTT text
@@ -358,3 +358,13 @@ Background → P offers 12 common stripe-only pride presets; H accepts hex colou
 for a stripe or from its picker. Startup status accents follow the saved theme.
 The intro's stripe fills are 240 ms each (previously 400 ms), with the same
 halfway stagger, logo fade and one-second hold.
+
+## 0.8.1-dev additions
+
+[Files](docs/FILES.md) adds checkbox selection, Ctrl+X/C/V and recursive
+filename/document search. Open [JPEG/BMP images](docs/IMAGE_VIEWER.md) from Files.
+[Recorder editing](docs/RECORDER_EDITING.md) offers waveforms, trim and
+normalization into a new verified WAV. [Graph tools](docs/CALCULATOR.md) add three
+curves and numerical analysis. [Meshtastic](docs/MESHTASTIC.md) adds telemetry and
+an opt-in SD store-and-forward server/client with bounded retention and airtime.
+See [verification and limits](docs/BUG_REPORT_0.8.1.md).

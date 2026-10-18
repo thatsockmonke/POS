@@ -61,3 +61,14 @@ CONFIG_LWIP_IPV6=n
 
 # TLS clients use ordinary software keys; no digital-signature peripheral keys.
 # CONFIG_ESP_TLS_USE_DS_PERIPHERAL is not set
+
+# POS stores SSID/password networks; it exposes no 802.1X/EAP identity, CA or
+# enterprise enrollment API. Omit that unused supplicant, keeping WPA2/WPA3 PSK.
+CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
+
+# Keep BLE warnings/errors; omit verbose GAP/GATT informational log strings.
+CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
+
+# POS presents contextual errors and preserves numeric SDK error codes/backtraces.
+# Omit the SDK-wide symbolic error-name table, not error checks or assertions.
+CONFIG_ESP_ERR_TO_NAME_LOOKUP=n

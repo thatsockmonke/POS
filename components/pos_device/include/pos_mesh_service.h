@@ -1,6 +1,7 @@
 #pragma once
 #include "pos_install.h"
 #include "pos_mesh.h"
+#include "pos_mesh_modules.h"
 typedef struct {
   bool enabled, ready;
   uint32_t node, generation, frequency_hz;
@@ -37,3 +38,15 @@ void pos_meshtastic_stop(void);
 /* Cached text only, nonblocking; no SD access on the display path. */
 uint32_t pos_meshtastic_notification(char text[64], bool *sound);
 int pos_meshtastic_notifications_configure(bool banner, bool sound);
+
+/* Server caches only opted-in channel broadcasts; never private DMs. */
+int pos_meshtastic_modules(bool telemetry_replies, bool store_server,
+                           unsigned channel, pos_error_t *);
+void pos_meshtastic_modules_status(bool *telemetry, bool *server,
+                                   unsigned *channel);
+int pos_meshtastic_telemetry(unsigned index, uint32_t *node,
+                             pos_mesh_telemetry_t *, uint64_t *received_ms);
+int pos_meshtastic_telemetry_send(unsigned channel, uint32_t to, bool request,
+                                  pos_error_t *);
+int pos_meshtastic_history(unsigned channel, uint32_t server,
+                           unsigned window_minutes, bool abort, pos_error_t *);

@@ -167,6 +167,8 @@ static uint16_t content_pixel(const pos_view_t *v, int x, int y) {
   uint16_t notice_color;
   if (notification_pixel(v, x, y, &notice_color))
     return notice_color;
+  if (v->image_pixels && y >= 16 && y < 104)
+    return v->image_pixels[(y - 16) * 240 + x];
   if (v->map_pixels && y >= 16 && y < 104) {
     int my = y - 16;
     if (v->map_turn && x >= 4 && x < 37 && my >= 4 && my < 34) {

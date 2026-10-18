@@ -174,12 +174,16 @@ static void record(const char *root, pos_settings_t *settings) {
   free(work);
 }
 void pos_ui_recorder(const char *root, pos_settings_t *settings) {
-  const char *items[] = {
-      "Start recording",         "Microphone gain", "Open Recordings in Files",
-      "Recover interrupted WAV", "Controls",        "Back"};
+  const char *items[] = {"Start recording",
+                         "Microphone gain",
+                         "Open Recordings in Files",
+                         "Recover interrupted WAV",
+                         "Controls",
+                         "Edit recording",
+                         "Back"};
   while (!pos_home_pending()) {
-    int choice = pos_ui_menu("Recorder", items, 6);
-    if (choice < 0 || choice == 5)
+    int choice = pos_ui_menu("Recorder", items, 7);
+    if (choice < 0 || choice == 6)
       return;
     if (choice == 0)
       record(root, settings);
@@ -216,6 +220,11 @@ void pos_ui_recorder(const char *root, pos_settings_t *settings) {
                             : "WAV verified and saved beside the partial file. "
                               "Original audio preserved.");
       }
+    }
+    if (choice == 5) {
+      char relative[241];
+      if (pos_ui_pick_file_from(root, "Edit PCM WAV", POS_RECORDINGS, relative))
+        pos_ui_recording_edit(root, relative);
     }
     if (choice == 4)
       pos_ui_help(root, "Recorder controls", "recorder-controls.txt");

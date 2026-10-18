@@ -4,6 +4,7 @@
 #include "pos_calculator.h"
 #include "pos_device.h"
 #include "pos_files.h"
+#include "pos_graph.h"
 #include "ui.h"
 #include <math.h>
 #include <stdio.h>
@@ -188,7 +189,12 @@ static void graph(calculator_t *s) {
     return;
   }
   uint8_t *pixels = calloc(1, 2640);
-  if (!pixels) {
+  char (*curves)[POS_CALC_TEXT] = calloc(3, POS_CALC_TEXT);
+  if (curves)
+    snprintf(curves[0], POS_CALC_TEXT, "%s", s->expression);
+  if (!pixels || !curves) {
+    free(pixels);
+    free(curves);
     pos_ui_notice("Graph", "Not enough memory");
     return;
   }
@@ -207,32 +213,36 @@ static void graph(calculator_t *s) {
       if (ax >= 0 && ax < 240)
         for (int y = 0; y < 88; ++y)
           dot(pixels, (int)ax, y);
-      int last = -1000;
-      for (int x = 0; x < 240; ++x) {
-        double value;
-        int y = -1000;
-        if (!pos_calc_sample(&s->calc, s->expression,
-                             cx + (x - 120) * scale / 12, &value)) {
-          double py = 44 - (value - cy) * 12 / scale;
-          if (py >= 0 && py < 88)
-            y = (int)py;
+      for (unsigned curve = 0; curve < 3; ++curve) {
+        if (!*curves[curve])
+          continue;
+        int last = -1000;
+        for (int x = 0; x < 240; ++x) {
+          double value;
+          int y = -1000;
+          if (!pos_calc_sample(&s->calc, curves[curve],
+                               cx + (x - 120) * scale / 12, &value)) {
+            double py = 44 - (value - cy) * 12 / scale;
+            if (py >= 0 && py < 88)
+              y = (int)py;
+          }
+          if (y >= 0 && (curve == 0 || (x % (curve == 1 ? 6 : 10)) < 3)) {
+            dot(pixels, x, y);
+            if (last >= 0 && abs(last - y) < 20)
+              for (int r = last; r != y; r += r < y ? 1 : -1)
+                dot(pixels, x, r);
+          }
+          last = y;
         }
-        if (y >= 0) {
-          dot(pixels, x, y);
-          if (last >= 0 && abs(last - y) < 20)
-            for (int r = last; r != y; r += r < y ? 1 : -1)
-              dot(pixels, x, r);
-        }
-        last = y;
       }
-      pos_view_clear(&s->view, "Graph y=f(x)");
+      pos_view_clear(&s->view, "Graph 1:solid 2:dash 3:dot");
       pos_ui_style(&s->view);
       s->view.map_pixels = pixels;
       s->view.map_generation = ++generation;
       pos_view_line(&s->view, 13, "x %.4g y %.4g span %.4g", cx, cy,
                     scale * 20);
       pos_view_line(&s->view, 14, "Arrows:pan +/-:zoom 0:reset");
-      pos_view_line(&s->view, 15, "Esc:Calculator");
+      pos_view_line(&s->view, 15, "Tab:curves/tools Esc:back");
       pos_device_show(&s->view);
       redraw = false;
     }
@@ -258,11 +268,66 @@ static void graph(calculator_t *s) {
       cx = cy = 0;
       scale = 1;
     }
+    if (e.key == '\t') {
+      const char *items[] = {
+          "Curve 1 (solid)", "Curve 2 (dash)",     "Curve 3 (dot)",
+          "Root of curve 1", "Intersection 1 / 2", "Minimum curve 1",
+          "Maximum curve 1", "Integral curve 1",   "Back"};
+      int choice = pos_ui_menu("Graph tools", items, 9);
+      if (choice >= 0 && choice < 3) {
+        char expression[POS_CALC_TEXT];
+        snprintf(expression, sizeof(expression), "%s", curves[choice]);
+        if (pos_ui_text("Graph curve", "Function of x; blank disables",
+                        expression, sizeof(expression), false))
+          snprintf(curves[choice], POS_CALC_TEXT, "%s", expression);
+      }
+      if (choice >= 3 && choice <= 7) {
+        double bounds[2] = {cx - scale * 10, cx + scale * 10};
+        bool valid = true;
+        for (unsigned i = 0; i < 2; ++i) {
+          char text[40];
+          snprintf(text, sizeof(text), "%.9g", bounds[i]);
+          if (!pos_ui_text("Analysis interval", i ? "Upper x" : "Lower x", text,
+                           sizeof(text), false)) {
+            valid = false;
+            break;
+          }
+          char *end;
+          bounds[i] = strtod(text, &end);
+          if (!*text || *end || !isfinite(bounds[i]))
+            valid = false;
+        }
+        double x, y;
+        if (valid) {
+          if (pos_graph_analyze(&s->calc, curves[0], curves[1],
+                                (unsigned)choice - 3, bounds[0], bounds[1], &x,
+                                &y))
+            pos_ui_notice(
+                "No reliable result",
+                "Use a finite, continuous interval. Root/intersection "
+                "endpoints must straddle a zero; extrema need an interior "
+                "turning point. Integral must converge. Narrow the interval "
+                "around the desired feature.");
+          else {
+            char result[128];
+            snprintf(result, sizeof(result),
+                     choice == 7 ? "Integral = %.10g" : "x = %.10g\ny = %.10g",
+                     choice == 7 ? y : x, y);
+            pos_ui_notice("Numerical result", result);
+            if (choice != 7) {
+              cx = x;
+              cy = y;
+            }
+          }
+        }
+      }
+    }
     redraw = true;
   }
   s->view.map_pixels = NULL;
   pos_ui_message("Calculator", "");
   free(pixels);
+  free(curves);
 }
 
 static void append(calculator_t *s, const char *text) {

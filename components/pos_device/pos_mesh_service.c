@@ -9,11 +9,13 @@
 #include "pos_appdata.h"
 #include "pos_device.h"
 #include "pos_fs.h"
+#include "pos_mesh_cache.h"
 #include "pos_network.h"
 #include "pos_peripherals.h"
 #include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 static SemaphoreHandle_t lock;
@@ -26,6 +28,27 @@ static uint64_t announce_at;
 static uint32_t notice_sequence;
 static bool notice_enabled = true, notice_sound = true;
 static char notice_text[64];
+static bool telemetry_replies, store_server, cache_ready;
+static unsigned store_channel;
+static uint8_t server_scope[32];
+static pos_mesh_cache_t cache;
+static struct {
+  uint32_t node;
+  uint64_t at;
+  pos_mesh_telemetry_t data;
+} telemetry[8];
+
+static uint64_t module_reply_at, replay_at, heartbeat_at;
+static uint32_t history_requests;
+static struct {
+  uint32_t client, cursor, end;
+  unsigned channel, window, left;
+  uint8_t token[32];
+} replay;
+static uint32_t utc_now(void) {
+  time_t t = time(NULL);
+  return t >= 1700000000 && (uint64_t)t <= UINT32_MAX ? (uint32_t)t : 0;
+}
 static uint64_t now_ms(void) { return esp_timer_get_time() / 1000; }
 static int fail(pos_error_t *e, const char *s) {
   if (e)
@@ -256,6 +279,265 @@ static int append_event(pos_mesh_event_t type, const pos_mesh_message_t *m) {
   cJSON_Delete(j);
   return bad ? -1 : 0;
 }
+static int send_store(uint32_t to, unsigned channel,
+                      const pos_mesh_store_t *s) {
+  uint8_t payload[233];
+  size_t n = pos_mesh_store_encode(s, payload);
+  return n ? pos_mesh_send(mesh, channel, to, POS_MESH_STORE_FORWARD, payload,
+                           n, false, now_ms())
+           : -1;
+}
+static void pump_history(void) {
+  if (!replay.client || !store_server || now_ms() < replay_at)
+    return;
+  replay_at = now_ms() + 5000;
+  unsigned pending = 0;
+  for (unsigned i = 0; i < POS_MESH_QUEUE; ++i)
+    pending += mesh->queue[i].used;
+  if (pending > 2)
+    return;
+  pos_mesh_cached_t row;
+  while (replay.cursor < replay.end && replay.left) {
+    uint32_t seq = replay.cursor;
+    if (pos_mesh_cache_read(&cache, seq, replay.token, utc_now(), replay.window,
+                            &row) ||
+        row.from == replay.client) {
+      ++replay.cursor;
+      continue;
+    }
+    pos_mesh_store_t out = {.rr = 9, .variant = 5};
+    int prefix =
+        snprintf((char *)out.text, sizeof(out.text),
+                 "!%08x [%08x]: ", (unsigned)row.from, (unsigned)row.id);
+    if (prefix < 0 || (size_t)prefix + row.length > 220) {
+      ++replay.cursor;
+      continue;
+    }
+    memcpy(out.text + prefix, row.text, row.length);
+    out.length = prefix + row.length;
+    if (!send_store(replay.client, replay.channel, &out)) {
+      ++replay.cursor;
+      --replay.left;
+    }
+    return;
+  }
+  replay.client = 0;
+}
+static void cancel_history_queue(void) {
+  if (!mesh)
+    return;
+  for (unsigned i = 0; i < POS_MESH_QUEUE; ++i)
+    if (mesh->queue[i].used && mesh->queue[i].own) {
+      pos_mesh_message_t m;
+      if (!pos_mesh_decode(mesh, mesh->queue[i].wire, mesh->queue[i].length,
+                           &m) &&
+          m.data.port == POS_MESH_STORE_FORWARD)
+        mesh->queue[i].used = false;
+    }
+}
+static int history_seen(const pos_mesh_message_t *m, bool save) {
+  char path[POS_FS_PATH], record[80], line[96];
+  if (pos_fs_join(path, storage, "POS/Users/Owner/Radio/history-received.txt"))
+    return -1;
+  snprintf(record, sizeof(record), "%08x %08x %u\n", (unsigned)m->header.from,
+           (unsigned)m->header.id, m->channel_index);
+  FILE *f = fopen(path, "rb");
+  uint32_t size = 0;
+  if (f) {
+    if (!fseek(f, 0, SEEK_END)) {
+      long size = ftell(f);
+      if (size > 65536) {
+        fseek(f, size - 65536, SEEK_SET);
+        (void)fgets(line, sizeof(line), f);
+      } else
+        rewind(f);
+    }
+    while (fgets(line, sizeof(line), f))
+      if (!strcmp(line, record)) {
+        fclose(f);
+        return 1;
+      }
+    bool bad = ferror(f);
+    fclose(f);
+    if (bad)
+      return -1;
+  }
+  if (!save)
+    return 0;
+  if (!pos_fs_file_size(path, &size) && size > 65536) {
+    char previous[POS_FS_PATH];
+    if (pos_fs_join(previous, storage,
+                    "POS/Users/Owner/Radio/history-received.previous.txt"))
+      return -1;
+    (void)unlink(previous);
+    if (rename(path, previous))
+      return -1;
+  }
+  return pos_fs_append_line(path, record) ? -1 : 0;
+}
+static int module_receive(const pos_mesh_message_t *m) {
+  if (m->data.port == POS_MESH_TELEMETRY) {
+    pos_mesh_telemetry_t t;
+    if (!m->data.length) {
+      if (telemetry_replies && m->data.want_response &&
+          m->header.to == identity && now_ms() >= module_reply_at) {
+        uint8_t payload[64];
+        size_t n = pos_mesh_telemetry_device(
+            payload, utc_now(), pos_device_battery_mv(), now_ms() / 1000);
+        if (!pos_mesh_send(mesh, m->channel_index, m->header.from,
+                           POS_MESH_TELEMETRY, payload, n, false, now_ms()))
+          module_reply_at = now_ms() + 60000;
+      }
+      return 0;
+    }
+    if (pos_mesh_telemetry_decode(m->data.payload, m->data.length, &t))
+      return -1;
+    if (t.kind == 2 && telemetry_replies && m->data.want_response &&
+        m->header.to == identity && now_ms() >= module_reply_at) {
+      uint8_t payload[64];
+      size_t n = pos_mesh_telemetry_device(
+          payload, utc_now(), pos_device_battery_mv(), now_ms() / 1000);
+      if (!pos_mesh_send(mesh, m->channel_index, m->header.from,
+                         POS_MESH_TELEMETRY, payload, n, false, now_ms()))
+        module_reply_at = now_ms() + 60000;
+    }
+    if (!t.present)
+      return 0;
+    unsigned at = 8;
+    for (unsigned i = 0; i < 8; ++i)
+      if (telemetry[i].node == m->header.from &&
+          telemetry[i].data.kind == t.kind) {
+        at = i;
+        break;
+      }
+    if (at == 8) {
+      at = 0;
+      for (unsigned i = 0; i < 8; ++i) {
+        if (!telemetry[i].node) {
+          at = i;
+          break;
+        }
+        if (telemetry[i].at < telemetry[at].at)
+          at = i;
+      }
+    }
+    telemetry[at].node = m->header.from;
+    telemetry[at].at = now_ms();
+    telemetry[at].data = t;
+    snprintf(latest, sizeof(latest), "Telemetry !%08x (type %u)",
+             (unsigned)m->header.from, t.kind);
+    return 0;
+  }
+  if (m->data.port != POS_MESH_STORE_FORWARD)
+    return 0;
+  pos_mesh_store_t s;
+  if (pos_mesh_store_decode(m->data.payload, m->data.length, &s))
+    return -1;
+  if ((s.rr == 8 || s.rr == 9) && s.variant == 5) {
+    pos_mesh_message_t text = *m;
+    text.data.port = POS_MESH_TEXT;
+    text.data.length = s.length;
+    memcpy(text.data.payload, s.text, s.length);
+    text.header.to = s.rr == 9 ? UINT32_MAX : identity;
+    /* Restore sender/ID in local logs only; radio uses a fresh server nonce. */
+    if (s.length >= 22 && s.text[0] == '!' && s.text[9] == ' ' &&
+        s.text[10] == '[' && s.text[19] == ']' && s.text[20] == ':' &&
+        s.text[21] == ' ') {
+      char prefix[23];
+      memcpy(prefix, s.text, 22);
+      prefix[22] = 0;
+      unsigned origin, id;
+      if (sscanf(prefix, "!%8x [%8x]: ", &origin, &id) == 2 && origin >= 4 &&
+          origin != UINT32_MAX && id) {
+        text.header.from = origin;
+        text.header.id = id;
+        text.data.length = s.length - 22;
+        memmove(text.data.payload, s.text + 22, text.data.length);
+      }
+    }
+    int seen = history_seen(&text, false);
+    if (seen)
+      return seen < 0 ? -1 : 0;
+    if (append_event(POS_MESH_RX, &text) || history_seen(&text, true) < 0)
+      return -1;
+    snprintf(latest, sizeof(latest), "History via !%08x: %.*s",
+             (unsigned)m->header.from, (int)s.length, s.text);
+    return 0;
+  }
+  if (s.rr < 64) {
+    snprintf(latest, sizeof(latest),
+             "History server !%08x: response %u, %u messages",
+             (unsigned)m->header.from, s.rr, (unsigned)s.count);
+    return 0;
+  }
+  if (!store_server || !cache_ready || m->channel_index != store_channel ||
+      m->header.to != identity || m->pki)
+    return 0;
+  uint8_t scope[32];
+  if (pos_mesh_channel_token(&saved, store_channel, scope) ||
+      memcmp(scope, server_scope, 32))
+    return 0;
+  if (s.rr == 106 || s.rr == 64) {
+    if (replay.client == m->header.from) {
+      replay.client = 0;
+      cancel_history_queue();
+    }
+    return 0;
+  }
+  if (now_ms() < module_reply_at)
+    return 0;
+  pos_mesh_store_t out = {0};
+  if (s.rr == 67)
+    out.rr = 4;
+  else if (s.rr == 65) {
+    if (replay.client)
+      out.rr = 5;
+    else {
+      unsigned window = s.variant == 3 && s.window ? s.window : 240;
+      if (window > 1440)
+        window = 1440;
+      uint8_t token[32];
+      if (pos_mesh_channel_token(&saved, store_channel, token))
+        return -1;
+      uint32_t first = cache.next > 128 ? cache.next - 128 : 1;
+      unsigned count = 0;
+      pos_mesh_cached_t row;
+      for (uint32_t seq = first; seq < cache.next && count < 20; ++seq)
+        if (!pos_mesh_cache_read(&cache, seq, token, utc_now(), window, &row) &&
+            row.from != m->header.from)
+          ++count;
+      out = (pos_mesh_store_t){
+          .rr = 6, .variant = 3, .count = count, .window = window * 60000};
+      replay.client = count ? m->header.from : 0;
+      replay.cursor = first;
+      replay.end = cache.next;
+      replay.channel = store_channel;
+      replay.window = window;
+      replay.left = count;
+      memcpy(replay.token, token, 32);
+      replay_at = now_ms() + 5000;
+    }
+  } else if (s.rr == 66) {
+    out.rr = 7;
+    out.variant = 2;
+    out.stats[0] = cache.next - 1;
+    out.stats[1] = cache.next > 128 ? 128 : cache.next - 1;
+    out.stats[2] = 128;
+    out.stats[3] = now_ms() / 1000;
+    out.stats[4] = ++history_requests;
+    out.stats[5] = history_requests;
+    out.stats[6] = 1;
+    out.stats[7] = 20;
+    out.stats[8] = 240;
+  } else {
+    out.rr = 1;
+  }
+  if (!send_store(m->header.from, m->channel_index, &out))
+    module_reply_at = now_ms() + 5000;
+  else
+    replay.client = 0;
+  return 0;
+}
 static int sink(void *unused, pos_mesh_event_t type,
                 const pos_mesh_message_t *m) {
   (void)unused;
@@ -267,11 +549,24 @@ static int sink(void *unused, pos_mesh_event_t type,
       snprintf(latest, sizeof(latest), "Trace !%08x: %.210s",
                (unsigned)m->header.from, *route ? route : "Direct path");
   }
+  if (type == POS_MESH_RX && (m->data.port == POS_MESH_TELEMETRY ||
+                              m->data.port == POS_MESH_STORE_FORWARD))
+    return module_receive(m);
   if (type == POS_MESH_RX && m->data.port == POS_MESH_TEXT) {
     if (memchr(m->data.payload, 0, m->data.length) || append_event(type, m)) {
       snprintf(error, sizeof(error),
                "Cannot retain received text; no delivery ACK sent.");
       return -1;
+    }
+    if (store_server && cache_ready && !m->pki && m->header.to == UINT32_MAX &&
+        m->channel_index == store_channel) {
+      uint8_t token[32];
+      if (pos_mesh_channel_token(&saved, store_channel, token) ||
+          memcmp(token, server_scope, 32) ||
+          pos_mesh_cache_put(&cache, m, token, utc_now()))
+        snprintf(error, sizeof(error),
+                 "History cache incomplete (text over 198 bytes or SD error); "
+                 "received text remains in conversation log.");
     }
     snprintf(notice_text, sizeof(notice_text), "!%08x: %.*s",
              (unsigned)m->header.from,
@@ -291,6 +586,14 @@ static int sink(void *unused, pos_mesh_event_t type,
       }
   }
   if (type != POS_MESH_RX && type != POS_MESH_FORWARDED) {
+    if (type == POS_MESH_SENT && m->data.port == POS_MESH_TEXT &&
+        store_server && cache_ready && m->header.to == UINT32_MAX &&
+        m->channel_index == store_channel) {
+      uint8_t token[32];
+      if (!pos_mesh_channel_token(&saved, store_channel, token) &&
+          !memcmp(token, server_scope, 32))
+        (void)pos_mesh_cache_put(&cache, m, token, utc_now());
+    }
     if (append_event(type, m))
       snprintf(error, sizeof(error), "Message status log could not be saved.");
     if (type == POS_MESH_ACKED ||
@@ -349,6 +652,8 @@ int pos_meshtastic_init(const char *root, uint32_t id) {
   strcpy(storage, root);
   identity = id;
   generation = 1;
+  heartbeat_at = now_ms() + 15000;
+  cache_ready = false;
   lock = xSemaphoreCreateMutex();
   if (!lock)
     return -1;
@@ -363,6 +668,22 @@ int pos_meshtastic_init(const char *root, uint32_t id) {
   }
   nvs_handle_t notify;
   if (nvs_open("pos_mesh", NVS_READONLY, &notify) == ESP_OK) {
+    uint32_t modules = 0;
+    if (nvs_get_u32(notify, "modules", &modules) == ESP_OK) {
+      telemetry_replies = (modules & 1) != 0;
+      store_server = (modules & 2) != 0;
+      store_channel = (modules >> 2) & 7;
+    }
+    if (store_server) {
+      size_t length = 32;
+      uint8_t token[32];
+      if (nvs_get_blob(notify, "cache_scope", server_scope, &length) !=
+              ESP_OK ||
+          length != 32 ||
+          pos_mesh_channel_token(&saved, store_channel, token) ||
+          memcmp(token, server_scope, 32))
+        store_server = false;
+    }
     uint32_t mode = 0;
     if (nvs_get_u32(notify, "notifications", &mode) == ESP_OK && mode < 3) {
       notice_enabled = mode != 2;
@@ -370,6 +691,8 @@ int pos_meshtastic_init(const char *root, uint32_t id) {
     }
     nvs_close(notify);
   }
+  if (store_server)
+    cache_ready = !pos_mesh_cache_open(&cache, storage, esp_random());
   char path[POS_FS_PATH];
   pos_fs_join(path, root, "POS/Users/Owner/Radio/mesh-outbox");
   if (pos_fs_mkdirs(path))
@@ -429,7 +752,13 @@ int pos_meshtastic_configure(const pos_mesh_config_t *c, bool use,
   }
   saved = *c;
   selected = use;
+  uint8_t token[32];
+  if (store_server && (pos_mesh_channel_token(&saved, store_channel, token) ||
+                       memcmp(token, server_scope, 32)))
+    store_server = false;
   ++generation;
+  replay.client = 0;
+  memset(telemetry, 0, sizeof(telemetry));
   if (mesh) {
     pos_mesh_cancel(mesh);
     memset(mesh->seen, 0, sizeof(mesh->seen));
@@ -644,6 +973,14 @@ int pos_meshtastic_due(uint8_t wire[255], size_t *length) {
       (void)pos_mesh_announce(mesh, UINT32_MAX, false, now_ms());
       announce_at = now_ms() + 3 * 60 * 60 * 1000 + esp_random() % 60000;
     }
+    if (store_server && now_ms() >= heartbeat_at) {
+      pos_mesh_store_t beat = {.rr = 2, .variant = 4, .count = 900};
+      if (!send_store(UINT32_MAX, store_channel, &beat))
+        heartbeat_at = now_ms() + 900000;
+      else
+        heartbeat_at = now_ms() + 30000;
+    }
+    pump_history();
     const uint8_t *p = NULL;
     result = pos_mesh_due(mesh, now_ms(), &p, length);
     if (result == 1)
@@ -738,4 +1075,88 @@ int pos_meshtastic_mqtt_accept(const uint8_t *wire, size_t length,
   }
   xSemaphoreGive(lock);
   return r ? -1 : 0;
+}
+
+int pos_meshtastic_modules(bool tele, bool server, unsigned channel,
+                           pos_error_t *e) {
+  if (!lock || channel >= 8)
+    return fail(e, "Invalid mesh module/channel.");
+  xSemaphoreTake(lock, portMAX_DELAY);
+  if (server && !cache_ready)
+    cache_ready = !pos_mesh_cache_open(&cache, storage, esp_random());
+  uint8_t scope[32] = {0};
+  if (server && (!cache_ready || !saved.channels[channel].enabled ||
+                 pos_mesh_channel_token(&saved, channel, scope))) {
+    xSemaphoreGive(lock);
+    return fail(e, "History server needs a readable SD and enabled channel.");
+  }
+  nvs_handle_t h;
+  int bad = nvs_open("pos_mesh", NVS_READWRITE, &h) != ESP_OK;
+  if (!bad) {
+    bad = nvs_set_blob(h, "cache_scope", scope, 32) != ESP_OK ||
+          nvs_set_u32(h, "modules",
+                      (tele ? 1 : 0) | (server ? 2 : 0) | (channel << 2)) !=
+              ESP_OK ||
+          nvs_commit(h) != ESP_OK;
+    nvs_close(h);
+  }
+  if (!bad) {
+    telemetry_replies = tele;
+    store_server = server;
+    store_channel = channel;
+    memcpy(server_scope, scope, 32);
+    replay.client = 0;
+    cancel_history_queue();
+  }
+  xSemaphoreGive(lock);
+  return bad ? fail(e, "Module settings not saved.") : 0;
+}
+void pos_meshtastic_modules_status(bool *tele, bool *server,
+                                   unsigned *channel) {
+  *tele = *server = false;
+  *channel = 0;
+  if (!lock)
+    return;
+  xSemaphoreTake(lock, portMAX_DELAY);
+  *tele = telemetry_replies;
+  *server = store_server;
+  *channel = store_channel;
+  xSemaphoreGive(lock);
+}
+int pos_meshtastic_telemetry(unsigned index, uint32_t *node,
+                             pos_mesh_telemetry_t *t, uint64_t *at) {
+  if (!lock || index >= 8)
+    return -1;
+  xSemaphoreTake(lock, portMAX_DELAY);
+  int bad = !telemetry[index].node;
+  if (!bad) {
+    *node = telemetry[index].node;
+    *t = telemetry[index].data;
+    *at = telemetry[index].at;
+  }
+  xSemaphoreGive(lock);
+  return bad ? -1 : 0;
+}
+int pos_meshtastic_telemetry_send(unsigned ch, uint32_t to, bool request,
+                                  pos_error_t *e) {
+  uint8_t payload[64];
+  payload[0] = 0x12;
+  payload[1] = 0;
+  size_t n = request ? 2
+                     : pos_mesh_telemetry_device(payload, utc_now(),
+                                                 pos_device_battery_mv(),
+                                                 now_ms() / 1000);
+  return pos_meshtastic_send(ch, to, POS_MESH_TELEMETRY, payload, n, request,
+                             e);
+}
+int pos_meshtastic_history(unsigned ch, uint32_t server, unsigned window,
+                           bool abort, pos_error_t *e) {
+  if (window < 1 || window > 1440 || server < 4 || server == UINT32_MAX)
+    return fail(e, "Choose a server node and 1-1440 minute window.");
+  pos_mesh_store_t s = {
+      .rr = abort ? 106 : 65, .variant = abort ? 0 : 3, .window = window};
+  uint8_t p[233];
+  size_t n = pos_mesh_store_encode(&s, p);
+  return pos_meshtastic_send(ch, server, POS_MESH_STORE_FORWARD, p, n, false,
+                             e);
 }

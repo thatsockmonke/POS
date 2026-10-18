@@ -35,7 +35,7 @@ class FeatureTests(unittest.TestCase):
         cls.runner=Path(cls.compilation.name)/"features"
         sdk=Path(os.environ.get("IDF_PATH","/workspace/pos-cloud/esp-idf-v5.5.5"));cjson=sdk/"components/json/cJSON"
         sources=[ROOT/"tests/feature_runner.c",ROOT/"main/ui.c",ROOT/"main/setup.c",ROOT/"main/settings.c",ROOT/"main/browser.c",ROOT/"main/background.c",ROOT/"main/editor.c",ROOT/"main/wifi.c",ROOT/"components/pos_device/pos_console.c",ROOT/"components/pos_install/pos_install.c",ROOT/"components/pos_install/pos_hash.c",cjson/"cJSON.c"]
-        sources += [ROOT/"main/files.c",ROOT/"main/music.c",ROOT/"main/recorder.c",ROOT/"main/instruments.c",ROOT/"main/sharing.c",ROOT/"main/expansion.c",ROOT/"main/maps.c",ROOT/"main/calculator.c",ROOT/"main/meshtastic.c"]
+        sources += [ROOT/"main/image.c",ROOT/"main/recording_edit.c",ROOT/"main/files.c",ROOT/"main/music.c",ROOT/"main/recorder.c",ROOT/"main/instruments.c",ROOT/"main/sharing.c",ROOT/"main/expansion.c",ROOT/"main/maps.c",ROOT/"main/calculator.c",ROOT/"main/meshtastic.c"]
         for component in ("pos_core","pos_recovery","pos_update"):
             sources.extend((ROOT/"components"/component).glob("*.c"))
         command=["gcc","-std=c11","-D_POSIX_C_SOURCE=200809L","-Wall","-Wextra","-Werror","-g","-fsanitize=undefined","-fno-sanitize-recover=all"]
@@ -989,5 +989,107 @@ class FeatureTests(unittest.TestCase):
         self.assertTrue(any(p.is_file() and p.read_bytes()==b'wasd' for p in (self.card/'POS/Users/Owner/Trash').rglob('*')))
     def test_known_networks_ui_connect_forget_and_auto_toggle_without_vault_prompt(self):
         self.run_feature('wifi-ui-known')
+
+    def test_radio_settings_back_exits_without_reconfiguring(self):
+        self.run_feature('mesh-ui-back')
+
+    def test_files_checkbox_ctrl_a_and_copy_shortcuts_reach_clipboard(self):
+        source=self.write('POS/Users/Owner/Documents/a.txt',b'keep')
+        self.run_feature('files-ui-shortcuts');self.assertEqual(source.read_bytes(),b'keep')
+
+    def test_file_search_stream_boundaries_case_and_system_symlink_protection(self):
+        self.write('Documents/Across.txt',b'x'*1022+b'Needle'+b'y'*15000)
+        self.write('Documents/Needle-name.bin',b'opaque')
+        self.write('POS/System/private.txt',b'Needle')
+        outside=self.base/'outside.txt';outside.write_bytes(b'Needle')
+        (self.card/'Documents/link.txt').symlink_to(outside)
+        result=self.run_feature('file-search','','needle',1).stdout
+        self.assertIn('Documents/Across.txt|1',result);self.assertIn('Documents/Needle-name.bin|0',result)
+        self.assertNotIn('private',result);self.assertNotIn('link',result)
+        result=self.run_feature('file-search','Documents','needle',0).stdout
+        self.assertNotIn('Across',result)
+
+    def test_multi_file_clipboard_preflights_entire_batch_and_preserves_sources(self):
+        self.write('Documents/a.txt',b'one');self.write('Documents/b.txt',b'two');(self.card/'Downloads').mkdir()
+        self.write('Downloads/b.txt',b'existing')
+        self.run_feature('file-batch','Downloads',1,'Documents/a.txt','Documents/b.txt',expected=1)
+        self.assertFalse((self.card/'Downloads/a.txt').exists());self.assertTrue((self.card/'Documents/a.txt').exists())
+        (self.card/'Downloads/b.txt').unlink()
+        self.run_feature('file-batch','Downloads',0,'Documents/a.txt','Documents/b.txt')
+        self.assertEqual((self.card/'Downloads/a.txt').read_bytes(),b'one');self.assertTrue((self.card/'Documents/a.txt').exists())
+        (self.card/'Downloads/a.txt').unlink();(self.card/'Downloads/b.txt').unlink()
+        result=self.run_feature('file-batch','Downloads',1,'Documents/a.txt','Documents/b.txt')
+        self.assertTrue(result.stdout.startswith('0'));self.assertFalse((self.card/'Documents/a.txt').exists())
+        self.assertEqual((self.card/'Downloads/b.txt').read_bytes(),b'two')
+
+    def test_batch_refuses_nested_selection_and_protected_system_paths(self):
+        self.write('Documents/sub/a.txt');(self.card/'Downloads').mkdir()
+        self.run_feature('file-batch','Downloads',1,'Documents','Documents/sub',expected=1)
+        self.assertTrue((self.card/'Documents/sub/a.txt').exists())
+        self.write('POS/System/file');self.run_feature('file-batch','Downloads',1,'POS/System/file',expected=1)
+
+    def test_streamed_bmp_orientation_rgb565_zoom_and_damage(self):
+        # Two rows: top red/green, bottom blue/white. BGR with 4-byte padding.
+        body=bytes([255,0,0,255,255,255,0,0, 0,0,255,0,255,0,0,0])
+        header=b'BM'+struct.pack('<IHHI',54+len(body),0,0,54)+struct.pack('<IiiHHIIiiII',40,2,2,1,24,0,len(body),0,0,0,0)
+        self.write('Pictures/test.bmp',header+body)
+        self.run_feature('image-render','Pictures/test.bmp',1)
+        pixels=struct.unpack('<21120H',(self.card/'viewport.raw').read_bytes())
+        self.assertEqual([pixels[y*240+x] for y in (43,44) for x in (119,120)],[0xf800,0x07e0,0x001f,0xffff])
+        self.run_feature('image-render','Pictures/test.bmp',2)
+        self.write('Pictures/bad.bmp',header+body[:-1]);self.run_feature('image-render','Pictures/bad.bmp',1,expected=1)
+        bad=bytearray(header);bad[18:22]=struct.pack('<I',0x7fffffff);self.write('Pictures/huge.bmp',bad+body)
+        self.run_feature('image-render','Pictures/huge.bmp',1,expected=1)
+
+    def test_recorder_edit_streams_trim_normalization_and_preserves_original(self):
+        import wave,io
+        samples=[-32768,-1000,0,1000,2000,3000,4000,32767]*2000
+        out=io.BytesIO()
+        with wave.open(out,'wb') as w:w.setnchannels(1);w.setsampwidth(2);w.setframerate(16000);w.writeframes(struct.pack('<%dh'%len(samples),*samples))
+        original=self.write('Recordings/source.wav',out.getvalue())
+        scan=self.run_feature('wave-scan','Recordings/source.wav').stdout.split()
+        self.assertEqual(list(map(int,scan[:3])),[16000,16000,1]);self.assertEqual(max(map(int,scan[3:])),32768)
+        saved=self.run_feature('wave-edit','Recordings/source.wav',1,7,1).stdout
+        with wave.open(str(self.card/saved),'rb') as w:
+            self.assertEqual(w.getnframes(),6);got=struct.unpack('<6h',w.readframes(6))
+        self.assertEqual(got,tuple(int(x*31128/4000) for x in samples[1:7]));self.assertEqual(original.read_bytes(),out.getvalue())
+        self.run_feature('wave-edit','Recordings/source.wav',7,7,1,expected=1)
+        self.run_feature('wave-edit','Recordings/source.wav',0,20000,1,expected=1)
+
+    def test_recorder_edit_silence_stereo_and_existing_destination_protections(self):
+        import wave,io
+        out=io.BytesIO()
+        with wave.open(out,'wb') as w:w.setnchannels(2);w.setsampwidth(2);w.setframerate(48000);w.writeframes(bytes(4000))
+        self.write('Recordings/source.wav',out.getvalue());self.write('Recordings/Edit-0001.wav',b'keep')
+        saved=self.run_feature('wave-edit','Recordings/source.wav',100,900,1).stdout
+        self.assertEqual(saved,'Recordings/Edit-0002.wav')
+        with wave.open(str(self.card/saved),'rb') as w:self.assertEqual((w.getnframes(),w.getnchannels(),w.readframes(800)),(800,2,bytes(3200)))
+        self.assertEqual((self.card/'Recordings/Edit-0001.wav').read_bytes(),b'keep')
+
+    def test_graph_roots_intersections_extrema_integral_and_poles(self):
+        def tool(f,g,op,a,b,expected=0):return self.run_feature('graph-analysis',f,g,op,a,b,expected=expected).stdout
+        self.assertAlmostEqual(float(tool('x^2-2','',0,1,2).split()[0]),2**.5,places=7)
+        self.assertAlmostEqual(float(tool('x^2','2*x',1,1,3).split()[0]),2,places=7)
+        self.assertAlmostEqual(float(tool('(x-2)^2+1','',2,0,4).split()[0]),2,places=6)
+        self.assertAlmostEqual(float(tool('3-(x+1)^2','',3,-3,1).split()[0]),-1,places=6)
+        self.assertAlmostEqual(float(tool('sin(x)','',4,0,3.141592653589793).split()[1]),2,places=6)
+        for f,op,a,b in [('1/x',0,-1,1),('sqrt(x)',4,-1,1),('x',2,-1,1),('x^2+1',0,-1,1)]:tool(f,'',op,a,b,expected=1)
+
+    def test_meshtastic_telemetry_official_protobuf_fixtures_and_strict_float_types(self):
+        # Generated independently with meshtastic==2.7.8 official bindings.
+        fixture=bytes.fromhex('0d00f15365120a0864159a99594028d209')
+        result=self.run_feature('mesh-telemetry',fixture.hex()).stdout.split()
+        self.assertEqual(list(map(int,result[:3])),[2,1700000000,19]);self.assertAlmostEqual(float(result[4]),3.4,places=5)
+        self.run_feature('mesh-telemetry','1205150000c07f',expected=1) # NaN
+        self.run_feature('mesh-telemetry','12021001',expected=1) # voltage wrong wire type
+        self.run_feature('mesh-telemetry','120208641a00',expected=1) # two oneof variants
+
+    def test_meshtastic_storeforward_official_protocol_and_bounded_persistent_cache(self):
+        self.assertEqual(self.run_feature('mesh-store','08411a0310f001').stdout.splitlines()[0],'65 3 0 240 0')
+        self.assertEqual(self.run_feature('mesh-store','08092a0548656c6c6f').stdout.splitlines()[0],'9 5 0 0 5')
+        self.run_feature('mesh-store','08092a054865',expected=1)
+        self.run_feature('mesh-cache')
+        slots=list((self.card/'POS/Users/Owner/Radio/store-forward').glob('*.bin'));self.assertEqual(len(slots),128)
+        self.assertTrue(all(p.stat().st_size==288 for p in slots))
 
 if __name__=="__main__":unittest.main()

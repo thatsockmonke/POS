@@ -24,7 +24,7 @@ class MeshServiceTests(unittest.TestCase):
         command += ['-I', str(sdk / 'components/mbedtls/mbedtls/include'),
                     '-I', str(sdk / 'components/json/cJSON')]
         sources = ['tests/mesh_service_runner.c', 'components/pos_device/pos_mesh_service.c',
-                   'components/pos_core/pos_mesh.c', 'components/pos_core/pos_network.c',
+                   'components/pos_core/pos_mesh.c', 'components/pos_core/pos_mesh_cache.c', 'components/pos_core/pos_network.c',
                    'components/pos_core/pos_fs.c', 'components/pos_core/pos_files.c',
                    'components/pos_core/pos_appdata.c', 'components/pos_install/pos_hash.c']
         command += [str(ROOT / p) for p in sources]
@@ -49,6 +49,12 @@ class MeshServiceTests(unittest.TestCase):
     def run_service(self, action):
         return subprocess.run([self.runner, action, self.nvs, self.card],
                               capture_output=True, text=True, check=True, timeout=20).stdout
+
+    def test_telemetry_reply_consent_and_history_request_durable_dedup(self):
+        self.run_service('modules')
+        text=(self.card/'POS/Users/Owner/Radio/meshtastic.jsonl').read_text()
+        self.assertEqual(text.count('"from":"!33333333"'),1)
+        self.assertTrue((self.card/'POS/Users/Owner/Radio/history-received.txt').is_file())
 
     def test_mqtt_decryption_generation_text_filter_duplicate_and_notifications(self):
         self.run_service('mqtt')

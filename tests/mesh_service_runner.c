@@ -13,6 +13,7 @@ static uint64_t clock_ms;
 static bool fail_write;
 static unsigned revoked;
 int64_t esp_timer_get_time(void) { return clock_ms * 1000; }
+int pos_device_battery_mv(void) { return 3900; }
 int pos_device_wifi_prepare(void) { return 0; }
 void pos_expansion_revoke_transmit(void) { ++revoked; }
 uint32_t esp_random(void) {
@@ -87,6 +88,92 @@ int main(int argc, char **argv) {
   pos_mesh_config_t c;
   assert(!pos_meshtastic_settings(&c));
   pos_error_t e = {0};
+  if (!strcmp(argv[1], "modules")) {
+    assert(!pos_meshtastic_modules(false, true, 0, &e));
+    uint8_t key[32] = {9}, wire[255];
+    pos_mesh_t *p = calloc(1, sizeof(*p));
+    assert(p);
+    assert(!pos_mesh_init(p, 0x22222222, &c, key));
+    pos_mesh_message_t m = {
+        .header = {.from = p->node, .to = UINT32_MAX, .id = 100, .flags = 3},
+        .data = {.port = POS_MESH_TEXT, .length = 5}};
+    memcpy(m.data.payload, "Hello", 5);
+    size_t length = pos_mesh_encode(p, &m, wire);
+    assert(length);
+    pos_meshtastic_receive(wire, length, -80, 5);
+    pos_mesh_store_t request = {.rr = 65, .variant = 3, .window = 240};
+    m.header.to = 0x12345678;
+    m.header.id = 101;
+    m.data.port = POS_MESH_STORE_FORWARD;
+    m.data.length = pos_mesh_store_encode(&request, m.data.payload);
+    length = pos_mesh_encode(p, &m, wire);
+    assert(length);
+    pos_meshtastic_receive(wire, length, -80, 5);
+    bool got_history = false;
+    for (unsigned i = 0; i < 12; ++i) {
+      clock_ms = 1000 + i * 1000;
+      size_t n = 0;
+      int due = pos_meshtastic_due(wire, &n);
+      if (due == 1) {
+        pos_mesh_message_t out;
+        if (!pos_mesh_decode(p, wire, n, &out) &&
+            out.data.port == POS_MESH_STORE_FORWARD) {
+          pos_mesh_store_t s;
+          assert(!pos_mesh_store_decode(out.data.payload, out.data.length, &s));
+          if (s.rr == 6) {
+            assert(s.count == 0);
+            got_history = true;
+          }
+        }
+        pos_meshtastic_tx_result(true);
+      }
+    }
+    /* The requester never gets its own cached text replayed. */
+    assert(got_history);
+    pos_mesh_store_t history = {.rr = 9, .variant = 5, .length = 27};
+    memcpy(history.text, "!33333333 [00000001]: Hello", 27);
+    m.header.id = 103;
+    m.data.port = POS_MESH_STORE_FORWARD;
+    m.data.length = pos_mesh_store_encode(&history, m.data.payload);
+    length = pos_mesh_encode(p, &m, wire);
+    assert(length);
+    pos_meshtastic_receive(wire, length, -80, 5);
+    m.header.id = 104;
+    length = pos_mesh_encode(p, &m, wire);
+    pos_meshtastic_receive(wire, length, -80, 5);
+    assert(!pos_meshtastic_modules(true, false, 0, &e));
+    clock_ms = 120000;
+    m.header.id = 105;
+    m.data.port = POS_MESH_TELEMETRY;
+    m.data.want_response = true;
+    m.data.payload[0] = 0x12;
+    m.data.payload[1] = 0;
+    m.data.length = 2;
+    length = pos_mesh_encode(p, &m, wire);
+    assert(length);
+    pos_meshtastic_receive(wire, length, -80, 5);
+    bool got_telemetry = false;
+    for (unsigned i = 0; i < 12; ++i) {
+      clock_ms = 121000 + i * 1000;
+      size_t n = 0;
+      if (pos_meshtastic_due(wire, &n) == 1) {
+        pos_mesh_message_t out;
+        if (!pos_mesh_decode(p, wire, n, &out) &&
+            out.data.port == POS_MESH_TELEMETRY) {
+          pos_mesh_telemetry_t t;
+          assert(!pos_mesh_telemetry_decode(out.data.payload, out.data.length,
+                                            &t));
+          assert(t.kind == 2 && t.values[1] > 3.89 && t.values[1] < 3.91);
+          got_telemetry = true;
+        }
+        pos_meshtastic_tx_result(true);
+      }
+    }
+    assert(got_telemetry);
+    free(p);
+    return 0;
+  }
+
   if (!strcmp(argv[1], "prepare")) {
     assert(!pos_meshtastic_configure(&c, true, &e) && revoked);
     assert(pos_meshtastic_status().enabled && pos_meshtastic_status().ready);

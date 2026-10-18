@@ -1,7 +1,9 @@
 #include "pos_device.h"
 #include "pos_files.h"
+#include "pos_image.h"
 #include "pos_music.h"
 #include "ui.h"
+#include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -12,6 +14,10 @@ typedef struct {
   char names[12][256];
   unsigned page, pages, count, total;
   bool moving;
+  pos_file_clipboard_t batch;
+  char checked[POS_FILE_SELECTION_MAX][241], labels[12][260];
+  unsigned checked_count;
+  int cursor;
 } files_ui_t;
 static int progress(void *ctx, const char *phase, uint64_t done,
                     uint64_t total) {
@@ -84,6 +90,94 @@ static void details(const char *root, const char *relative) {
                                              : "Protected system/container");
   pos_ui_notice("Details", text);
 }
+static int checked(files_ui_t *f, const char *p) {
+  for (unsigned i = 0; i < f->checked_count; ++i)
+    if (!strcmp(f->checked[i], p))
+      return (int)i;
+  return -1;
+}
+static void toggle(files_ui_t *f, const char *p) {
+  int i = checked(f, p);
+  if (i >= 0) {
+    --f->checked_count;
+    memmove(f->checked + i, f->checked + i + 1,
+            (f->checked_count - (unsigned)i) * 241);
+  } else if (f->checked_count < POS_FILE_SELECTION_MAX)
+    strcpy(f->checked[f->checked_count++], p);
+  else
+    pos_ui_notice("Selection full", "Select up to 32 items per batch.");
+}
+static void clipboard(const char *root, files_ui_t *f, bool moving) {
+  unsigned n = f->checked_count ? f->checked_count : 1;
+  for (unsigned i = 0; i < n; ++i)
+    if (!pos_files_mutable(root,
+                           f->checked_count ? f->checked[i] : f->selected)) {
+      pos_ui_notice("Protected data", "Choose user files or folders.");
+      return;
+    }
+  f->batch.count = n;
+  f->batch.moving = moving;
+  for (unsigned i = 0; i < n; ++i)
+    strcpy(f->batch.paths[i], f->checked_count ? f->checked[i] : f->selected);
+  f->checked_count = 0;
+  pos_ui_notice(moving ? "Cut ready" : "Copy ready",
+                "Go to the destination, then Ctrl+V or Folder actions > Paste. "
+                "Originals stay until pasted. Existing names are protected.");
+}
+static void paste(const char *root, files_ui_t *f) {
+  pos_error_t e = {0};
+  result(pos_files_paste(root, &f->batch, f->folder, progress, NULL, &e), &e);
+}
+typedef struct {
+  char paths[64][241];
+  unsigned count;
+} results_t;
+static int match(void *ctx, const char *p, bool body) {
+  (void)body;
+  results_t *r = ctx;
+  strcpy(r->paths[r->count++], p);
+  return r->count == 64;
+}
+static void search(const char *root, files_ui_t *f) {
+  char query[81] = "";
+  if (!pos_ui_text("Search files", "Name or document text", query,
+                   sizeof(query), false) ||
+      !*query)
+    return;
+  const char *modes[] = {"Filenames", "Filenames + text contents", "Cancel"};
+  int mode = pos_ui_menu("Search this folder recursively", modes, 3);
+  if (mode < 0 || mode == 2)
+    return;
+  results_t *r = calloc(1, sizeof(*r));
+  if (!r)
+    return;
+  pos_error_t e = {0};
+  int status = pos_files_search(root, f->folder, query, mode == 1, match,
+                                progress, r, &e);
+  if (status < 0)
+    pos_ui_notice("Search incomplete", e.message);
+  if (r->count) {
+    const char *items[64];
+    for (unsigned i = 0; i < r->count; ++i)
+      items[i] = r->paths[i];
+    int n = pos_ui_menu(status == 1 ? "Matches (first 64 / stopped)"
+                                    : "Search results",
+                        items, (int)r->count);
+    if (n >= 0) {
+      strcpy(f->folder, r->paths[n]);
+      char *p = strrchr(f->folder, '/');
+      if (p)
+        *p = 0;
+      else
+        *f->folder = 0;
+      f->page = 0;
+      f->cursor = 0;
+    }
+  } else
+    pos_ui_notice("Search",
+                  status ? "Search stopped; no matches yet." : "No matches.");
+  free(r);
+}
 static void actions(const char *root, files_ui_t *f, bool folder) {
   const char *items[] = {folder ? "Open folder"
                          : pos_music_supported(f->selected)
@@ -96,16 +190,20 @@ static void actions(const char *root, files_ui_t *f, bool folder) {
                          "Share file",
                          "Delete permanently",
                          "Details",
+                         "Edit PCM recording",
                          "Back"};
-  int choice = pos_ui_menu(basename_of(f->selected), items, 9);
+  int choice = pos_ui_menu(basename_of(f->selected), items, 10);
   pos_error_t e = {0};
   if (choice == 0) {
     if (folder) {
       strcpy(f->folder, f->selected);
       f->page = 0;
+      f->cursor = 0;
     } else if (strrchr(f->selected, '.') &&
                !strcmp(strrchr(f->selected, '.'), ".calc"))
       pos_ui_calculator_open(root, f->selected);
+    else if (pos_image_supported(f->selected))
+      pos_ui_image(root, f->selected);
     else if (pos_music_supported(f->selected))
       pos_ui_music_file(root, f->selected);
     else {
@@ -131,17 +229,8 @@ static void actions(const char *root, files_ui_t *f, bool folder) {
         pos_ui_share(root, f->selected);
     }
   }
-  if (choice == 1 || choice == 2) {
-    if (!pos_files_mutable(root, f->selected))
-      pos_ui_notice("Protected data", "Choose a user file or folder.");
-    else {
-      strcpy(f->clipboard, f->selected);
-      f->moving = choice == 2;
-      pos_ui_notice("Clipboard ready",
-                    "Go to the destination folder, then Folder actions > "
-                    "Paste. Existing names will not be overwritten.");
-    }
-  }
+  if (choice == 1 || choice == 2)
+    clipboard(root, f, choice == 2);
   if (choice == 3) {
     char name[121];
     snprintf(name, sizeof(name), "%.120s", basename_of(f->selected));
@@ -188,6 +277,8 @@ static void actions(const char *root, files_ui_t *f, bool folder) {
   }
   if (choice == 7)
     details(root, f->selected);
+  if (choice == 8 && !folder)
+    pos_ui_recording_edit(root, f->selected);
 }
 static void folder_actions(const char *root, files_ui_t *f) {
   const char *items[] = {"New folder",
@@ -197,8 +288,10 @@ static void folder_actions(const char *root, files_ui_t *f) {
                          "Restore this Trash item",
                          "SD root",
                          "Recordings",
+                         "Search",
+                         "Selection / shortcuts",
                          "Back"};
-  int choice = pos_ui_menu("Folder actions", items, 8);
+  int choice = pos_ui_menu("Folder actions", items, 10);
   pos_error_t e = {0};
   if (choice == 0) {
     char name[121] = "New folder";
@@ -213,34 +306,28 @@ static void folder_actions(const char *root, files_ui_t *f) {
         result(pos_files_folder(root, relative, &e), &e);
     }
   }
-  if (choice == 1) {
-    if (!*f->clipboard)
-      pos_ui_notice("Clipboard empty",
-                    "Choose Copy or Cut on a file/folder first.");
-    else {
-      char name[241];
-      snprintf(name, sizeof(name), "%s", basename_of(f->clipboard));
-      if (!pos_ui_text(f->moving ? "Move into this folder"
-                                 : "Copy into this folder",
-                       "Destination filename", name, sizeof(name), false))
-        return;
-      if (strchr(name, '/')) {
-        pos_ui_notice("Invalid filename",
-                      "Use a filename without directories.");
-        return;
-      }
-      char destination[241];
-      if (snprintf(destination, sizeof(destination), "%s%s%s", f->folder,
-                   *f->folder ? "/" : "", name) >= (int)sizeof(destination))
-        return;
-      int status = f->moving
-                       ? pos_files_move(root, f->clipboard, destination, &e)
-                       : pos_files_copy(root, f->clipboard, destination,
-                                        progress, NULL, &e);
-      if (!status && f->moving)
-        *f->clipboard = 0;
-      result(status, &e);
+  if (choice == 1)
+    paste(root, f);
+  if (choice == 7)
+    search(root, f);
+  if (choice == 8) {
+    const char *ops[] = {"Copy selected", "Cut selected", "Clear selection",
+                         "Controls", "Back"};
+    int op = pos_ui_menu("Selection", ops, 5);
+    if (op < 2 && op >= 0) {
+      if (f->checked_count)
+        clipboard(root, f, op == 1);
+      else
+        pos_ui_notice("No selection", "Space toggles a checkbox; Ctrl+A "
+                                      "selects this folder (up to 32). ");
     }
+    if (op == 2)
+      f->checked_count = 0;
+    if (op == 3)
+      pos_ui_notice("Files controls",
+                    "Space: checkbox. Ctrl+A: select folder. Ctrl+C: copy. "
+                    "Ctrl+X: cut. Ctrl+V: paste. Ctrl+F: search. Enter: file "
+                    "actions. Cut/paste never overwrites existing names.");
   }
   if (choice == 2) {
     strcpy(f->selected, f->folder);
@@ -294,11 +381,55 @@ void pos_ui_files_from(const char *root, const char *initial) {
     const char *items[16] = {
         ".. (parent)", f->page ? "< Previous" : "Previous (first)",
         f->page + 1 < f->pages ? "Next >" : "Next (last)", "Folder actions"};
-    for (unsigned i = 0; i < f->count; ++i)
-      items[i + 4] = f->names[i];
-    int choice = pos_ui_menu_page(*f->folder ? f->folder : "SD root", items,
-                                  f->count + 4, f->page, f->pages,
-                                  f->total ? NULL : "Empty folder");
+    for (unsigned i = 0; i < f->count; ++i) {
+      char p[241];
+      int n = snprintf(p, sizeof(p), "%s%s%s", f->folder, *f->folder ? "/" : "",
+                       f->names[i]);
+      snprintf(f->labels[i], sizeof(f->labels[i]), "[%c] %s",
+               n < 241 && checked(f, p) >= 0 ? 'x' : ' ', f->names[i]);
+      items[i + 4] = f->labels[i];
+    }
+    char status[64];
+    snprintf(status, sizeof(status), "%u checked | Space Ctrl+C/X/V",
+             f->checked_count);
+    pos_event_t shortcut = {0};
+    int choice = pos_ui_files_menu(*f->folder ? f->folder : "SD root", items,
+                                   (int)f->count + 4, f->page, f->pages, status,
+                                   &f->cursor, &shortcut);
+    if (choice == -2) {
+      bool valid =
+          f->cursor >= 4 && (unsigned)f->cursor < f->count + 4 &&
+          snprintf(f->selected, sizeof(f->selected), "%s%s%s", f->folder,
+                   *f->folder ? "/" : "", f->names[f->cursor - 4]) < 241;
+      int key = tolower(shortcut.key);
+      if (key == ' ' && valid && pos_files_mutable(root, f->selected))
+        toggle(f, f->selected);
+      if (key == 'f')
+        search(root, f);
+      if (key == 'v')
+        paste(root, f);
+      if ((key == 'c' || key == 'x') && (valid || f->checked_count))
+        clipboard(root, f, key == 'x');
+      if (key == 'a') {
+        DIR *d = opendir(f->full);
+        struct dirent *ent;
+        f->checked_count = 0;
+        if (d) {
+          while ((ent = readdir(d)) &&
+                 f->checked_count < POS_FILE_SELECTION_MAX) {
+            char p[241];
+            if (ent->d_name[0] == '.')
+              continue;
+            if (snprintf(p, sizeof(p), "%s%s%s", f->folder,
+                         *f->folder ? "/" : "", ent->d_name) < 241 &&
+                pos_files_mutable(root, p))
+              toggle(f, p);
+          }
+          closedir(d);
+        }
+      }
+      continue;
+    }
     if (choice < 0)
       break;
     if (choice == 0) {
@@ -326,7 +457,7 @@ void pos_ui_files_from(const char *root, const char *initial) {
     }
     if (snprintf(f->selected, sizeof(f->selected), "%s%s%s", f->folder,
                  *f->folder ? "/" : "",
-                 items[choice]) >= (int)sizeof(f->selected))
+                 f->names[choice - 4]) >= (int)sizeof(f->selected))
       continue;
     struct stat st;
     if (pos_fs_join(f->full, root, f->selected) || pos_fs_lstat(f->full, &st) ||

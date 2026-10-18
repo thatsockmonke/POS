@@ -121,8 +121,8 @@ void pos_ui_notice(const char *title, const char *body) {
 }
 
 static int menu(const char *title, const char *const *items, int count,
-                unsigned page, unsigned pages, const char *status,
-                int initial) {
+                unsigned page, unsigned pages, const char *status, int initial,
+                int *cursor, pos_event_t *shortcut) {
   if (count < 1 || pos_home_pending())
     return -1;
   int selected = initial >= 0 && initial < count ? initial : 0;
@@ -151,6 +151,15 @@ static int menu(const char *title, const char *const *items, int count,
     if (!pos_device_event(&event, 100))
       continue;
     int key = pos_navigation(&event);
+    if (shortcut && event.pressed &&
+        (event.key == ' ' ||
+         ((event.modifiers & POS_MOD_CTRL) && event.key > 0 &&
+          event.key < 128 && strchr("xXcCvVaAfF", event.key) && event.key))) {
+      *shortcut = event;
+      if (cursor)
+        *cursor = selected;
+      return -2;
+    }
     if (cancelled(&event))
       return -1;
     if (key == POS_KEY_UP || key == POS_KEY_LEFT) {
@@ -161,20 +170,29 @@ static int menu(const char *title, const char *const *items, int count,
       selected = (selected + 1) % count;
       redraw = true;
     }
-    if (key == POS_KEY_ENTER)
+    if (key == POS_KEY_ENTER) {
+      if (cursor)
+        *cursor = selected;
       return selected;
+    }
   }
 }
 int pos_ui_menu(const char *title, const char *const *items, int count) {
-  return menu(title, items, count, 0, 0, NULL, 0);
+  return menu(title, items, count, 0, 0, NULL, 0, NULL, NULL);
 }
 int pos_ui_menu_from(const char *title, const char *const *items, int count,
                      int selected) {
-  return menu(title, items, count, 0, 0, NULL, selected);
+  return menu(title, items, count, 0, 0, NULL, selected, NULL, NULL);
 }
 int pos_ui_menu_page(const char *title, const char *const *items, int count,
                      unsigned page, unsigned pages, const char *status) {
-  return menu(title, items, count, page, pages, status, 0);
+  return menu(title, items, count, page, pages, status, 0, NULL, NULL);
+}
+int pos_ui_files_menu(const char *title, const char *const *items, int count,
+                      unsigned page, unsigned pages, const char *status,
+                      int *cursor, pos_event_t *shortcut) {
+  return menu(title, items, count, page, pages, status, *cursor, cursor,
+              shortcut);
 }
 bool pos_ui_text(const char *title, const char *label, char *text,
                  size_t capacity, bool secret) {

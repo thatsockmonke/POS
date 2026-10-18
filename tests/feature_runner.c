@@ -16,6 +16,10 @@
 #include "pos_peripherals.h"
 #include "pos_mesh_service.h"
 #include "pos_chat.h"
+#include "pos_image.h"
+#include "pos_wave.h"
+#include "pos_graph.h"
+#include "pos_mesh_cache.h"
 #include "pos_mesh_mqtt.h"
 #include "pos_recovery.h"
 #include "pos_settings.h"
@@ -52,6 +56,42 @@ static unsigned folder_pages_seen, picker_frames;
 static bool background_preview_seen;
 static pos_view_t picker_last;
 static pos_expansion_status_t fake_expansion;
+int pos_meshtastic_modules(bool t, bool s, unsigned c, pos_error_t *e) {
+  (void)t;
+  (void)s;
+  (void)c;
+  (void)e;
+  return 0;
+}
+void pos_meshtastic_modules_status(bool *t, bool *s, unsigned *c) {
+  *t = *s = false;
+  *c = 0;
+}
+int pos_meshtastic_telemetry(unsigned i, uint32_t *n, pos_mesh_telemetry_t *t,
+                             uint64_t *a) {
+  (void)i;
+  (void)n;
+  (void)t;
+  (void)a;
+  return -1;
+}
+int pos_meshtastic_telemetry_send(unsigned c, uint32_t n, bool r,
+                                  pos_error_t *e) {
+  (void)c;
+  (void)n;
+  (void)r;
+  (void)e;
+  return 0;
+}
+int pos_meshtastic_history(unsigned c, uint32_t n, unsigned w, bool a,
+                           pos_error_t *e) {
+  (void)c;
+  (void)n;
+  (void)w;
+  (void)a;
+  (void)e;
+  return 0;
+}
 int pos_meshtastic_notifications_configure(bool a,bool b){(void)a;(void)b;return 0;}
 int pos_mesh_mqtt_start(const pos_mesh_mqtt_config_t *c){(void)c;return 0;}
 void pos_mesh_mqtt_stop(void){}
@@ -211,6 +251,7 @@ static unsigned fake_gain = 8;
 static bool microphone_ended, microphone_tail_enabled, microphone_silent;
 static bool mic_quiet_meter_seen, mic_silence_seen;
 static unsigned folder_hint_seen, microphone_backlog;
+static bool checkbox_seen;
 static unsigned microphone_tail_frames;
 static const char *microphone_test_root;
 static unsigned brightness_applied;
@@ -285,6 +326,8 @@ void pos_device_show(const pos_view_t *view) {
   if (!strncmp(view->lines[0], "Calculator /", 12)) {
     snprintf(calculator_answer,sizeof(calculator_answer),"%s%s%s",view->lines[4],view->lines[5],view->lines[6]);
   }
+  for (unsigned r=3;r<13;++r)
+    if(!strncmp(view->lines[r],"[x] ",4))checkbox_seen=true;
   assert(!display_hidden);
   for (unsigned row = 0; row < POS_ROWS; ++row) {
     assert(!strstr(view->lines[row], "Old vault passphrase"));
@@ -323,7 +366,7 @@ void pos_device_show(const pos_view_t *view) {
     const char *names[] = {"Documents", "Music", "Pictures", "Mixed", "Links"};
     for (unsigned i = 0; i < 5; ++i)
       for (unsigned row = 3; row < 13; ++row)
-        if (!strcmp(view->lines[row], names[i]))
+        if (!strcmp(view->lines[row], names[i]) || !strcmp(view->lines[row]+4, names[i]))
           folder_hint_seen |= 1u << i;
   }
   if (display_off_count && !strcmp(view->lines[0], "System")) {
@@ -1802,14 +1845,14 @@ static int apps_ui(const char *root, const char *mode) {
     keys_down(strstr(mode, "cut") ? 2 : 1);
     push_key(POS_KEY_ENTER, 0);
     push_key(POS_KEY_ENTER, 0);
-    keys_down(directory_index);
+    keys_down((directory_index + at - file_index) % at);
     push_key(POS_KEY_ENTER, 0);
     push_key(POS_KEY_ENTER, 0);
     keys_down(3);
     push_key(POS_KEY_ENTER, 0);
     keys_down(1);
     push_key(POS_KEY_ENTER, 0);
-    push_key(POS_KEY_ENTER, 0); /* Accept default paste filename. */
+    /* Batch paste uses original names without a duplicate prompt. */
     idle_event();
     push_key(POS_KEY_ENTER, 0);
     push_key(POS_KEY_HOME, 0);
@@ -1837,9 +1880,187 @@ static int apps_ui(const char *root, const char *mode) {
   }
   return 2;
 }
+static int search_match(void *ctx, const char *relative, bool body) {
+  (void)ctx;
+  printf("%s|%d\n", relative, body);
+  return 0;
+}
 int main(int argc, char **argv) {
   if (argc < 3)
     return 2;
+  if (!strcmp(argv[2], "file-search")) {
+    pos_error_t e = {0};
+    int status = pos_files_search(argv[1], argv[3], argv[4], atoi(argv[5]),
+                                  search_match, NULL, NULL, &e);
+    if (status < 0)
+      fprintf(stderr, "%s", e.message);
+    return status < 0 ? 1 : 0;
+  }
+  if (!strcmp(argv[2], "file-batch")) {
+    pos_file_clipboard_t *c = calloc(1, sizeof(*c));
+    assert(c);
+    c->moving = atoi(argv[4]);
+    c->count = argc - 5;
+    for (unsigned i = 0; i < c->count; ++i)
+      strcpy(c->paths[i], argv[i + 5]);
+    pos_error_t e = {0};
+    int status = pos_files_paste(argv[1], c, argv[3], NULL, NULL, &e);
+    printf("%u\n%s", c->count, e.message);
+    free(c);
+    return status ? 1 : 0;
+  }
+  if (!strcmp(argv[2], "image-render")) {
+    pos_error_t e = {0};
+    pos_image_t *i = pos_image_open(argv[1], argv[3], &e);
+    if (!i) {
+      fprintf(stderr, "%s", e.message);
+      return 1;
+    }
+    unsigned width, height;
+    pos_image_size(i, &width, &height);
+    uint16_t *pixels = malloc(240 * 88 * 2);
+    assert(pixels);
+    int status =
+        pos_image_render(i, width / 2.0, height / 2.0, strtod(argv[4], NULL),
+                         pixels, NULL, NULL, &e);
+    if (!status) {
+      char path[512];
+      pos_fs_join(path, argv[1], "viewport.raw");
+      FILE *f = fopen(path, "wb");
+      assert(f);
+      assert(fwrite(pixels, 2, 240 * 88, f) == 240 * 88);
+      fclose(f);
+    }
+    pos_image_close(i);
+    free(pixels);
+    return status ? 1 : 0;
+  }
+  if (!strcmp(argv[2], "wave-scan")) {
+    pos_wave_info_t info;
+    pos_error_t e = {0};
+    int r = pos_wave_scan(argv[1], argv[3], &info, NULL, NULL, &e);
+    if (r) {
+      fprintf(stderr, "%s", e.message);
+      return 1;
+    }
+    printf("%u %u %u\n", info.frames, info.rate, info.channels);
+    for (unsigned i = 0; i < 240; ++i)
+      printf("%u ", info.peaks[i]);
+    return 0;
+  }
+  if (!strcmp(argv[2], "wave-edit")) {
+    char saved[241];
+    pos_error_t e = {0};
+    int r = pos_wave_edit(argv[1], argv[3], strtoul(argv[4], NULL, 10),
+                          strtoul(argv[5], NULL, 10), atoi(argv[6]), saved,
+                          NULL, NULL, &e);
+    if (r)
+      fprintf(stderr, "%s", e.message);
+    else
+      printf("%s", saved);
+    return r ? 1 : 0;
+  }
+  if (!strcmp(argv[2], "graph-analysis")) {
+    pos_calc_t c = {0};
+    double x, y;
+    int r =
+        pos_graph_analyze(&c, argv[3], argv[4], atoi(argv[5]),
+                          strtod(argv[6], NULL), strtod(argv[7], NULL), &x, &y);
+    if (!r)
+      printf("%.15g %.15g", x, y);
+    return r ? 1 : 0;
+  }
+  if (!strcmp(argv[2], "mesh-telemetry")) {
+    uint8_t data[233];
+    size_t n = 0;
+    for (const char *p = argv[3]; *p; p += 2) {
+      unsigned b;
+      assert(sscanf(p, "%2x", &b) == 1);
+      data[n++] = b;
+    }
+    pos_mesh_telemetry_t t;
+    if (pos_mesh_telemetry_decode(data, n, &t))
+      return 1;
+    printf("%u %u %u", t.kind, (unsigned)t.time, (unsigned)t.present);
+    for (unsigned i = 0; i < 22; ++i)
+      printf(" %.10g", t.values[i]);
+    return 0;
+  }
+  if (!strcmp(argv[2], "mesh-store")) {
+    uint8_t data[233], out[233];
+    size_t n = 0;
+    for (const char *p = argv[3]; *p; p += 2) {
+      unsigned b;
+      assert(sscanf(p, "%2x", &b) == 1);
+      data[n++] = b;
+    }
+    pos_mesh_store_t s;
+    if (pos_mesh_store_decode(data, n, &s))
+      return 1;
+    printf("%u %u %u %u %zu\n", s.rr, s.variant, (unsigned)s.count,
+           (unsigned)s.window, s.length);
+    size_t k = pos_mesh_store_encode(&s, out);
+    for (size_t i = 0; i < k; ++i)
+      printf("%02x", out[i]);
+    return 0;
+  }
+  if (!strcmp(argv[2], "mesh-cache")) {
+    pos_mesh_cache_t cache;
+    assert(!pos_mesh_cache_open(&cache, argv[1], 123));
+    pos_mesh_config_t cfg;
+    pos_mesh_defaults(&cfg);
+    uint8_t token[32];
+    assert(!pos_mesh_channel_token(&cfg, 0, token));
+    pos_mesh_message_t m = {
+        .header = {.to = UINT32_MAX, .from = 0x12345678, .id = 1},
+        .data = {.port = POS_MESH_TEXT, .length = 5}};
+    memcpy(m.data.payload, "Hello", 5);
+    for (unsigned i = 0; i < 140; ++i) {
+      m.header.id = i + 1;
+      assert(!pos_mesh_cache_put(&cache, &m, token, 1700000000 + i));
+    }
+    pos_mesh_cached_t row;
+    assert(pos_mesh_cache_read(&cache, 1, token, 1700000200, 60, &row));
+    assert(!pos_mesh_cache_read(&cache, 140, token, 1700000200, 60, &row));
+    assert(row.id == 140 && row.length == 5);
+    assert(pos_mesh_cache_read(&cache, 140, token, 1700100000, 60, &row));
+    token[0] ^= 1;
+    assert(pos_mesh_cache_read(&cache, 140, token, 1700000200, 60, &row));
+    token[0] ^= 1;
+    assert(!pos_mesh_cache_open(&cache, argv[1], 124) && cache.next == 141);
+    assert(pos_mesh_cache_read(&cache, 140, token, 0, 60, &row));
+    char corrupt[512];
+    pos_fs_join(corrupt, argv[1],
+                "POS/Users/Owner/Radio/store-forward/012.bin");
+    FILE *bad = fopen(corrupt, "r+b");
+    assert(bad);
+    assert(!fseek(bad, 70, SEEK_SET));
+    assert(fputc(42, bad) != EOF);
+    fclose(bad);
+    assert(pos_mesh_cache_read(&cache, 140, token, 1700000200, 60, &row));
+    m.pki = true;
+    assert(pos_mesh_cache_put(&cache, &m, token, 0));
+    m.pki = false;
+    m.header.to = 42;
+    assert(pos_mesh_cache_put(&cache, &m, token, 0));
+    return 0;
+  }
+
+  if (!strcmp(argv[2], "files-ui-shortcuts")) {
+    push_key('a', POS_MOD_CTRL);
+    push_key('c', POS_MOD_CTRL);
+    push_key(POS_KEY_ENTER, 0);
+    push_key(POS_KEY_HOME, 0);
+    pos_ui_files(argv[1]);
+    assert(checkbox_seen && pos_home_pending());
+    return 0;
+  }
+  if (!strcmp(argv[2], "mesh-ui-back")) {
+    choose(9);
+    pos_ui_mesh_settings(argv[1]);
+    assert(ui_next == ui_count && !mesh_changes);
+    return 0;
+  }
   if (!strncmp(argv[2], "mesh-ui-", 8)) {
     if (!strcmp(argv[2],"mesh-ui-setup")) {
       choose(0); choose(0); push_key(POS_KEY_ENTER,0); push_key(POS_KEY_HOME,0);

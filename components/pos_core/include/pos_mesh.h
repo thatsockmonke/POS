@@ -16,6 +16,8 @@ enum {
   POS_MESH_USER = 4,
   POS_MESH_ROUTING = 5,
   POS_MESH_REPLY = 32,
+  POS_MESH_STORE_FORWARD = 65,
+  POS_MESH_TELEMETRY = 67,
   POS_MESH_TRACEROUTE = 70
 };
 enum {
@@ -172,6 +174,8 @@ int pos_mesh_export_url(const pos_mesh_config_t *, char *, size_t);
 int pos_mesh_trace_route(pos_mesh_data_t *, uint32_t node, bool endpoint);
 int pos_mesh_trace_text(const pos_mesh_data_t *, char *, size_t);
 
-size_t pos_mesh_envelope(const void *,size_t,const char *,const char *,uint8_t *,size_t);
-int pos_mesh_unenvelope(const void *,size_t,const char *,const char *,uint8_t[255],size_t *);
-const char *pos_mesh_channel_name(const pos_mesh_config_t *,unsigned);
+size_t pos_mesh_envelope(const void *, size_t, const char *, const char *,
+                         uint8_t *, size_t);
+int pos_mesh_unenvelope(const void *, size_t, const char *, const char *,
+                        uint8_t[255], size_t *);
+const char *pos_mesh_channel_name(const pos_mesh_config_t *, unsigned);

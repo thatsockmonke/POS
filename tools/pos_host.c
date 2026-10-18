@@ -107,11 +107,12 @@ static int preview(const char *root, const char *output, unsigned screen,
       pos_view_line(&v, 1, "Folder page 1/1");
       const char *items[] = {".. (parent)", "Previous (first)",
                              "Next (last)", "Folder actions",
-                             "Documents",   "Music",
-                             "Recordings"};
+                             "[ ] Documents", "[x] Music",
+                             "[ ] Recordings"};
       for (unsigned i = 0; i < 7; ++i)
         pos_view_line(&v, 3 + i, "%s", items[i]);
       v.selected_row = 7;
+      pos_view_line(&v, 2, "1 checked | Space Ctrl+C/X/V");
       pos_view_line(&v, 15, "Arrows Enter:OK Fn+`:back");
     } else if (screen == 5) {
       v.visual = POS_VISUAL_STRIPES;

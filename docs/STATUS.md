@@ -1,4 +1,4 @@
-# POS development status — 0.8.0-dev
+# POS development status — 0.8.1-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -13,7 +13,7 @@ layouts and display-off still require physical validation; other peripherals ret
 | Core/UI/apps | Central event loop, native 32×32 icons, seventeen-app ribbon, one foreground app, lifecycle/cleanup, stationary focus with an elapsed-time spring ribbon, optimized scanlines and partial/pipelined LCD transfers, zoom/fade entry/return, shared wallpaper accents and paginated menus; launcher workspace is heap-owned | Additional scoped apps; physical stack/heap measurements |
 | Background app | 1-12 horizontal stripes, visual arrow-key picker, Q/E hue, Shift fine steps, live striped canvas, white selection pulse, 12 common stripe-only pride presets (P), typed hex colours (H), S to save and protected persistence | Optional richer styling later |
 | Setup/settings | Direct profile/brightness/date-time/background controls, regional/custom POSIX timezones, manual validated UTC, SNTP, preference reset confirmation and remembered menu selection and manual LCD/backlight-off with consumed wake input; checksummed redundant settings | Physical UX/time-sync validation; preset rule changes when legislation changes |
-| SD/files | Safe file manager, previews/editor/music, restored text list/actions, create/rename, copy/cut/paste, streamed verified folder copies, Trash/restore and confirmed permanent deletion | Optional sorting/search refinements; real-card performance |
+| SD/files | Safe file manager, previews/editor/music, restored text list/actions, create/rename, checkbox multi-selection, Ctrl+X/C/V, recursive name/content search, JPEG/BMP viewer, streamed verified folder copies, Trash/restore and confirmed permanent deletion | Real-card search/copy performance and keyboard validation |
 | Installer | USB factory installer, package validation, SD staging/readback, inactive runtime write/readback and boot selection | Physical flashing/SD/OTA rollback/power-cut validation |
 | Repair/reinstall | Exact-package repair, backup-bound journal, previous tree retained, resume/refusal at interrupted states | Real card-removal/low-space/power-cut experiments and recovery UX refinement from results |
 | Backup/restore | Standard small ZIPs, scalable readable folder backups, owned folder resume, full verification, conflict preservation and reports | Measure large real-card performance; archives/settings from unknown formats remain preserved, not guessed compatible |
@@ -45,18 +45,24 @@ backup/migration limits, and [VALIDATION.md](VALIDATION.md) for physical evidenc
 for update use, maintainer signing setup, custom source trust and recovery.
 
 
-## Remaining software roadmap (current priorities)
+## Remaining software roadmap
 
-Recorder, Files Audio Player, IR/IMU services, developer tooling and versioned
-save migrations are implemented and removed below. Hardware validation remains separate. Games, a POS terminal,
-installable app/package management and automatic power management are removed from
-scope; existing legacy user folders are never erased.
+The requested Files search, image viewer, Recorder editing, calculator graph
+analysis, Meshtastic telemetry and store-and-forward are implemented in
+0.8.1-dev within the [documented limits](BUG_REPORT_0.8.1.md). Files also has
+checkbox selection and Ctrl+X/C/V clipboard shortcuts. No further software
+features are scheduled from the last suggestions list.
 
-- Physical verification remains required; it is separate from software scope.
-  Meshtastic messaging, encrypted channels/public-key DMs, bounded client relaying,
-  node discovery and opt-in location are now implemented. Upstream phone/USB API,
-  remote admin, telemetry modules, store-and-forward, compressed text and
-  adaptive next-hop routing are not implemented; see [MESHTASTIC.md](MESHTASTIC.md).
+Clock/alarms, Notes/tasks, additional Maps POI/GPX features and a new integrated
+Help app are removed from the proposed list at the user's request. Existing map
+features and existing streamed help resources remain available. Games, terminal,
+app packages/package management and automatic power management remain outside
+scope. Existing user data is preserved.
+
+Physical validation remains separate: display/input, audio/SD/heap performance,
+ROM JPEG, external mesh interoperability, and power-loss/OTA recovery checks.
+Other upstream Meshtastic modules/APIs described as unsupported in
+[MESHTASTIC.md](MESHTASTIC.md) are limitations, not promised roadmap items.
 
 0.6.2-dev fixes zero-tick audio handoff, adds randomized cues/startup melody,
 optimizes the ribbon and text editor, adds Known Networks and signed SD firmware
@@ -152,7 +158,7 @@ See [the bug report](BUG_REPORT_0.6.11.md) for measured I/O counts and limits.
 To make room without changing the safe factory/two-OTA layout, unused IPv6 protocol
 code is omitted: POS configures IPv4 STA/DHCP and IPv4 LAN sessions, with no IPv6
 interface previously configured. IPv4 HTTPS validation and all signed-update checks
-remain. No experimental link-time optimization is enabled.
+remain. That release did not enable LTO; 0.8.1 uses POS-owned size/LTO builds as described in DEVELOPMENT.md.
 
 ## 0.7.0-stable Meshtastic and mesh Wi-Fi
 
@@ -192,3 +198,10 @@ remain outside scope.
 
 The boot intro fills each stripe in 240 ms instead of 400 ms; half-fill stagger,
 logo fade and one-second hold are retained (total scheduled intro 1.88 s).
+
+## 0.8.1-dev Files, media editing, graph analysis and mesh modules
+
+See [Files](FILES.md), [Image viewer](IMAGE_VIEWER.md),
+[Recorder editing](RECORDER_EDITING.md), [Calculator](CALCULATOR.md),
+[Meshtastic](MESHTASTIC.md) and the [verification report](BUG_REPORT_0.8.1.md).
+The resident firmware keeps independent recovery and both existing OTA slots.

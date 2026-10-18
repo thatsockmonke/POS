@@ -66,3 +66,8 @@ void pos_ui_calculator(const char *root);
 void pos_ui_calculator_open(const char *root, const char *relative);
 
 void pos_ui_help(const char *root, const char *title, const char *file);
+
+int pos_ui_files_menu(const char *, const char *const *, int, unsigned,
+                      unsigned, const char *, int *, pos_event_t *);
+void pos_ui_image(const char *, const char *);
+void pos_ui_recording_edit(const char *, const char *);
