@@ -29,6 +29,10 @@ bool pos_console_claim(void) {
 void pos_console_release(void) {
   sequence = 0;
   pending = -1;
+  /* The foreground may have consumed a prefix before Home/cancellation.
+   * Quarantine the remaining line even when its prefix is no longer in stdin.
+   */
+  discard = true;
   atomic_store(&claimed, false);
 }
 static uint64_t milliseconds(void) {

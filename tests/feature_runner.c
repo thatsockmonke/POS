@@ -2244,6 +2244,11 @@ int main(int argc, char **argv) {
     /* Late framed traffic, including controls, cannot select/close apps. */
     assert(write(descriptors[1], "\036POS1\0\035\nq", 9) == 9);
     assert(pos_console_poll(descriptors[0]) == 'q');
+    assert(pos_console_claim());
+    pos_console_release();
+    /* Cancellation can leave only the tail: the prefix was already read. */
+    assert(write(descriptors[1], "eedccbbaa\nz", 11) == 11);
+    assert(pos_console_poll(descriptors[0]) == 'z');
     assert(write(descriptors[1], "w", 1) == 1);
     assert(pos_console_poll(descriptors[0]) == 'w');
     assert(pos_console_poll(descriptors[0]) == -1);

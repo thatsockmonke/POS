@@ -150,4 +150,7 @@ CRC handles accidental framing damage; SHA-256 verifies the completed file.
 USB physical access and explicit on-device session/offer approval are the access
 boundary; this is not an encrypted transport or a replacement for authenticated
 firmware updates. Late frames are swallowed outside the session rather than
-being interpreted as keyboard input. Recovery/OTA partitions are unchanged.
+being interpreted as keyboard input. Console release also discards the remaining
+line when cancellation consumed a frame prefix; after a checked Q response, the
+PC sends one bare LF to clear this quarantine. With an interrupted serial-console
+session, press Enter once to resume USB keyboard fallback. Recovery/OTA partitions are unchanged.

@@ -21,6 +21,11 @@ reads bounded nonblocking frames in the foreground. The PC waits for a valid
 protocol/model greeting before transmitting; old firmware is not probed with
 bytes that could become keyboard commands. Framed packets arriving after exit
 are swallowed by the console parser, including embedded Home/Escape controls.
+On release the console quarantines the remainder of a packet line even if its
+prefix was already consumed before cancellation. A successful checked PC session
+sends a final newline to clear that quarantine; after an interrupted serial
+terminal session, press Enter once before using USB keyboard fallback. Physical
+keyboard/G0 are unaffected. A regression covers prefix-less remaining bytes.
 CRC framing ignores logs/noise, oversized lines and damaged packets. Completed
 responses are cached for safe retry after a lost acknowledgment.
 
@@ -76,7 +81,7 @@ same. The new catalog adds one manifest record, avoiding dozens of extra records
   and matching every reference with exactly one catalog entry.
 - GCC static analysis of the new codec/service, console and help reader found
   no warnings. Post-LTO USB/UI/core stack reports remain below the 3 KiB guard.
-- Both firmware roles build: runtime **1,506,800 bytes**, leaving **528 bytes** in
+- Both firmware roles build: runtime **1,506,816 bytes**, leaving **512 bytes** in
   each unchanged 1,507,328-byte OTA slot; installer **822,576 bytes**, below its
   1,048,576-byte factory slot. The flash margin is small, separately from RAM.
 - Linux private-D-Bus Bluetooth transfer/cleanup smoke passed; no physical radio.

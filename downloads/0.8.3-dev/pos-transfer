@@ -971,6 +971,10 @@ def usb_transfer(action, source, folder, port, progress=print):
             finally:
                 receiver.close()
         cable.request(b'Q', progress)
+        # Release the console's tail quarantine after a checked USB session.
+        # Never send this to an old device that did not greet us.
+        with contextlib.suppress(OSError):
+            os.write(cable.fd, b'\n')
     finally:
         # Closing never invokes esptool, changes modem-control lines, or erases.
         cable.close()

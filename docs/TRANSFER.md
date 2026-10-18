@@ -81,7 +81,9 @@ probe old firmware by injecting serial keyboard commands.
 POS temporarily reserves USB console input, while physical keyboard/G0 remain
 active. CRC-framed traffic ignores console logs/noise; repeated acknowledgments
 are safe, and transfer frames arriving after exit are discarded by the console.
-The tool never sends bootloader commands or toggles RTS/DTR. Actual ChromeOS
+The tool never sends bootloader commands or toggles RTS/DTR. If you use USB
+keyboard fallback from a serial terminal after interrupting a file session,
+press Enter once first; the partial packet tail is deliberately discarded. Actual ChromeOS
 USB sharing, device scheduling and cable throughput still require hardware
 verification; the host tests use Linux pseudo-terminals with the actual C
 service/UI and PC tty transport, not a physical Cardputer.
