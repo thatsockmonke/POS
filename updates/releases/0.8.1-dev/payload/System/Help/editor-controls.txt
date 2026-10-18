@@ -1,0 +1,1 @@
+Shift + arrows: select. Ctrl+A: select all. Ctrl+C/X/V: copy/cut/paste. Ctrl+Z: undo; Ctrl+Y or Ctrl+Shift+Z: redo (32 edits each). Ctrl+arrows: words/document ends. Ctrl+U/D: page up/down. Ctrl+L/E: line start/end. Ctrl+F/G: find/go to line. Ctrl+S: save. Clipboard and history are SD-backed and last for this open document.
