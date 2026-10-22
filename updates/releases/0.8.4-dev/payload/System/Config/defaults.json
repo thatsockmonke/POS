@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "device_name": "PANPUTER",
+  "setup_required": true,
+  "location_broadcast": false,
+  "wifi_enabled": false,
+  "note": "Read-only defaults. User settings will live outside bundled system files."
+}
