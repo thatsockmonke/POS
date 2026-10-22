@@ -1,0 +1,1 @@
+World overview: Natural Earth, public domain. Regional roads: (c) OpenStreetMap contributors. https://www.openstreetmap.org/copyright. ODbL 1.0. Downloads use OpenStreetMap or the selected Overpass service; availability is not guaranteed. Raw .osm files remain in POS/Maps. Small areas only. Offline routing uses the selected travel mode and downloaded restrictions.

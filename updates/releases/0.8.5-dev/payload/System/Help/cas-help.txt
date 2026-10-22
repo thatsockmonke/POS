@@ -1,0 +1,1 @@
+x is symbolic, even if saved. Polynomials: degree 8. Solve degree 1/2 (real/complex) and 3..8 (numeric real roots). Example: (x-1)*(x-2)*(x-3)=0. Derivative/integral: polynomials. More modes: checked exact fractions, linear systems and matrices. This is bounded algebra, not an unlimited symbolic engine.
