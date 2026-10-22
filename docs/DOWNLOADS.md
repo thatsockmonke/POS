@@ -1,6 +1,6 @@
 # Download POS
 
-**Current release: [0.8.3-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.8.3-dev).**
+**Current release: [0.8.4-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.8.4-dev).**
 The previous stable release remains [0.7.0-stable](https://github.com/thatsockmonke/POS/releases/tag/v0.7.0-stable).
 This development prerelease includes the updater fix; installing 0.6.6-dev first is not
 required for a fresh install. The [bridge recovery guide](UPDATER_HEAP.md)
@@ -12,25 +12,25 @@ You do not need to compile the OS to use a prebuilt package.
 
 ## Current package
 
-**POS 0.8.3-dev — USB cable file transfer for Linux/Crostini.**
+**POS 0.8.4-dev — Esc works without Fn in apps and dialogs.**
 Physical radio interoperability still needs verification; see [scope and setup](MESHTASTIC.md).
 
-- **Beginner installer:** [download pos-setup](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/pos-setup) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/pos-setup.sha256) · [easy instructions](EASY_INSTALL.md)
-- [POS 0.8.3-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.8.3-dev)
-- [Download pos-0.8.3-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/pos-0.8.3-dev.zip)
-- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/pos-0.8.3-dev.zip.sha256)
-- [Signed OTA package](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/pos-update-0.8.3-dev.zip) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/pos-update-0.8.3-dev.zip.sha256) · [on-device update instructions](UPDATES.md)
-- [World overview preview](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/world.png)
-- [Maps preview (generated example state)](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/maps.png)
-- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/boot-animation.png)
-- [Animated launcher/app transitions](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/ui-animation.png)
-- App previews: [Recorder](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/recorder.png), [Files](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/files.png), [Background](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/background.png), [Counter](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/counter.png)
+- **Beginner installer:** [download pos-setup](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/pos-setup) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/pos-setup.sha256) · [easy instructions](EASY_INSTALL.md)
+- [POS 0.8.4-dev release and installation downloads](https://github.com/thatsockmonke/POS/releases/tag/v0.8.4-dev)
+- [Download pos-0.8.4-dev.zip](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/pos-0.8.4-dev.zip)
+- [Download its SHA-256 checksum](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/pos-0.8.4-dev.zip.sha256)
+- [Signed OTA package](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/pos-update-0.8.4-dev.zip) · [checksum](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/pos-update-0.8.4-dev.zip.sha256) · [on-device update instructions](UPDATES.md)
+- [World overview preview](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/world.png)
+- [Maps preview (generated example state)](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/maps.png)
+- [Boot animation preview](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/boot-animation.png)
+- [Animated launcher/app transitions](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/ui-animation.png)
+- App previews: [Recorder](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/recorder.png), [Files](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/files.png), [Background](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/background.png), [Counter](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/counter.png)
 - [Browse versioned downloads](https://github.com/thatsockmonke/POS/tree/main/downloads)
 - [Full installation guide](INSTALL.md)
 - [Implemented / partial / planned features](STATUS.md)
 
 The 0.3.6-dev candidate was withdrawn before release after an ESP32 stack audit.
-Use 0.8.3-dev, which includes the bounded-buffer fix and a compiler frame-size guard.
+Use 0.8.4-dev, which includes the bounded-buffer fix and a compiler frame-size guard.
 
 Every new POS version is published as a versioned GitHub Release with its matching
 installation ZIP and checksum. Development versions are marked **prerelease**.
@@ -66,7 +66,7 @@ From the source checkout with ESP-IDF v5.5.5 activated:
 ```sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.8.3-dev --zip-output dist/pos-0.8.3-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.8.4-dev --zip-output dist/pos-0.8.4-dev.zip
 ```
 
 Choose a fresh output name if one already exists. `bundle` verifies images and
@@ -77,7 +77,7 @@ the two copied USB scripts in the binary download.
 
 ## Linux file transfer
 
-Download [pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/pos-transfer)
-([SHA-256](https://github.com/thatsockmonke/POS/releases/download/v0.8.3-dev/pos-transfer.sha256)).
-Run `python3 ~/Downloads/pos-transfer`; choose Send/Receive, then Wi-Fi/Bluetooth.
+Download [pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/pos-transfer)
+([SHA-256](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/pos-transfer.sha256)).
+Run `python3 ~/Downloads/pos-transfer`; choose Send/Receive, then USB cable, Wi-Fi or Bluetooth.
 Also included inside the installation ZIP. See [TRANSFER.md](TRANSFER.md).

@@ -477,7 +477,7 @@ static void diagnostics(services_t *s) {
     if (choice == 2) {
       pos_device_keyboard_begin();
       pos_ui_message("Keyboard test",
-                     "Press all 56 keys, including modifiers. Fn+` exits; "
+                     "Press all 56 keys; press Esc last to exit. "
                      "Fn+Space returns home. Each raw position is recorded.");
       for (;;) {
         pos_event_t e;

@@ -45,7 +45,8 @@ installer, boot animation, setup and launcher.
 
 The stock ADV Fn layer differs from the M5Cardputer library: keys without an
 Fn override fall through, including Enter/Tab/numbers/punctuation. Fn+letters
-produce capitals; Fn+backtick is Escape, Fn+Del is forward Delete, and Fn with
+produce capitals. POS makes bare Esc primary; Fn+Esc also remains Escape.
+Shift+Esc types a tilde and Alt+Esc types a backtick. Fn+Del is forward Delete; Fn with
 semicolon/comma/period/slash produces Up/Left/Down/Right. Aa/Shift, Ctrl, Alt
 and Opt/Meta are tracked independently. POS retains its reserved Fn+Space Home
 shortcut and adds Fn + apostrophe as a global Home alias. Key releases keep the identity emitted on press when modifiers change.

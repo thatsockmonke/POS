@@ -1,8 +1,9 @@
-POS 0.8.3-dev - Pan Operating System
+POS 0.8.4-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
 blue starts halfway through yellow, then large POS fades in and holds one second.
 ADV arrows: ; (Up), , (Left), . (Down), / (Right), no Fn needed in menus/apps.
+Esc works without Fn; Fn+Esc also cancels. Shift+Esc: tilde; Alt+Esc: backtick.
 Text entry keeps punctuation; Fn+arrows moves the editor cursor.
 Launcher: Left/Right moves, Up/Enter opens the centered app. Fn+Space closes the app.
 Background: choose 1-12 stripes; arrows pick color, Q/E hue, Shift fine.

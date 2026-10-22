@@ -143,7 +143,7 @@ static int menu(const char *title, const char *const *items, int count,
       if (count > 10)
         pos_view_line(&view, 14, "Menu %d/%d", selected / 10 + 1,
                       (count + 9) / 10);
-      pos_view_line(&view, 15, "Arrows Enter:OK Fn+`:back");
+      pos_view_line(&view, 15, "Arrows Enter:OK Esc:back");
       pos_device_show(&view);
       redraw = false;
     }
@@ -217,7 +217,7 @@ bool pos_ui_text(const char *title, const char *label, char *text,
       pos_view_line(&v, 10, "%zu/%zu characters", n, capacity - 1);
       pos_view_line(&v, 12, "Enter: accept  Ctrl+U: clear");
       pos_view_line(&v, 13, "Del: erase (top-right key)");
-      pos_view_line(&v, 15, "Fn+`: back  Fn+Space: home");
+      pos_view_line(&v, 15, "Esc: cancel  Fn+Space: home");
       pos_device_show(&v);
       redraw = false;
     }

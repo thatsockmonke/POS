@@ -987,7 +987,88 @@ static int keyboard_ui_tests(bool fn) {
   char text[16] = "";
   assert(pos_ui_text("Text", "Punctuation", text, sizeof(text), false));
   assert(!strcmp(text, ";,./"));
+  /* Literal tilde/backtick remain typeable in ordinary text inputs. */
+  memset(&keyboard, 0, sizeof(keyboard));
+  ui_next = ui_count = 0;
+  const uint8_t literals[] = {0x87, 0x81, 0x01, 0x07,
+                              0x8e, 0x81, 0x01, 0x0e};
+  for (unsigned i = 0; i < sizeof(literals); ++i) {
+    pos_event_t e;
+    if (pos_keyboard_decode(&keyboard, literals[i], &e))
+      ui_events[ui_count++] = e;
+  }
+  push_key(POS_KEY_ENTER, 0);
+  text[0] = 0;
+  assert(pos_ui_text("Text", "Esc characters", text, sizeof(text), false));
+  assert(!strcmp(text, "~`"));
+  assert(ui_next == ui_count);
   puts("Physical arrows navigate without Fn; text punctuation preserved");
+  return 0;
+}
+static int keyboard_escape_ui_tests(const char *root, const char *screen,
+                                    bool fn) {
+  pos_keyboard_t keyboard = {0};
+  pos_event_t event;
+  pos_settings_t settings, before;
+  pos_settings_defaults(&settings);
+  before = settings;
+  assert(!pos_fs_layout(root));
+  ui_next = ui_count = 0;
+  if (fn)
+    assert(!pos_keyboard_decode(&keyboard, 0x83, &event));
+  /* Use real top-left TCA8418 press/release events, not synthetic Escape. */
+  assert(pos_keyboard_decode(&keyboard, 0x81, &event));
+  ui_events[ui_count++] = event;
+  assert(pos_keyboard_decode(&keyboard, 0x01, &event));
+  ui_events[ui_count++] = event;
+  if (!strcmp(screen, "menu")) {
+    const char *items[] = {"Keep", "Delete"};
+    assert(pos_ui_menu("Confirmation", items, 2) == -1);
+  } else if (!strcmp(screen, "text")) {
+    char text[32] = "unchanged";
+    assert(!pos_ui_text("Text", "Esc cancels", text, sizeof(text), false));
+    assert(!strcmp(text, "unchanged"));
+  } else if (!strcmp(screen, "notice")) {
+    pos_ui_notice("Notice", "Esc closes this notice.");
+  } else if (!strcmp(screen, "progress")) {
+    assert(pos_ui_progress(NULL, "copy", "document.txt", 1, 100) == 1);
+  } else if (!strcmp(screen, "picker")) {
+    uint32_t color = 0x123456;
+    assert(!pos_ui_color("Color", &color) && color == 0x123456);
+  } else if (!strcmp(screen, "background")) {
+    assert(!pos_ui_background(root, &settings));
+  } else if (!strcmp(screen, "setup")) {
+    assert(!pos_ui_setup(root, &settings, true));
+  } else if (!strcmp(screen, "settings")) {
+    pos_ui_settings(root, &settings);
+  } else if (!strcmp(screen, "files")) {
+    pos_ui_files(root);
+  } else if (!strcmp(screen, "file-picker")) {
+    char path[241] = "";
+    assert(!pos_ui_pick_file(root, "Pick a file", path));
+    assert(!*path);
+  } else if (!strcmp(screen, "editor")) {
+    pos_ui_editor(root);
+  } else if (!strcmp(screen, "wifi")) {
+    pos_ui_wifi(root);
+  } else if (!strcmp(screen, "recorder")) {
+    pos_ui_recorder(root, &settings);
+  } else if (!strcmp(screen, "music")) {
+    pos_ui_music(root);
+  } else if (!strcmp(screen, "share")) {
+    pos_ui_sharing(root);
+  } else if (!strcmp(screen, "calculator")) {
+    pos_ui_calculator(root);
+  } else {
+    assert(false);
+  }
+  assert(!memcmp(&settings, &before, sizeof(settings)));
+  /* Cancellation is local, not a latched global Home request. The key-up
+   * remains a release and cannot cancel the parent screen a second time. */
+  assert(!pos_home_pending());
+  assert(pos_device_event(&event, 0) && !event.pressed &&
+         event.key == POS_KEY_ESCAPE);
+  assert(ui_next == ui_count);
   return 0;
 }
 static void choose(unsigned index) {
@@ -1437,7 +1518,13 @@ static int core_tests(void) {
     assert(!pos_core_event(&core, &event));
     pos_core_tick(&core, 1, &view);
     assert(!strcmp(view.lines[4], "hello"));
-    event = (pos_event_t){POS_KEY_HOME, 0, true};
+    if (i % 2)
+      event = (pos_event_t){POS_KEY_HOME, 0, true};
+    else {
+      pos_keyboard_t physical = {0};
+      assert(pos_keyboard_decode(&physical, 0x81, &event));
+      assert(event.key == POS_KEY_ESCAPE && !event.modifiers);
+    }
     assert(!pos_core_event(&core, &event));
     assert(!core.app && !core.state && !allocations);
   }
@@ -2313,6 +2400,10 @@ int main(int argc, char **argv) {
     return keyboard_ui_tests(true);
   if (!strcmp(argv[2], "keyboard-bare"))
     return keyboard_ui_tests(false);
+  if (!strcmp(argv[2], "keyboard-escape-ui")) {
+    assert(argc == 5);
+    return keyboard_escape_ui_tests(argv[1], argv[3], !strcmp(argv[4], "fn"));
+  }
   if (!strcmp(argv[2], "keyboard-events")) {
     pos_keyboard_t keyboard = {0};
     for (int i = 3; i < argc; ++i) {

@@ -1,8 +1,8 @@
 # Files, Audio Player, Recorder, Music and hardware
 
 Use Left/Right arrows to move the launcher ribbon and Up/Enter to open an app. Menus use Up/Down
-and Enter. Fn+backtick is Escape; Fn + apostrophe, Fn+Space or short G0 closes
-the current app.
+and Enter. Esc works without Fn (Fn+Esc also works); Fn + apostrophe, Fn+Space or short G0 closes
+the current app. Shift+Esc types a tilde; Alt+Esc types a backtick in text.
 Only one foreground app runs. Wi-Fi and the enabled location/radio services can
 continue in the background. Music and explicit file-transfer sessions stop on exit.
 

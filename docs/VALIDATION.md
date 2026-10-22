@@ -49,7 +49,7 @@ Open **Diagnostics** and run:
 - Display test: examine edges, orientation, colors and readability. Frame metrics
   describe complete rendered transfers, with minimum/mean/maximum since boot.
 - Keyboard test: press all 56 raw positions, including modifiers, then exit with
-  Fn+backtick. The evidence stores a 56-bit position mask and overflow/drop counts.
+  Esc (press it last). The evidence stores a 56-bit position mask and overflow/drop counts.
   Seeing a position does not prove its decoded character is correct; check that too.
 - Save device measurements: write current/minimum/largest heap, main-task stack
   headroom, build/SDK/chip/reset details, flash/firmware/SD bytes, boot/uptime,

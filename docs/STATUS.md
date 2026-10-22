@@ -1,4 +1,4 @@
-# POS development status — 0.8.3-dev
+# POS development status — 0.8.4-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -228,3 +228,12 @@ make room without removing features, either OTA slot or independent recovery.
 Missing/corrupt help fails with a clear notice. See [TRANSFER.md](TRANSFER.md)
 and [the verification report](BUG_REPORT_0.8.3.md). Real USB hardware, ChromeOS
 pass-through, throughput and cable-disconnect timing remain physical checks.
+
+## 0.8.4-dev: Esc without Fn
+
+The physical top-left key now emits Escape without Fn, so the existing app and
+dialog cancel/back handlers receive it. Fn+Esc remains compatible; Shift+Esc
+types a tilde and Alt+Esc types a backtick in text. Shared hints and keyboard
+diagnostics match the new primary mapping. Regression tests exercise actual
+TCA8418 codes through 16 UI paths in both layers; physical timing remains to
+verify. See [the cause and regression report](BUG_REPORT_0.8.4.md).

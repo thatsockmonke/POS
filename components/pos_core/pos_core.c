@@ -17,7 +17,9 @@ bool pos_home_take(void) {
 
 /* Physical remap and Fn behavior from stock M5Cardputer-UserDemo's
  * main/hal/keyboard/keyboard.cpp at b549eac0a3c65bc108186c276b8fac0a214aaa4e.
- * Fn+letters type uppercase; keys without an override keep working. */
+ * Fn+letters type uppercase; keys without an override keep working. POS makes
+ * the Esc legend primary: bare Esc and Fn+Esc cancel, Shift+Esc types '~',
+ * and Alt+Esc types '`'. All app and text contexts receive the same Escape. */
 static const int normal[4][14] = {
     {'`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=',
      POS_KEY_BACKSPACE},
@@ -63,7 +65,11 @@ bool pos_keyboard_decode(pos_keyboard_t *k, uint8_t raw, pos_event_t *event) {
   int key = normal[y][x];
   if (!key || (home && (index == 55 || index == 40)))
     return false;
-  if (mods & POS_MOD_FN) {
+  if (index == 0 && !(mods & POS_MOD_FN))
+    key = mods & POS_MOD_SHIFT ? '~'
+          : mods & POS_MOD_ALT ? '`'
+                              : POS_KEY_ESCAPE;
+  else if (mods & POS_MOD_FN) {
     if (index == 0)
       key = POS_KEY_ESCAPE;
     else if (index == 13)

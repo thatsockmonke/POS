@@ -409,15 +409,38 @@ class FeatureTests(unittest.TestCase):
         self.run_feature("editor-ui-punctuation")
         self.assertEqual((self.card/"POS/Users/Owner/Documents/Untitled.txt").read_bytes(),b"wasd;,./:<>?")
 
-    def test_entire_stock_adv_key_layout_normal_shift_and_fn_layers(self):
+    def test_physical_escape_cancels_shared_dialogs_and_apps_without_fn(self):
+        screens=("menu", "text", "notice", "progress", "picker", "background",
+                 "setup", "settings", "files", "file-picker", "editor", "wifi",
+                 "recorder", "music", "share", "calculator")
+        for layer in ("bare", "fn"):
+            for screen in screens:
+                with self.subTest(screen=screen, layer=layer):
+                    card=self.base/(layer+"-"+screen);card.mkdir()
+                    self.run_feature("keyboard-escape-ui", screen, layer, card=card)
+
+    def test_escape_keeps_literal_characters_and_release_identity(self):
+        # Bare top-left is Esc; Shift types tilde, Alt types backtick. Fn+Esc
+        # remains compatible, including when Fn is released before Esc.
+        cases=[([],257,0),([0x87],ord("~"),1),([0x8e],ord("`"),8),
+               ([0x83],257,4),([0x83,0x87],257,5)]
+        for prefix,key,mods in cases:
+            with self.subTest(prefix=prefix):
+                actual=self.run_feature("keyboard-events",*prefix,0x81,0x01).stdout
+                self.assertEqual(actual,f"{key} {mods} 1\n{key} {mods} 0\n")
+        self.assertEqual(self.run_feature("keyboard-events",0x83,0x81,0x03,0x01).stdout,
+                         "257 4 1\n257 0 0\n")
+
+    def test_adv_stock_key_layout_with_pos_primary_escape(self):
         # Stock UserDemo keyboard.cpp b549eac0...: physical TCA codes by row,
         # normal/Shift character legends and Fn overrides. No decoder-derived
-        # expectations; in particular stock Fn+number stays a number.
+        # expectations; stock Fn+number stays a number. POS intentionally
+        # makes bare top-left Escape rather than the stock backtick.
         scans=[[1,5,11,15,21,25,31,35,41,45,51,55,61,65],
                [2,6,12,16,22,26,32,36,42,46,52,56,62,66],
                [3,7,13,17,23,27,33,37,43,47,53,57,63,67],
                [4,8,14,18,24,28,34,38,44,48,54,58,64,68]]
-        normal=[list("`1234567890-=")+[258],list("\tqwertyuiop[]\\"),
+        normal=[[257,*"1234567890-="]+[258],list("\tqwertyuiop[]\\"),
                 [None,None,*"asdfghjkl;'",256],[None,None,None,*"zxcvbnm,./ "]]
         shifted=[list("~!@#$%^&*()_+")+[258],list("\tQWERTYUIOP{}|"),
                  [None,None,*'ASDFGHJKL:"',256],[None,None,None,*"ZXCVBNM<>? "]]

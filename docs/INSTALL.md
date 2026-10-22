@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.8.3-dev adds USB cable file transfer for Linux/Crostini and retains the audio memory fixes.
+POS 0.8.4-dev fixes Esc without Fn across apps and dialogs; USB cable transfer and audio memory fixes remain included.
 Existing installations can use Settings → System → Software Update without formatting.
 The complete master specification and physical radio/mesh-Wi-Fi verification are not finished.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
@@ -21,9 +21,9 @@ including Chromebook shared-folder/USB limits. The detailed manual route follows
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.8.3-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.8.4-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.8.3-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.8.4-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -44,10 +44,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.8.3-dev.zip.sha256
-mkdir pos-0.8.3-dev
-unzip pos-0.8.3-dev.zip -d pos-0.8.3-dev
-cd pos-0.8.3-dev
+sha256sum -c pos-0.8.4-dev.zip.sha256
+mkdir pos-0.8.4-dev
+unzip pos-0.8.4-dev.zip -d pos-0.8.4-dev
+cd pos-0.8.4-dev
 sha256sum -c SHA256SUMS
 ```
 
@@ -188,7 +188,7 @@ with the final runtime. Close the serial program and reset/power-cycle if needed
 3. The installer checks package/model/version, file sizes/hashes, runtime header,
    destination ownership, flash capacity and conservative SD free space.
 4. Read the summary, then type **INSTALL** exactly and press Enter. **Ctrl+U**
-   clears a text field; a character counter shows its limit. Fn+backtick
+   clears a text field; a character counter shows its limit. Esc (no Fn needed)
    goes back; Fn+Space requests Home/cancellation. No formatting option is offered.
 5. Leave power and SD connected. Progress labels distinguish **Prepare SD system**,
    **Verify files**, **Write runtime firmware** and **Verify runtime firmware**.
@@ -231,7 +231,8 @@ as Meta. In USB terminals, use the normal arrow keys.
 | Menus | Up/Down arrows, Enter |
 | Color picker | Arrow keys move cursor; Q/E hue; Shift fine steps; Enter accepts; Esc cancels |
 | Clear a text field | Ctrl+U (also byte 0x15 from a raw USB terminal) |
-| Back | Fn+backtick (Escape) |
+| Back | Esc (no Fn); Fn+Esc also works |
+| Tilde / backtick in text | Shift+Esc types ~; Alt+Esc types a backtick |
 | Return Home | Fn+Space or a short G0 press |
 | Escape a stalled foreground app | Hold Fn+Space or G0 for two seconds to restart into recovery |
 | See measured hardware data | Diagnostics; JSON files go to `/Diagnostics` |
@@ -300,7 +301,7 @@ Press **S** to save and return home. Changes remain local until saving succeeds;
 Saved backgrounds do not change the boot animation.
 
 Only one foreground app runs. **Fn+Space** (or a short G0 press) requests closing
-the app from any screen. The editor asks what to do with unsaved changes. **Fn+backtick** is Escape: back within
+the app from any screen. The editor asks what to do with unsaved changes. **Esc** works without Fn: back within
 an app, or close it from its main screen. Background system services may continue.
 
 

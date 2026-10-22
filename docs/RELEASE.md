@@ -1,26 +1,24 @@
-# POS 0.8.3-dev
+# POS 0.8.4-dev
 
-Adds USB cable file transfer for Linux and Chromebook/Crostini, avoiding local
-Wi-Fi/BlueZ dependence and keeping the microSD inserted.
+Fixes the physical Esc key across apps and dialogs. Previously the top-left
+key produced a backtick unless Fn was held, so screens advertising Esc could
+ignore it or insert a character instead of cancelling.
 
-- PC tool: Send/Receive → **3. USB cable**; detect/select the serial port. Standard
-  Python only, with no additional USB/Bluetooth package installation.
-- On POS: **Share → Receive USB cable / PC**, or **Files → file → Share → USB
-  cable to PC**. Incoming filenames/sizes require on-device acceptance.
-- Streamed files, progress on both sides, CRC framing, SHA-256 verification,
-  interruption/resume, duplicate-ACK handling and no overwrite of existing data.
-- File transfer uses the running OS, without esptool, modem-control resets,
-  firmware/partition writes or raw USB disk access. Console input is reserved
-  during the explicit session; physical keyboard/G0 still work. Late packets
-  cannot act as serial keyboard shortcuts.
-- Existing explanatory notices are retained in a signed SD help catalog to
-  preserve both OTA slots and independent recovery within the flash limit.
+- **Esc alone** now goes back/cancels. **Fn+Esc** continues to work.
+- **Shift+Esc** types `~`; **Alt+Esc** types a backtick in text inputs.
+- Shared menu/text prompts and hardware diagnostics now show the correct key.
+- Cancellation remains local: Esc dismisses a dialog or goes back one screen;
+  in the Text Editor it opens the existing document menu. Global Home and
+  unsaved-document protections remain intact.
+- Regression tests feed actual TCA8418 press/release codes into 16 app/dialog
+  paths, with and without Fn, and check modifier/release identity, literal text,
+  preserved settings and application cleanup.
 
-Update POS once through Settings → System → Software Update, then download the
-new `pos-transfer`. No SD formatting or repartition is required. On ChromeOS,
-share the Cardputer USB device with Linux and close flashing/serial monitors.
+Install through **Settings → System → Software Update**. No SD formatting or
+reinstallation is needed. USB cable file transfer remains supported with the
+0.8.3-dev PC tool; the new release includes its matching standalone tools too.
 
-[Step-by-step instructions](TRANSFER.md) · [verification and limits](BUG_REPORT_0.8.3.md).
-Native tests exercise actual C/PC code over pseudo-terminals. Physical Cardputer
-USB, ChromeOS sharing, actual throughput and unplug timing are not claimed tested.
-This is a development prerelease. Audio memory fixes remain included.
+[Cause, regression checks and limitations](BUG_REPORT_0.8.4.md).
+Both firmware roles and the host suite are checked before publication. Physical
+Cardputer keyboard testing is still needed; cloud tests do not claim hardware
+validation. This is a development prerelease.
