@@ -37,14 +37,19 @@ Background, first-time setup, Settings, Files, the file picker, Text Editor,
 Wi-Fi, Recorder, Music, Share and Calculator. It checks release identity,
 unchanged settings, unchanged cancelled text and the absence of a global Home
 latch. Further tests cover tilde/backtick text entry and Fn-release ordering.
+The editor regression caught and fixed an additional edge case before release:
+Alt used to select the literal backtick must be consumed by the decoder, or
+the editor treats the result as an Alt shortcut and filters it out. A physical
+Alt+Esc/Shift+Esc typing test now saves both characters and verifies that Esc
+opens the document menu and a second Esc cancels it without losing the edits.
 The app lifecycle test alternates global Home and physical bare Esc for 100
 open/save/close cycles, verifying resource cleanup.
 
-Results: all **530** host regression tests passed with no skips. All four
+Results: all **531** host regression tests passed with no skips. All five
 Escape-focused test methods also passed with AddressSanitizer and undefined
 behavior checks enabled. Both ESP-IDF firmware roles built successfully: the
-runtime is 1,506,816 bytes (512 bytes below its existing OTA-slot limit), and
-the installer is 822,576 bytes. No partition change was needed.
+runtime is 1,506,864 bytes (464 bytes below its existing OTA-slot limit), and
+the installer is 822,624 bytes. No partition change was needed.
 
 These are native tests of the real decoder/core/UI with mocked device services,
 not physical key presses on a Cardputer. Both installer and runtime builds must

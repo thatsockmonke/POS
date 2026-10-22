@@ -607,6 +607,20 @@ static int editor_ui_tests(const char *root, const char *mode) {
     push_key('s', POS_MOD_CTRL);
     idle_event();
     push_key(POS_KEY_HOME, 0);
+  } else if (!strcmp(mode, "editor-ui-escape-text")) {
+    pos_keyboard_t physical = {0};
+    const uint8_t raw[] = {0x8e, 0x81, 0x01, 0x0e, /* Alt+Esc: backtick */
+                            0x87, 0x81, 0x01, 0x07, /* Shift+Esc: tilde */
+                            0x81, 0x01, /* Esc: editor menu */
+                            0x81, 0x01}; /* Esc: cancel menu, keep editing */
+    for (unsigned i = 0; i < sizeof(raw); ++i) {
+      pos_event_t event;
+      if (pos_keyboard_decode(&physical, raw[i], &event))
+        ui_events[ui_count++] = event;
+    }
+    push_key('s', POS_MOD_CTRL);
+    idle_event();
+    push_key(POS_KEY_HOME, 0);
   } else if (!strcmp(mode, "editor-ui-idle")) {
     for (unsigned i = 0; i < 30; ++i)
       idle_event();

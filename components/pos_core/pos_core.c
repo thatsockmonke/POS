@@ -59,6 +59,8 @@ bool pos_keyboard_decode(pos_keyboard_t *k, uint8_t raw, pos_event_t *event) {
     k->pressed_key[index] = 0;
     if (!key)
       return false;
+    if (!index && key < 128)
+      mods &= ~POS_MOD_ALT;
     *event = (pos_event_t){key, mods, false};
     return true;
   }
@@ -89,6 +91,10 @@ bool pos_keyboard_decode(pos_keyboard_t *k, uint8_t raw, pos_event_t *event) {
       key = shifted[y][x];
   } else if ((mods & POS_MOD_SHIFT) && key < 128)
     key = shifted[y][x];
+  /* Alt chooses a literal on Esc rather than an application Alt shortcut.
+   * Consume it on both edges so editor typing/batching accepts the character. */
+  if (!index && key < 128)
+    mods &= ~POS_MOD_ALT;
   k->pressed_key[index] = key;
   *event = (pos_event_t){key, mods, down};
   return true;

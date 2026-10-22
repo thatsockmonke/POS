@@ -422,7 +422,8 @@ class FeatureTests(unittest.TestCase):
     def test_escape_keeps_literal_characters_and_release_identity(self):
         # Bare top-left is Esc; Shift types tilde, Alt types backtick. Fn+Esc
         # remains compatible, including when Fn is released before Esc.
-        cases=[([],257,0),([0x87],ord("~"),1),([0x8e],ord("`"),8),
+        cases=[([],257,0),([0x87],ord("~"),1),([0x8e],ord("`"),0),
+               ([0x8e,0x87],ord("~"),1),
                ([0x83],257,4),([0x83,0x87],257,5)]
         for prefix,key,mods in cases:
             with self.subTest(prefix=prefix):
@@ -430,6 +431,13 @@ class FeatureTests(unittest.TestCase):
                 self.assertEqual(actual,f"{key} {mods} 1\n{key} {mods} 0\n")
         self.assertEqual(self.run_feature("keyboard-events",0x83,0x81,0x03,0x01).stdout,
                          "257 4 1\n257 0 0\n")
+        self.assertEqual(self.run_feature("keyboard-events",0x8e,0x81,0x0e,0x01).stdout,
+                         "96 0 1\n96 0 0\n")
+
+    def test_editor_types_escape_literals_and_cancel_keeps_document(self):
+        self.run_feature("editor-ui-escape-text")
+        self.assertEqual((self.card/"POS/Users/Owner/Documents/Untitled.txt").read_bytes(),
+                         b"wasd`~")
 
     def test_adv_stock_key_layout_with_pos_primary_escape(self):
         # Stock UserDemo keyboard.cpp b549eac0...: physical TCA codes by row,
