@@ -23,6 +23,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "pos_battery.h"
+#include "pos_boot.h"
 #include "pos_console.h"
 #include "pos_health.h"
 #include "pos_mesh_service.h"
@@ -342,29 +343,7 @@ bool pos_device_event(pos_event_t *event, uint32_t timeout_ms) {
 }
 
 void pos_device_boot_animation(void) {
-  /* Once per boot, immediately after initialization; no SD assets or
-   * framebuffer. */
-  if (!info.display_ok)
-    return;
-  pos_view_t view;
-  uint32_t hold_ms;
-  for (unsigned i = 0; pos_boot_frame(i, &view, &hold_ms); ++i) {
-    int64_t start = esp_timer_get_time();
-    pos_device_show(&view);
-    if (!info.display_ok)
-      break;
-    /* Clear panel RAM to black before lighting the first visible frame. */
-    if (!i)
-      pos_device_brightness(70);
-    /* Count transfer time toward animation frame pacing; still hold the
-     * final splash for its full duration after presentation. */
-    int64_t remaining = (int64_t)hold_ms * 1000;
-    if (view.boot_splash && i != POS_BOOT_HOLD_FRAME)
-      remaining -= esp_timer_get_time() - start;
-    TickType_t ticks =
-        remaining > 0 ? pdMS_TO_TICKS((remaining + 999) / 1000) : 0;
-    vTaskDelay(ticks ? ticks : 1);
-  }
+  pos_boot_animation(events, &info.display_ok);
 }
 
 static void show_view(const pos_view_t *input) {

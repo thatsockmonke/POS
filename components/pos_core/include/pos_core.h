@@ -45,8 +45,8 @@ int pos_navigation(const pos_event_t *event); /* Arrow legends work without Fn;
 #define POS_COLS 30
 enum {
   POS_BOOT_COLOR_COUNT = 3,
-  POS_BOOT_SPLASH_MS = 1000,
-  POS_BOOT_FRAME_MS = 40,
+  POS_BOOT_SPLASH_MS = 500,
+  POS_BOOT_FRAME_MS = 20,
   POS_BOOT_SLIDE_FRAMES = 6,
   POS_BOOT_STAGGER_FRAMES = 3,
   POS_BOOT_FADE_FRAMES = 10,
@@ -124,8 +124,8 @@ bool pos_visual_pixel(const pos_view_t *, int x, int y, uint16_t *color);
 void pos_color_picker_view(const char *title, uint32_t rgb, uint16_t hue,
                            uint16_t saturation, uint16_t value,
                            pos_view_t *view);
-/* Black start, staggered pink/yellow/blue slides, text fade, then a one-second
- * hold. False after the last frame. Frames require no SD assets. */
+/* Black start, staggered pink/yellow/blue slides, text fade, then a
+ * half-second hold. False after the last frame. Frames require no SD assets. */
 bool pos_boot_frame(unsigned step, pos_view_t *view, uint32_t *hold_ms);
 
 typedef struct {

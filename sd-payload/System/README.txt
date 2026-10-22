@@ -1,7 +1,8 @@
-POS 0.8.4-dev - Pan Operating System
+POS 0.8.5-dev - Pan Operating System
 
 Boot starts black. Pink slides in first, yellow starts halfway through pink,
-blue starts halfway through yellow, then large POS fades in and holds one second.
+blue starts halfway through yellow, then large POS fades in and holds half a second.
+Press a key or G0 to skip the intro. Target duration: 0.94 seconds (was 1.88).
 ADV arrows: ; (Up), , (Left), . (Down), / (Right), no Fn needed in menus/apps.
 Esc works without Fn; Fn+Esc also cancels. Shift+Esc: tilde; Alt+Esc: backtick.
 Text entry keeps punctuation; Fn+arrows moves the editor cursor.

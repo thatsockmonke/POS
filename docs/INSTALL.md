@@ -1,6 +1,6 @@
 # Install POS on a Cardputer ADV
 
-POS 0.8.4-dev fixes Esc without Fn across apps and dialogs; USB cable transfer and audio memory fixes remain included.
+POS 0.8.5-dev makes the boot intro skippable and halves its target duration. Esc without Fn, USB cable transfer and audio fixes remain included.
 Existing installations can use Settings → System → Software Update without formatting.
 The complete master specification and physical radio/mesh-Wi-Fi verification are not finished.
 The installer and runtime build for ESP32-S3 and have host tests; actual ADV
@@ -21,9 +21,9 @@ including Chromebook shared-folder/USB limits. The detailed manual route follows
 ## 1. Download the complete matching package
 
 From [POS on GitHub](https://github.com/thatsockmonke/POS), open
-[Downloads](DOWNLOADS.md). Download **pos-0.8.4-dev.zip** and its `.sha256` file,
+[Downloads](DOWNLOADS.md). Download **pos-0.8.5-dev.zip** and its `.sha256` file,
 then extract the ZIP on your computer. Use an ordinary directory such as
-`~/Downloads/pos-0.8.4-dev`. You need these files from the **same build**:
+`~/Downloads/pos-0.8.5-dev`. You need these files from the **same build**:
 
 | Item | What you do with it |
 | --- | --- |
@@ -44,10 +44,10 @@ On Linux, verify and extract the complete download:
 
 ```sh
 cd ~/Downloads
-sha256sum -c pos-0.8.4-dev.zip.sha256
-mkdir pos-0.8.4-dev
-unzip pos-0.8.4-dev.zip -d pos-0.8.4-dev
-cd pos-0.8.4-dev
+sha256sum -c pos-0.8.5-dev.zip.sha256
+mkdir pos-0.8.5-dev
+unzip pos-0.8.5-dev.zip -d pos-0.8.5-dev
+cd pos-0.8.5-dev
 sha256sum -c SHA256SUMS
 ```
 
@@ -181,7 +181,9 @@ with the final runtime. Close the serial program and reset/power-cycle if needed
 1. The LCD starts **black**, then pink slides in from the left at the top.
    Yellow starts in the middle when pink is halfway; blue starts at the bottom
    when yellow is halfway. Once all stripes are complete, large centered **POS**
-   fades in, holds for **one second**, then normal boot status follows. The sequence runs once on each
+   fades in, holds for **half a second**, then normal boot status follows.
+   Press a key or G0 at any point to skip the intro. Its target duration is
+   about 0.94 seconds, half the previous 1.88 seconds. The sequence runs once on each
    firmware boot, including recovery boots. Setup, SD validation and recovery
    checks still run before the launcher opens.
 2. In **POS Installer / Recovery**, choose **Install POS / resume** with Up/Down and Enter.

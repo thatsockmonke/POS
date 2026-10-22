@@ -618,7 +618,7 @@ class FeatureTests(unittest.TestCase):
         report=json.loads(self.run_feature("boot-splash").stdout)
         for key in ("black_start","pink_first","yellow_staggered","blue_staggered","smooth_fade","large_centered_letters"):
             self.assertTrue(report[key])
-        self.assertEqual(report["splash_ms"],1000)
+        self.assertEqual(report["splash_ms"],500)
 
     def test_animated_preview_matches_device_frames_and_timings(self):
         output=self.base/"boot-animation.png"
@@ -644,7 +644,7 @@ class FeatureTests(unittest.TestCase):
             if kind==b"IEND":
                 frames.append(zlib.decompress(payload));break
         self.assertEqual(offset,len(png));self.assertEqual(len(frames),23)
-        self.assertEqual(holds,[40]*22+[1000])
+        self.assertEqual(holds,[20]*22+[500])
         for frame in frames:
             self.assertEqual(len(frame),135*721)
             self.assertTrue(all(frame[y*721]==0 for y in range(135)))

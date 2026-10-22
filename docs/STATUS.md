@@ -1,4 +1,4 @@
-# POS development status — 0.8.4-dev
+# POS development status — 0.8.5-dev
 
 **The complete master specification is not implemented.** This release provides
 an experimental operating-environment foundation. Source builds and host tests
@@ -8,7 +8,7 @@ layouts and display-off still require physical validation; other peripherals ret
 
 | Area | Current implementation | Remaining work |
 | --- | --- | --- |
-| Boot appearance | Black start; pink, yellow and blue slide in with each starting halfway through the previous stripe; large POS fades in after the flag completes, holds 1 second, then normal boot | Observe orientation/color on actual ADV |
+| Boot appearance | Black start; pink, yellow and blue slide in with each starting halfway through the previous stripe; large POS fades in after the flag completes, holds half a second, any key/G0 skips; nominal 0.94-second presentation, then normal boot | Observe orientation/color on actual ADV |
 | Display/input | ST7789 output, TCA8418 decode, arrow-key/context routing, global Home, held recovery shortcut, nonblocking USB fallback | Verify all 56 positions, wiring, timing and stalled-app recovery physically |
 | Core/UI/apps | Central event loop, native 32×32 icons, seventeen-app ribbon, one foreground app, lifecycle/cleanup, stationary focus with an elapsed-time spring ribbon, optimized scanlines and partial/pipelined LCD transfers, zoom/fade entry/return, shared wallpaper accents and paginated menus; launcher workspace is heap-owned | Additional scoped apps; physical stack/heap measurements |
 | Background app | 1-12 horizontal stripes, visual arrow-key picker, Q/E hue, Shift fine steps, live striped canvas, white selection pulse, 12 common stripe-only pride presets (P), typed hex colours (H), S to save and protected persistence | Optional richer styling later |
@@ -237,3 +237,13 @@ types a tilde and Alt+Esc types a backtick in text. Shared hints and keyboard
 diagnostics match the new primary mapping. Regression tests exercise actual
 TCA8418 codes through 16 UI paths in both layers; physical timing remains to
 verify. See [the cause and regression report](BUG_REPORT_0.8.4.md).
+
+## 0.8.5-dev: faster, skippable intro
+
+A keyboard press or G0 skips the boot presentation, including the final logo
+hold, without activating the following screen. Its target duration is halved
+from 1.88 seconds to 0.94 seconds. Rendering uses elapsed-time frame deadlines
+and drops overdue samples; the first black frame is retained before backlight
+enablement. Startup validation and the independent held recovery shortcut are
+unchanged. Host timing tests simulate the actual 100 Hz scheduler; physical
+LCD/key timing still needs verification. See [the report](BUG_REPORT_0.8.5.md).

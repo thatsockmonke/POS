@@ -4,7 +4,7 @@ POS is an ESP-IDF/FreeRTOS operating environment for Panputer, the M5Stack
 Cardputer ADV. Resident firmware provides the core and recovery machinery;
 ordinary FAT32 microSD files hold the system resources and user data.
 
-**Current release: [0.8.4-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.8.4-dev) — Esc works without Fn across apps and dialogs.**
+**Current release: [0.8.5-dev](https://github.com/thatsockmonke/POS/releases/tag/v0.8.5-dev) — skippable boot intro at twice the previous target speed.**
 
 New: an offline **[Calculator](docs/CALCULATOR.md)** with scientific-function
 buttons, saved variables, fractions and polynomial CAS. **[POS Transfer](docs/TRANSFER.md)**
@@ -32,7 +32,7 @@ its route, next maneuver/road name and remaining distance.
 **Download your regions again after updating from 0.6.3** to include access and
 restriction data. Existing road maps remain viewable. Routes cover the selected
 cached graph; unsupported conditional/via-way rules are blocked conservatively.
-[World map preview](downloads/0.8.4-dev/world.png) · See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.8.4-dev/maps.png).
+[World map preview](downloads/0.8.5-dev/world.png) · See [Maps instructions and limits](docs/MAPS.md) and the [example screen](downloads/0.8.5-dev/maps.png).
 
 Earlier Recorder playback, launcher, editor and Wi-Fi improvements remain:
 The launcher keeps its selection box fixed while crisp 32×32 icons slide on an
@@ -66,7 +66,7 @@ Upgrade through **0.6.0-dev** first if using an older installation. Active updat
 metadata stays at exactly seven fields; the old bridge feed remains frozen.
 Black-start flag/logo boot, microphone gain and themed app visuals remain.
 
-[Animated UI preview](downloads/0.8.4-dev/ui-animation.png) · [Recorder](downloads/0.8.4-dev/recorder.png) · [Files](downloads/0.8.4-dev/files.png) · [Background](downloads/0.8.4-dev/background.png) · [Counter](downloads/0.8.4-dev/counter.png)
+[Animated UI preview](downloads/0.8.5-dev/ui-animation.png) · [Recorder](downloads/0.8.5-dev/recorder.png) · [Files](downloads/0.8.5-dev/files.png) · [Background](downloads/0.8.5-dev/background.png) · [Counter](downloads/0.8.5-dev/counter.png)
 
 Previews use the actual portable renderer with example state; they are not
 hardware recordings or device frame-rate measurements.
@@ -109,7 +109,8 @@ Implemented:
 
 - Boot starts black; pink slides in from the left, yellow starts when pink is halfway,
   and blue starts when yellow is halfway. Once all stripes are complete, large centered
-  **POS** lettering fades in, holds for one second, then normal boot continues.
+  **POS** lettering fades in, holds for half a second, then normal boot continues.
+  Press a key or G0 to skip the intro; boot validation still runs.
 - Native ST7789 display output and TCA8418 ADV keyboard input, with USB fallback.
 - A seventeen-app horizontal launcher with black icons outlined in white, streamed from SD.
   Left/Right moves the ribbon; Up or Enter opens the centered app. Only one foreground app runs.
@@ -182,14 +183,14 @@ Implemented:
 
 Software-rendered launcher and color picker:
 
-![Launcher](downloads/0.8.4-dev/launcher.png)
-![Color picker](downloads/0.8.4-dev/color-picker.png)
+![Launcher](downloads/0.8.5-dev/launcher.png)
+![Color picker](downloads/0.8.5-dev/color-picker.png)
 
 Software-rendered boot animation (loops here; plays once on the device):
 
-![POS boot animation](downloads/0.8.4-dev/boot-animation.png)
+![POS boot animation](downloads/0.8.5-dev/boot-animation.png)
 
-[Final splash frame](downloads/0.8.4-dev/boot-splash.png)
+[Final splash frame](downloads/0.8.5-dev/boot-splash.png)
 
 The USB bootstrap is unsigned development firmware; online updates require a
 trusted P-256 signature. This does not enable secure boot or eFuse anti-rollback. Physical display orientation, all key
@@ -206,7 +207,7 @@ cd /workspace/POS
 . /workspace/pos-cloud/activate.sh
 python tools/posctl.py build --build-root build-v050
 python -m unittest discover -s tests -v
-python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.8.4-dev --zip-output dist/pos-0.8.4-dev.zip
+python tools/posctl.py bundle --build-root build-v050 --output dist/pos-0.8.5-dev --zip-output dist/pos-0.8.5-dev.zip
 python tools/posctl.py preview --output dist/launcher.png
 python tools/posctl.py preview --screen picker --output dist/color-picker.png
 python tools/posctl.py preview --screen boot --output dist/boot-splash.png
@@ -328,7 +329,7 @@ See [Developer tooling](docs/DEVELOPMENT.md) for `posctl flash`, `files` and gat
 existing OTA layout; validation remains enabled and unsupported roots are rejected.
 
 Transfer files between POS and Linux with the simple **[POS Transfer tool](docs/TRANSFER.md)**:
-[download pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/pos-transfer),
+[download pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.8.5-dev/pos-transfer),
 then run `python3 ~/Downloads/pos-transfer`. Choose Send/Receive and USB cable,
 Wi-Fi or Bluetooth. USB cable avoids mesh-Wi-Fi and BlueZ restrictions in Crostini.
 
@@ -379,10 +380,18 @@ Settings → System → Software Update; no formatting or partition change is ne
 
 ## USB cable file transfer (0.8.3-dev)
 
-The updated [pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.8.4-dev/pos-transfer)
+The updated [pos-transfer](https://github.com/thatsockmonke/POS/releases/download/v0.8.5-dev/pos-transfer)
 adds a USB cable option using only standard Python on Linux/Crostini. Install
 0.8.3 once, share the Cardputer USB device with Linux, and open Share → Receive
 USB cable / PC, or Files → file → Share → USB cable to PC. Send/receive files
 with the SD inserted; this does not reflash firmware or export a raw disk.
 See [step-by-step Chromebook instructions](docs/TRANSFER.md#usb-cable--linux-and-chromebookcrostini)
 and [verification and hardware limits](docs/BUG_REPORT_0.8.3.md).
+
+## Boot intro (0.8.5-dev)
+
+Press a keyboard key or G0 to skip the intro during the stripes, logo fade or
+final hold. The target duration is now 0.94 seconds instead of 1.88: 120 ms
+stripe fills, a 200 ms logo fade and a 500 ms final hold. Overdue frames are
+skipped on a slower LCD. The skip press is consumed; setup, storage validation
+and recovery still run. See [verification and timing limits](docs/BUG_REPORT_0.8.5.md).

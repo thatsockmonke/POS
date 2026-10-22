@@ -801,7 +801,7 @@ static int boot_splash_tests(void) {
    * Boot artwork also takes priority over the normal battery overlay. */
   for (unsigned frame = 0; frame <= 12; ++frame) {
     assert(pos_boot_frame(frame, &view, &hold));
-    assert(hold == 40 && view.boot_splash && !view.solid_color);
+    assert(hold == 20 && view.boot_splash && !view.solid_color);
     assert(!view.boot_text_alpha);
     view.battery_overlay = true;
     view.battery_available = true;
@@ -824,7 +824,7 @@ static int boot_splash_tests(void) {
                           pos_boot_colors[2]};
   for (unsigned frame = 1; frame <= 10; ++frame) {
     assert(pos_boot_frame(12 + frame, &view, &hold));
-    assert(hold == (frame == 10 ? 1000 : 40) && view.boot_pink_width == 240 &&
+    assert(hold == (frame == 10 ? 500 : 20) && view.boot_pink_width == 240 &&
            view.boot_yellow_width == 240 && view.boot_blue_width == 240);
     for (unsigned stripe = 0; stripe < 3; ++stripe) {
       uint16_t pixel = pos_view_pixel(&view, 30, 22 + stripe * 39);
@@ -841,7 +841,7 @@ static int boot_splash_tests(void) {
   }
   assert(!previous[0] && !previous[1] && !previous[2]);
   assert(pos_boot_frame(POS_BOOT_HOLD_FRAME, &view, &hold));
-  assert(hold == 1000 && view.boot_text_alpha == 255);
+  assert(hold == 500 && view.boot_text_alpha == 255);
   unsigned ink[3] = {0}, ink_stripes[3] = {0};
   int left = 240, right = 0, top = 135, bottom = 0;
   for (int y = 0; y < 135; ++y)
@@ -865,7 +865,7 @@ static int boot_splash_tests(void) {
   for (unsigned i = 0; i < 3; ++i)
     assert(ink[i] > 500 && ink_stripes[i] > 500);
   assert(left == 21 && right == 218 && top == 22 && bottom == 112);
-  assert(total == 1880);
+  assert(total == 940);
   assert(!pos_boot_frame(POS_BOOT_HOLD_FRAME + 1, &view, &hold));
   assert(!pos_boot_frame(UINT32_MAX, &view, &hold));
   assert(!pos_boot_frame(0, NULL, &hold));
@@ -877,7 +877,7 @@ static int boot_splash_tests(void) {
   assert(pos_view_pixel(&view, 0, 90) != pos_boot_colors[2]);
   puts("{\"black_start\":true,\"pink_first\":true,\"yellow_staggered\":true,"
        "\"blue_staggered\":true,\"smooth_fade\":true,"
-       "\"large_centered_letters\":true,\"splash_ms\":1000}");
+       "\"large_centered_letters\":true,\"splash_ms\":500}");
   return 0;
 }
 static int text_qol_tests(void) {
